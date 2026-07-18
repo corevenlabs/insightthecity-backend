@@ -5,7 +5,7 @@ const db = require("../config/db");
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
 
     const sig = req.headers["stripe-signature"];
 
@@ -39,30 +39,16 @@ router.post("/", (req, res) => {
         console.log("Checkout completed");
         console.log("Email:", session.customer_email);
 
-        const sql =
-            "UPDATE users SET is_premium = 1 WHERE email = ?";
-
-        db.query(
-            sql,
-            [session.customer_email],
-            (err, result) => {
-
-                if (err) {
-                    console.log("DB error:", err);
-                    return;
-                }
-
-                console.log(
-                    "Rows affected:",
-                    result.affectedRows
-                );
-
-                console.log(
-                    "User upgraded:",
-                    session.customer_email
-                );
-            }
-        );
+        try {
+            const result = await db.query(
+                "UPDATE users SET is_premium = TRUE WHERE email = $1",
+                [session.customer_email]
+            );
+            console.log("Rows affected:", result.rowCount);
+            console.log("User upgraded:", session.customer_email);
+        } catch (err) {
+            console.log("DB error:", err);
+        }
     }
 
     res.json({ received: true });

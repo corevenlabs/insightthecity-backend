@@ -2,11 +2,8 @@ const db = require("../config/db");
 const openai = require("../config/openai");
 
 const obtenerUsuarios = async () => {
-  const [users] = await db.query(
-    "SELECT * FROM users"
-  );
-
-  return users;
+  const { rows } = await db.query("SELECT * FROM users");
+  return rows;
 };
 const responderChat = async (message) => {
 
@@ -20,7 +17,7 @@ const responderChat = async (message) => {
 
 
 const guardarMensaje = async ( userId, role, message) =>{
-    await db.query(`INSERT INTO chat_messages (user_id, role, message) VALUES (?,?,?)`, [userId, role, message])
+    await db.query(`INSERT INTO chat_messages (user_id, role, message) VALUES ($1,$2,$3)`, [userId, role, message])
 }
 
 

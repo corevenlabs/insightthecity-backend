@@ -1,0 +1,81 @@
+name: Deploy a Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: itc-developer-502721
+  REGION: us-east1
+  SERVICE: itc-backend
+  REPOSITORY: itc
+  SQL_INSTANCE: itc-developer-502721:us-east1:itc-postgres
+  GCS_BUCKET: itc-developer-502721-media
+
+permissions:
+  contents: read
+  id-token: write # necesario para Workload Identity Federation
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar en GCP (sin claves, vía OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configurar Docker para Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build y push de la imagen
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}"
+          docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
+
+      - name: Migrar la base de datos
+        run: |
+          curl -sSL -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --port 5432 "$SQL_INSTANCE" &
+          # Esperar a que el proxy acepte conexiones.
+          for i in $(seq 1 30); do
+            nc -z 127.0.0.1 5432 && break
+            sleep 1
+          done
+          npm ci --omit=dev
+          npm run db:migrate
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: "5432"
+          DB_USER: itc_app
+          DB_DATABASE: itc
+          DB_SSL: "false"
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      - name: Desplegar en Cloud Run
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --add-cloudsql-instances "$SQL_INSTANCE" \
+            --set-env-vars "DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID}" \
+            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest" \
+            --min-instances 0 \
+            --max-instances 4 \
+            --memory 512Mi
+
+      - name: Mostrar la URL del servicio
+        run: gcloud run services describe "$SERVICE" --region "$REGION" --format="value(status.url)"
