@@ -57,12 +57,14 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(255) UNIQUE,
   password_hash VARCHAR(255),
   is_premium    BOOLEAN NOT NULL DEFAULT FALSE,
+  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Para bases ya existentes donde la tabla users se creó sin password_hash
+-- Para bases ya existentes donde la tabla users se creó sin estas columnas
 -- (antes solo se usaba para chat/favoritos). Idempotente.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id         SERIAL PRIMARY KEY,
