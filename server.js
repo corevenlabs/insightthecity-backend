@@ -9,6 +9,7 @@ const placesRouter = require("./routes/places.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const experiencesRouter = require("./routes/experiences.routes");
 const authRouter = require("./routes/auth.routes");
+const usersRouter = require("./routes/users.routes");
 const uploadsRouter = require("./routes/uploads.routes");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
@@ -31,6 +32,7 @@ app.use("/api/places", placesRouter)
 app.use("/api/payment", paymentRoutes);
 app.use("/api/experiences", experiencesRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/users", usersRouter);
 app.use("/api/uploads", uploadsRouter);
 
 app.use(manejadorErrors)

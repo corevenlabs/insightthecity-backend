@@ -52,12 +52,17 @@ CREATE TABLE IF NOT EXISTS admins (
 -- Tablas existentes (chat / usuarios / favoritos) migradas a Postgres
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
-  id         SERIAL PRIMARY KEY,
-  name       VARCHAR(100),
-  email      VARCHAR(255) UNIQUE,
-  is_premium BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  name          VARCHAR(100),
+  email         VARCHAR(255) UNIQUE,
+  password_hash VARCHAR(255),
+  is_premium    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Para bases ya existentes donde la tabla users se creó sin password_hash
+-- (antes solo se usaba para chat/favoritos). Idempotente.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id         SERIAL PRIMARY KEY,
