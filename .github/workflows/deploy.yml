@@ -72,7 +72,7 @@ jobs:
             --allow-unauthenticated \
             --add-cloudsql-instances "$SQL_INSTANCE" \
             --set-env-vars "DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID}" \
-            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest" \
+            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest" \
             --min-instances 0 \
             --max-instances 4 \
             --memory 512Mi

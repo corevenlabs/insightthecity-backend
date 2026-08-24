@@ -2,9 +2,7 @@ const stripeService = require('../services/stripe.service');
 
 async function createSubscription(req, res) {
     try {
-        const { email } = req.body;
-
-        const url = await stripeService.createCheckoutSession({ email });
+        const url = await stripeService.createCheckoutSession({ email: req.user.email });
 
         return res.json({
             success: true,

@@ -10,7 +10,11 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    req.admin = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type === "user") {
+      return res.status(403).json({ success: false, message: "Acceso de administrador requerido" });
+    }
+    req.admin = payload;
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Token inválido o expirado" });
@@ -28,7 +32,11 @@ function requireUserAuth(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type !== "user") {
+      return res.status(403).json({ success: false, message: "Acceso de usuario requerido" });
+    }
+    req.user = payload;
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Token inválido o expirado" });

@@ -11,6 +11,7 @@ const experiencesRouter = require("./routes/experiences.routes");
 const authRouter = require("./routes/auth.routes");
 const usersRouter = require("./routes/users.routes");
 const uploadsRouter = require("./routes/uploads.routes");
+const stripeWebhookRouter = require("./routes/stripe.webhook");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
 
@@ -19,6 +20,9 @@ const app = express()
 
 // Content-Range es necesario para la paginación de react-admin.
 app.use(cors({ exposedHeaders: ["Content-Range"] }))
+
+// Stripe necesita el body original para verificar la firma del webhook.
+app.use("/api/payment/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter)
 
 app.use(express.json())
 
