@@ -32,11 +32,9 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configurar Docker para Artifact Registry
-        if: github.event_name == 'push'
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - name: Build y push de la imagen
-        if: github.event_name == 'push'
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}"
           docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
@@ -44,7 +42,6 @@ jobs:
           docker push "$IMAGE:latest"
 
       - name: Migrar la base de datos
-        if: github.event_name == 'push'
         run: |
           curl -sSL -o cloud-sql-proxy \
             https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
@@ -66,7 +63,6 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
       - name: Desplegar en Cloud Run
-        if: github.event_name == 'push'
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
           gcloud run deploy "$SERVICE" \
@@ -82,16 +78,4 @@ jobs:
             --memory 512Mi
 
       - name: Mostrar la URL del servicio
-        if: github.event_name == 'push'
         run: gcloud run services describe "$SERVICE" --region "$REGION" --format="value(status.url)"
-
-      - name: Habilitar lectura pública de imágenes
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET}" \
-            --member="allUsers" \
-            --role="roles/storage.objectViewer"
-
-      - name: Verificar política aplicada
-        if: github.event_name == 'workflow_dispatch'
-        run: gcloud storage buckets get-iam-policy "gs://${GCS_BUCKET}"
