@@ -11,6 +11,7 @@ const experiencesRouter = require("./routes/experiences.routes");
 const authRouter = require("./routes/auth.routes");
 const usersRouter = require("./routes/users.routes");
 const uploadsRouter = require("./routes/uploads.routes");
+const newsRouter = require("./routes/news.routes");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
 
@@ -34,6 +35,7 @@ app.use("/api/experiences", experiencesRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/uploads", uploadsRouter);
+app.use("/api/news", newsRouter);
 
 app.use(manejadorErrors)
 
