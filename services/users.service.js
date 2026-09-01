@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 // Auth de usuarios de la app (distinto de los admins del panel).
 // La tabla `users` guarda name, email, password_hash, is_premium, is_active.
 
-const PUBLIC_FIELDS = "id, name, email, is_premium, is_active, created_at";
+const PUBLIC_FIELDS = "id, name, email, is_premium, is_active, language, created_at";
 
 // Columnas por las que el panel puede ordenar (whitelist anti-inyección).
 const SORTABLE = new Set(["id", "name", "email", "is_premium", "is_active", "created_at"]);
@@ -32,7 +32,7 @@ async function findById(id) {
 }
 
 // Crea una cuenta. Devuelve { token, user } o lanza { status, message }.
-async function register({ name, email, password }) {
+async function register({ name, email, password, language = "es" }) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const password_hash = await bcrypt.hash(password, 10);
 
@@ -44,10 +44,10 @@ async function register({ name, email, password }) {
   }
 
   const { rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash)
-     VALUES ($1, $2, $3)
+    `INSERT INTO users (name, email, password_hash, language)
+     VALUES ($1, $2, $3, $4)
      RETURNING ${PUBLIC_FIELDS}`,
-    [name ? String(name).trim() : null, normalizedEmail, password_hash]
+    [name ? String(name).trim() : null, normalizedEmail, password_hash, language]
   );
 
   const user = rows[0];
@@ -76,6 +76,7 @@ async function login(email, password) {
     email: user.email,
     is_premium: user.is_premium,
     is_active: user.is_active,
+    language: user.language || "es",
     created_at: user.created_at,
   };
   return { token: signToken(publicUser), user: publicUser };

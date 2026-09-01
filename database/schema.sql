@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255),
   is_premium    BOOLEAN NOT NULL DEFAULT FALSE,
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  language      VARCHAR(2) NOT NULL DEFAULT 'es' CHECK (language IN ('es', 'en', 'pt')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- (antes solo se usaba para chat/favoritos). Idempotente.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(2) NOT NULL DEFAULT 'es';
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id         SERIAL PRIMARY KEY,

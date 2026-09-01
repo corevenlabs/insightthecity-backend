@@ -11,13 +11,14 @@ function serialize(u) {
     email: u.email,
     is_premium: u.is_premium,
     is_active: u.is_active,
+    language: u.language || "es",
     created_at: u.created_at,
   };
 }
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body || {};
+    const { name, email, password, language = "es" } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "email y password requeridos" });
@@ -28,8 +29,11 @@ const register = async (req, res, next) => {
     if (String(password).length < 8) {
       return res.status(400).json({ success: false, message: "La contraseña debe tener al menos 8 caracteres" });
     }
+    if (!["es", "en", "pt"].includes(language)) {
+      return res.status(400).json({ success: false, message: "Idioma no válido" });
+    }
 
-    const result = await usersService.register({ name, email, password });
+    const result = await usersService.register({ name, email, password, language });
     res.status(201).json({ success: true, ...result });
   } catch (err) {
     if (err.status === 409) {
