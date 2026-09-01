@@ -37,6 +37,28 @@ CREATE TABLE IF NOT EXISTS experience_includes (
 
 CREATE INDEX IF NOT EXISTS idx_includes_experience ON experience_includes (experience_id);
 
+-- Partnership destacado del home (registro único editable desde el panel).
+CREATE TABLE IF NOT EXISTS featured_partnership (
+  id          SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  brand_name  VARCHAR(120) NOT NULL,
+  title       VARCHAR(200) NOT NULL,
+  description TEXT,
+  image_url   VARCHAR(500),
+  cta_label   VARCHAR(80),
+  cta_url     VARCHAR(500),
+  is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO featured_partnership
+  (id, brand_name, title, description, image_url, cta_label, cta_url, is_published)
+VALUES
+  (1, 'COCA-COLA', 'Comparte la magia de Nueva York con Coca-Cola',
+   'Momentos refrescantes y experiencias especiales para disfrutar la ciudad juntos.',
+   'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Coca-cola_bottle.jpg/1280px-Coca-cola_bottle.jpg',
+   'CONOCER MÁS', 'https://www.coca-cola.com/us/en', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
 -- ============================================================
 -- Admins del panel
 -- ============================================================
@@ -95,4 +117,9 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_experiences_updated_at ON experiences;
 CREATE TRIGGER trg_experiences_updated_at
   BEFORE UPDATE ON experiences
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_featured_partnership_updated_at ON featured_partnership;
+CREATE TRIGGER trg_featured_partnership_updated_at
+  BEFORE UPDATE ON featured_partnership
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
