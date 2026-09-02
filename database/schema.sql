@@ -21,9 +21,16 @@ CREATE TABLE IF NOT EXISTS experiences (
   sort_order     INTEGER NOT NULL DEFAULT 0,
   is_published   BOOLEAN NOT NULL DEFAULT TRUE,
   ends_at        TIMESTAMPTZ,                       -- para los drops con countdown
+  is_paid_event  BOOLEAN NOT NULL DEFAULT FALSE,    -- entrada vendida fuera de ITC
+  ticket_url     VARCHAR(1000),                     -- enlace externo de compra
+  ticket_cta     VARCHAR(80),                       -- texto futuro del botón en la app
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS is_paid_event BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_url VARCHAR(1000);
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_cta VARCHAR(80);
 
 CREATE INDEX IF NOT EXISTS idx_experiences_section ON experiences (section);
 CREATE INDEX IF NOT EXISTS idx_experiences_published ON experiences (is_published);

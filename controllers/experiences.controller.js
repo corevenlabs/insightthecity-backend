@@ -19,6 +19,9 @@ function serialize(row) {
     sortOrder: row.sort_order,
     isPublished: row.is_published,
     endsAt: row.ends_at,
+    isPaidEvent: row.is_paid_event,
+    ticketUrl: row.ticket_url,
+    ticketCta: row.ticket_cta,
     updatedAt: row.updated_at,
   };
 }
@@ -40,6 +43,9 @@ function deserialize(body) {
     sort_order: body.sortOrder ?? body.sort_order,
     is_published: body.isPublished ?? body.is_published,
     ends_at: body.endsAt ?? body.ends_at,
+    is_paid_event: body.isPaidEvent ?? body.is_paid_event,
+    ticket_url: body.ticketUrl ?? body.ticket_url,
+    ticket_cta: body.ticketCta ?? body.ticket_cta,
     includes: body.includes,
   };
 }

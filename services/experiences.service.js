@@ -99,8 +99,9 @@ async function create(data) {
     await client.query(
       `INSERT INTO experiences
         (id, title, category, image_url, date_label, location, access,
-         description, recommendation, section, is_featured, sort_order, is_published, ends_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        description, recommendation, section, is_featured, sort_order, is_published, ends_at,
+        is_paid_event, ticket_url, ticket_cta)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         id,
         data.title,
@@ -116,6 +117,9 @@ async function create(data) {
         Number.isFinite(data.sort_order) ? data.sort_order : 0,
         data.is_published === undefined ? true : Boolean(data.is_published),
         data.ends_at ?? null,
+        Boolean(data.is_paid_event),
+        data.is_paid_event ? data.ticket_url ?? null : null,
+        data.is_paid_event ? data.ticket_cta || "COMPRAR ENTRADAS" : null,
       ]
     );
     await replaceIncludes(client, id, data.includes);
@@ -147,7 +151,10 @@ async function update(id, data) {
          is_featured = COALESCE($11, is_featured),
          sort_order = COALESCE($12, sort_order),
          is_published = COALESCE($13, is_published),
-         ends_at = $14
+         ends_at = $14,
+         is_paid_event = COALESCE($15, is_paid_event),
+         ticket_url = $16,
+         ticket_cta = $17
        WHERE id = $1`,
       [
         id,
@@ -164,6 +171,9 @@ async function update(id, data) {
         Number.isFinite(data.sort_order) ? data.sort_order : null,
         data.is_published === undefined ? null : Boolean(data.is_published),
         data.ends_at ?? null,
+        data.is_paid_event === undefined ? null : Boolean(data.is_paid_event),
+        data.is_paid_event ? data.ticket_url ?? null : null,
+        data.is_paid_event ? data.ticket_cta || "COMPRAR ENTRADAS" : null,
       ]
     );
     if (rowCount === 0) {
