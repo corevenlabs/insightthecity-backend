@@ -5,6 +5,7 @@ const {
   register,
   login,
   me,
+  activatePremium,
   list,
   getOne,
   update,
@@ -16,6 +17,7 @@ const { requireAuth, requireUserAuth } = require("../middleware/auth");
 router.post("/register", register);
 router.post("/login", login);
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
+router.post("/me/activate-premium", requireUserAuth, activatePremium);
 
 // --- Administración de usuarios (panel, protegido con token de admin) ---
 router.get("/", requireAuth, list);

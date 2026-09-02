@@ -156,6 +156,14 @@ async function adminUpdate(id, { is_premium, is_active, name }) {
   return rows[0] || null;
 }
 
+async function activatePremium(id) {
+  const { rows } = await db.query(
+    `UPDATE users SET is_premium = TRUE WHERE id = $1 RETURNING ${PUBLIC_FIELDS}`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
 async function remove(id) {
   const { rowCount } = await db.query(`DELETE FROM users WHERE id = $1`, [id]);
   return rowCount > 0;
@@ -168,5 +176,6 @@ module.exports = {
   findByEmail,
   listForAdmin,
   adminUpdate,
+  activatePremium,
   remove,
 };

@@ -77,6 +77,16 @@ const me = async (req, res, next) => {
   }
 };
 
+const activatePremium = async (req, res, next) => {
+  try {
+    const user = await usersService.activatePremium(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    res.json({ success: true, user });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ---- Administración (panel, protegido con requireAuth de admin) ----
 
 // GET /api/users?_start=0&_end=24&_sort=created_at&_order=DESC&q=&premium=&active=
@@ -136,4 +146,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, me, list, getOne, update, remove };
+module.exports = { register, login, me, activatePremium, list, getOne, update, remove };

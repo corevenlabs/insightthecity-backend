@@ -2,8 +2,8 @@ const axios = require("axios");
 
 // El contenido vive en el WordPress del cliente. La app NO duplica nada:
 // este servicio consume la REST API pública de WordPress, la limpia y la cachea.
-const WP_BASE =
-  process.env.WORDPRESS_API_URL || "https://insightthecity.com/wp-json/wp/v2";
+const WP_BASE = (process.env.WORDPRESS_API_URL || "https://insightthecity.com/wp-json/wp/v2").replace(/\/+$/, "");
+const WP_FALLBACK_BASE = "https://www.insightthecity.com/wp-json/wp/v2";
 
 // Secciones de la app -> id de categoría en WordPress.
 const SECTIONS = {
@@ -29,6 +29,23 @@ function cacheGet(key, ttl) {
 
 function cacheSet(key, value) {
   cache.set(key, { value, at: Date.now() });
+}
+
+async function wordpressGet(path, config) {
+  const bases = [...new Set([WP_BASE, WP_FALLBACK_BASE])];
+  let lastError;
+  for (const base of bases) {
+    try {
+      return await axios.get(`${base}${path}`, {
+        ...config,
+        timeout: 12000,
+        headers: { "User-Agent": "InsightTheCity-App/1.0", Accept: "application/json" },
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 // Decodifica las entidades HTML más comunes que devuelve WordPress en los
@@ -109,9 +126,8 @@ async function listNews({ section, page = 1, perPage = DEFAULT_PER_PAGE }) {
   if (fresh) return fresh;
 
   try {
-    const res = await axios.get(`${WP_BASE}/posts`, {
+    const res = await wordpressGet("/posts", {
       params: { categories: catId, page: p, per_page: pp, _embed: 1 },
-      timeout: 8000,
     });
     const items = (res.data || []).map(toCard);
     const total = Number(res.headers["x-wp-total"]) || items.length;
@@ -145,9 +161,8 @@ async function getNews(id) {
   if (fresh) return fresh;
 
   try {
-    const res = await axios.get(`${WP_BASE}/posts/${numId}`, {
+    const res = await wordpressGet(`/posts/${numId}`, {
       params: { _embed: 1 },
-      timeout: 8000,
     });
     const value = toArticle(res.data);
     cacheSet(key, value);
