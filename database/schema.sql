@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS experiences (
   image_url      VARCHAR(500),                      -- URL pública en Cloud Storage
   date_label     VARCHAR(120),                      -- "Hoy · 7:00 PM"
   location       VARCHAR(200),
+  region         VARCHAR(2) NOT NULL DEFAULT 'NY'
+                 CHECK (region IN ('NY', 'NJ')),
   access         VARCHAR(10) NOT NULL DEFAULT 'free'
                  CHECK (access IN ('free', 'premium')),
   description    TEXT,
@@ -31,9 +33,21 @@ CREATE TABLE IF NOT EXISTS experiences (
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS is_paid_event BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_url VARCHAR(1000);
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_cta VARCHAR(80);
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS region VARCHAR(2) NOT NULL DEFAULT 'NY';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'experiences_region_check'
+  ) THEN
+    ALTER TABLE experiences
+      ADD CONSTRAINT experiences_region_check CHECK (region IN ('NY', 'NJ'));
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_experiences_section ON experiences (section);
 CREATE INDEX IF NOT EXISTS idx_experiences_published ON experiences (is_published);
+CREATE INDEX IF NOT EXISTS idx_experiences_region ON experiences (region);
 
 CREATE TABLE IF NOT EXISTS experience_includes (
   id            SERIAL PRIMARY KEY,
@@ -43,6 +57,47 @@ CREATE TABLE IF NOT EXISTS experience_includes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_includes_experience ON experience_includes (experience_id);
+
+-- Muestras iniciales de Nueva Jersey para validar ambas secciones en la app.
+INSERT INTO experiences
+  (id, title, category, image_url, date_label, location, region, access, description,
+   recommendation, section, is_featured, sort_order, is_published)
+VALUES
+  ('liberty-state-park-sunset', 'Atardecer en Liberty State Park', 'EVENTO',
+   'https://images.unsplash.com/photo-1522083165195-3424ed129620', 'Hoy · 6:30 PM',
+   'Liberty State Park, Jersey City', 'NJ', 'free',
+   'Un plan al aire libre con vistas directas al skyline de Manhattan, la Estatua de la Libertad y el río Hudson.',
+   'Llega antes del atardecer y revisa el regreso hacia Nueva York antes de salir.',
+   'top_today', TRUE, 8, TRUE),
+  ('hoboken-food-discount', 'Sabores de Hoboken', 'CITY DROP',
+   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5', 'Disponible esta semana',
+   'Washington Street, Hoboken', 'NJ', 'premium',
+   'Una selección de restaurantes y cafeterías de Hoboken con descuentos especiales para miembros de ITC Club.',
+   'Cruza en PATH y combina varias paradas caminando por Washington Street.',
+   'drops', FALSE, 8, TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO experience_includes (experience_id, item, sort_order)
+SELECT 'liberty-state-park-sunset', item, sort_order
+FROM (VALUES
+  ('Vista al skyline de Manhattan', 0),
+  ('Acceso gratuito al parque', 1),
+  ('Zona ideal para fotografías', 2)
+) AS sample(item, sort_order)
+WHERE NOT EXISTS (
+  SELECT 1 FROM experience_includes WHERE experience_id = 'liberty-state-park-sunset'
+);
+
+INSERT INTO experience_includes (experience_id, item, sort_order)
+SELECT 'hoboken-food-discount', item, sort_order
+FROM (VALUES
+  ('Descuentos en establecimientos seleccionados', 0),
+  ('Ruta gastronómica caminable', 1),
+  ('Recomendaciones cerca del PATH', 2)
+) AS sample(item, sort_order)
+WHERE NOT EXISTS (
+  SELECT 1 FROM experience_includes WHERE experience_id = 'hoboken-food-discount'
+);
 
 -- Partnership destacado del home (registro único editable desde el panel).
 CREATE TABLE IF NOT EXISTS featured_partnership (

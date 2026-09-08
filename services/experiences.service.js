@@ -8,6 +8,7 @@ const SORTABLE = new Set([
   "category",
   "section",
   "access",
+  "region",
   "sort_order",
   "is_published",
   "is_featured",
@@ -56,6 +57,10 @@ async function list({ section, publishedOnly, sort, order, start, end, filter } 
     params.push(filter.access);
     where.push(`e.access = $${params.length}`);
   }
+  if (filter?.region) {
+    params.push(filter.region);
+    where.push(`e.region = $${params.length}`);
+  }
   if (filter?.q) {
     params.push(`%${filter.q}%`);
     where.push(`(e.title ILIKE $${params.length} OR e.description ILIKE $${params.length})`);
@@ -98,10 +103,10 @@ async function create(data) {
     await client.query("BEGIN");
     await client.query(
       `INSERT INTO experiences
-        (id, title, category, image_url, date_label, location, access,
+        (id, title, category, image_url, date_label, location, region, access,
         description, recommendation, section, is_featured, sort_order, is_published, ends_at,
         is_paid_event, ticket_url, ticket_cta)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         id,
         data.title,
@@ -109,6 +114,7 @@ async function create(data) {
         data.image_url ?? null,
         data.date_label ?? null,
         data.location ?? null,
+        data.region === "NJ" ? "NJ" : "NY",
         data.access === "premium" ? "premium" : "free",
         data.description ?? null,
         data.recommendation ?? null,
@@ -144,17 +150,18 @@ async function update(id, data) {
          image_url = $4,
          date_label = $5,
          location = $6,
-         access = COALESCE($7, access),
-         description = $8,
-         recommendation = $9,
-         section = $10,
-         is_featured = COALESCE($11, is_featured),
-         sort_order = COALESCE($12, sort_order),
-         is_published = COALESCE($13, is_published),
-         ends_at = $14,
-         is_paid_event = COALESCE($15, is_paid_event),
-         ticket_url = $16,
-         ticket_cta = $17
+         region = COALESCE($7, region),
+         access = COALESCE($8, access),
+         description = $9,
+         recommendation = $10,
+         section = $11,
+         is_featured = COALESCE($12, is_featured),
+         sort_order = COALESCE($13, sort_order),
+         is_published = COALESCE($14, is_published),
+         ends_at = $15,
+         is_paid_event = COALESCE($16, is_paid_event),
+         ticket_url = $17,
+         ticket_cta = $18
        WHERE id = $1`,
       [
         id,
@@ -163,6 +170,7 @@ async function update(id, data) {
         data.image_url ?? null,
         data.date_label ?? null,
         data.location ?? null,
+        data.region === undefined ? null : data.region === "NJ" ? "NJ" : "NY",
         data.access === undefined ? null : data.access === "premium" ? "premium" : "free",
         data.description ?? null,
         data.recommendation ?? null,

@@ -10,6 +10,7 @@ function serialize(row) {
     image: row.image_url,
     date: row.date_label,
     location: row.location,
+    region: row.region,
     access: row.access,
     description: row.description,
     includes: row.includes || [],
@@ -35,6 +36,7 @@ function deserialize(body) {
     image_url: body.image ?? body.image_url,
     date_label: body.date ?? body.date_label,
     location: body.location,
+    region: body.region,
     access: body.access,
     description: body.description,
     recommendation: body.recommendation,
@@ -55,7 +57,7 @@ function deserialize(body) {
 // - Panel react-admin: ?_start=0&_end=9&_sort=title&_order=ASC&category=DROP
 const listExperiences = async (req, res, next) => {
   try {
-    const { _start, _end, _sort, _order, section, category, access, q, published } = req.query;
+    const { _start, _end, _sort, _order, section, category, access, region, q, published } = req.query;
 
     const start = _start !== undefined ? parseInt(_start, 10) : undefined;
     const end = _end !== undefined ? parseInt(_end, 10) : undefined;
@@ -70,7 +72,7 @@ const listExperiences = async (req, res, next) => {
       order: _order,
       start,
       end,
-      filter: { category, access, q },
+      filter: { category, access, region, q },
     });
 
     // Header que react-admin (ra-data-simple-rest) necesita para la paginación.
@@ -96,6 +98,9 @@ const createExperience = async (req, res, next) => {
     if (!req.body.title) {
       return res.status(400).json({ success: false, message: "title es requerido" });
     }
+    if (req.body.region && !['NY', 'NJ'].includes(req.body.region)) {
+      return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
+    }
     const row = await service.create(deserialize(req.body));
     res.status(201).json(serialize(row));
   } catch (err) {
@@ -105,6 +110,9 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    if (req.body.region && !['NY', 'NJ'].includes(req.body.region)) {
+      return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
+    }
     const row = await service.update(req.params.id, deserialize(req.body));
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
     res.json(serialize(row));
