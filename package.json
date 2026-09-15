@@ -12,7 +12,8 @@
     "db:migrate": "node database/migrate.js",
     "db:seed": "node database/seed.js",
     "admin:create": "node scripts/create-admin.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:migrate:tags": "node database/migrate-tags.js"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.14.0",

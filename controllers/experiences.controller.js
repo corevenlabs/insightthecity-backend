@@ -1,3 +1,4 @@
+const { normalizeTags, tagsForRecord } = require("../utils/experienceTags");
 const service = require("../services/experiences.service");
 
 // Fila DB -> forma de la API (coincide con el tipo Experience de la app Expo).
@@ -7,6 +8,7 @@ function serialize(row) {
     id: row.id,
     title: row.title,
     category: row.category,
+    tags: tagsForRecord(row),
     image: row.image_url,
     date: row.date_label,
     location: row.location,
@@ -32,7 +34,8 @@ function deserialize(body) {
   return {
     id: body.id,
     title: body.title,
-    category: body.category,
+    category: body.tags?.length ? normalizeTags(body.tags)[0] : body.category,
+    tags: body.tags,
     image_url: body.image ?? body.image_url,
     date_label: body.date ?? body.date_label,
     location: body.location,
@@ -95,6 +98,10 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
+      return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
+    }
+
     if (!req.body.title) {
       return res.status(400).json({ success: false, message: "title es requerido" });
     }
@@ -110,6 +117,10 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
+      return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
+    }
+
     if (req.body.region && !['NY', 'NJ'].includes(req.body.region)) {
       return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
     }

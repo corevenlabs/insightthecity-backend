@@ -13,6 +13,10 @@ const { requireAuth } = require("../middleware/auth");
 
 // Públicas (las consume la app)
 router.get("/", listExperiences);
+router.get("/tags", requireAuth, async (req, res, next) => {
+  try { res.json(await require("../services/experiences.service").listTags()); }
+  catch (err) { next(err); }
+});
 router.get("/:id", getExperience);
 
 // Protegidas (las usa el panel admin)

@@ -1,3 +1,4 @@
+const { normalizeTags } = require("../utils/experienceTags");
 const db = require("../config/db");
 const { slugify } = require("../utils/slugify");
 
@@ -51,7 +52,7 @@ async function list({ section, publishedOnly, sort, order, start, end, filter } 
   }
   if (filter?.category) {
     params.push(filter.category);
-    where.push(`e.category = $${params.length}`);
+    where.push(`(e.category = $${params.length} OR EXISTS (SELECT 1 FROM unnest(e.tags) tag WHERE lower(tag) = lower($${params.length})))`);
   }
   if (filter?.access) {
     params.push(filter.access);
@@ -128,6 +129,7 @@ async function create(data) {
         data.is_paid_event ? data.ticket_cta || "COMPRAR ENTRADAS" : null,
       ]
     );
+    await client.query(`UPDATE experiences SET tags = $2 WHERE id = $1`, [id, normalizeTags(data.tags ?? [data.category].filter(Boolean))]);
     await replaceIncludes(client, id, data.includes);
     await client.query("COMMIT");
   } catch (err) {
@@ -188,6 +190,9 @@ async function update(id, data) {
       await client.query("ROLLBACK");
       return null;
     }
+    if (data.tags !== undefined) {
+      await client.query(`UPDATE experiences SET tags = $2 WHERE id = $1`, [id, normalizeTags(data.tags)]);
+    }
     if (data.includes !== undefined) {
       await replaceIncludes(client, id, data.includes);
     }
@@ -206,4 +211,10 @@ async function remove(id) {
   return rowCount > 0;
 }
 
-module.exports = { list, getById, create, update, remove };
+async function listTags() {
+  const { rows } = await db.query(`SELECT DISTINCT tag FROM experiences e
+    CROSS JOIN LATERAL unnest(e.tags || ARRAY[e.category]) AS tag
+    WHERE tag <> '' ORDER BY tag`);
+  return rows.map((row) => row.tag);
+}
+module.exports = { list, getById, create, update, remove, listTags };
