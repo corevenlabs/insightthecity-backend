@@ -219,3 +219,7 @@ WHERE regexp_replace(lower(e.title), '[^a-z0-9]', '', 'g') = 'riseny'
               AND i.item ILIKE '%20% OFF GENERAL ADMISSION%')
   AND e.member_benefit = '- ITC CLUB EXCLUSIVE'
   AND e.member_benefit_details IS NULL;
+
+-- Las tarjetas muestran beneficio solo con autorización explícita del administrador.
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS show_benefit_on_card BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS card_benefit VARCHAR(60);

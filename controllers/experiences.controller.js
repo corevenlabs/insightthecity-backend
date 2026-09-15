@@ -17,6 +17,8 @@ function serialize(row) {
     description: row.description,
     includes: row.includes || [],
     recommendation: row.recommendation,
+    showBenefitOnCard: row.show_benefit_on_card === true,
+    cardBenefit: row.card_benefit ?? null,
     memberBenefit: row.member_benefit ?? null,
     memberBenefitDetails: row.member_benefit_details ?? null,
     section: row.section,
@@ -45,6 +47,8 @@ function deserialize(body) {
     access: body.access,
     description: body.description,
     recommendation: body.recommendation,
+    show_benefit_on_card: body.showBenefitOnCard,
+    card_benefit: body.cardBenefit === undefined ? undefined : body.cardBenefit?.trim() || null,
     member_benefit: body.memberBenefit === undefined ? undefined : body.memberBenefit?.trim() || null,
     member_benefit_details: body.memberBenefitDetails === undefined ? undefined : body.memberBenefitDetails?.trim() || null,
     section: body.section,
@@ -60,9 +64,12 @@ function deserialize(body) {
 }
 
 function validateMemberBenefit(body, requireBenefit) {
-  for (const [field, limit] of [['memberBenefit', 200], ['memberBenefitDetails', 2000]]) {
+  for (const [field, limit] of [['memberBenefit', 200], ['memberBenefitDetails', 2000], ['cardBenefit', 60]]) {
     if (body[field] != null && (typeof body[field] !== 'string' || body[field].length > limit)) return `${field} debe ser texto de hasta ${limit} caracteres.`;
   }
+  if (body.showBenefitOnCard !== undefined && typeof body.showBenefitOnCard !== 'boolean') return 'La opción de mostrar beneficio debe ser verdadero o falso.';
+  if (body.cardBenefit && /[\r\n]/.test(body.cardBenefit)) return 'El beneficio de la tarjeta debe ser un texto breve de una sola línea.';
+  if (body.showBenefitOnCard === true && !body.cardBenefit?.trim()) return 'Escribe el beneficio breve que quieres mostrar en la tarjeta.';
   if (requireBenefit && !body.memberBenefit?.trim()) return 'Indica el descuento o beneficio de la membresía.';
   return null;
 }

@@ -13,3 +13,8 @@ vez; las migraciones posteriores conservan las ediciones del administrador.
 
 Las nuevas altas premium requieren un beneficio. Las ediciones de versiones
 anteriores del cliente que omitan los nuevos campos los conservan.
+
+Las tarjetas usan únicamente `card_benefit` (máximo 60 caracteres, una sola línea)
+cuando `show_benefit_on_card` es verdadero. Esa opción empieza desactivada en
+los contenidos existentes. No se copia Incluye ni el beneficio detallado al
+texto de la tarjeta. El administrador debe escribirlo y autorizar su aparición.

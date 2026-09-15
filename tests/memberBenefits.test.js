@@ -44,3 +44,30 @@ test('ediciones de clientes anteriores conservan el beneficio al omitirlo', asyn
     assert.equal(res.body.memberBenefitDetails, 'Con reserva');
   } finally { service.update = original; }
 });
+
+test('tarjetas exigen autorización explícita y un texto corto independiente', async () => {
+  for (const body of [
+    { showBenefitOnCard: 'true', cardBenefit: '20% OFF' },
+    { showBenefitOnCard: true },
+    { showBenefitOnCard: true, cardBenefit: 'x'.repeat(61) },
+    { showBenefitOnCard: true, cardBenefit: '20% OFF\nCondiciones' },
+  ]) {
+    const res = response();
+    await controller.createExperience({ body: { title: 'Ejemplo', ...body } }, res, (error) => { throw error; });
+    assert.equal(res.code, 400);
+  }
+  const original = service.create;
+  service.create = async (data) => ({ ...data, id: 'ejemplo', tags: ['Museo'], includes: ['Descripción completa'] });
+  try {
+    const hidden = response();
+    await controller.createExperience({ body: { title: 'Snoopy', memberBenefit: 'Texto detallado' } }, hidden, (error) => { throw error; });
+    assert.equal(hidden.body.showBenefitOnCard, false);
+    assert.equal(hidden.body.cardBenefit, null);
+    const visible = response();
+    await controller.createExperience({ body: { title: 'Ejemplo', access: 'premium', memberBenefit: 'Descuento detallado', showBenefitOnCard: true, cardBenefit: ' 20% de descuento ' } }, visible, (error) => { throw error; });
+    assert.equal(visible.code, 201);
+    assert.equal(visible.body.showBenefitOnCard, true);
+    assert.equal(visible.body.cardBenefit, '20% de descuento');
+    assert.equal(visible.body.memberBenefit, 'Descuento detallado');
+  } finally { service.create = original; }
+});

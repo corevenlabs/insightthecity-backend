@@ -29,6 +29,12 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  if (data.show_benefit_on_card !== undefined || data.card_benefit !== undefined) {
+    await client.query(`UPDATE experiences SET
+      show_benefit_on_card = COALESCE($2::boolean, show_benefit_on_card),
+      card_benefit = CASE WHEN $3::boolean THEN $4::text ELSE card_benefit END
+      WHERE id = $1`, [id, data.show_benefit_on_card ?? null, data.card_benefit !== undefined, data.card_benefit ?? null]);
+  }
   if (data.member_benefit === undefined && data.member_benefit_details === undefined) return;
   await client.query(`UPDATE experiences SET
     member_benefit = CASE WHEN $2::boolean THEN $3::text ELSE member_benefit END,
