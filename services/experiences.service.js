@@ -28,6 +28,15 @@ const BASE_SELECT = `
   FROM experiences e
 `;
 
+async function saveMemberBenefit(client, id, data) {
+  if (data.member_benefit === undefined && data.member_benefit_details === undefined) return;
+  await client.query(`UPDATE experiences SET
+    member_benefit = CASE WHEN $2::boolean THEN $3::text ELSE member_benefit END,
+    member_benefit_details = CASE WHEN $4::boolean THEN $5::text ELSE member_benefit_details END
+    WHERE id = $1`, [id, data.member_benefit !== undefined, data.member_benefit ?? null,
+    data.member_benefit_details !== undefined, data.member_benefit_details ?? null]);
+}
+
 async function replaceIncludes(client, experienceId, includes) {
   await client.query(`DELETE FROM experience_includes WHERE experience_id = $1`, [
     experienceId,
@@ -131,6 +140,7 @@ async function create(data) {
     );
     await client.query(`UPDATE experiences SET tags = $2 WHERE id = $1`, [id, normalizeTags(data.tags ?? [data.category].filter(Boolean))]);
     await replaceIncludes(client, id, data.includes);
+    await saveMemberBenefit(client, id, data);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -196,6 +206,7 @@ async function update(id, data) {
     if (data.includes !== undefined) {
       await replaceIncludes(client, id, data.includes);
     }
+    await saveMemberBenefit(client, id, data);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");

@@ -17,6 +17,8 @@ function serialize(row) {
     description: row.description,
     includes: row.includes || [],
     recommendation: row.recommendation,
+    memberBenefit: row.member_benefit ?? null,
+    memberBenefitDetails: row.member_benefit_details ?? null,
     section: row.section,
     isFeatured: row.is_featured,
     sortOrder: row.sort_order,
@@ -43,6 +45,8 @@ function deserialize(body) {
     access: body.access,
     description: body.description,
     recommendation: body.recommendation,
+    member_benefit: body.memberBenefit === undefined ? undefined : body.memberBenefit?.trim() || null,
+    member_benefit_details: body.memberBenefitDetails === undefined ? undefined : body.memberBenefitDetails?.trim() || null,
     section: body.section,
     is_featured: body.isFeatured ?? body.is_featured,
     sort_order: body.sortOrder ?? body.sort_order,
@@ -53,6 +57,14 @@ function deserialize(body) {
     ticket_cta: body.ticketCta ?? body.ticket_cta,
     includes: body.includes,
   };
+}
+
+function validateMemberBenefit(body, requireBenefit) {
+  for (const [field, limit] of [['memberBenefit', 200], ['memberBenefitDetails', 2000]]) {
+    if (body[field] != null && (typeof body[field] !== 'string' || body[field].length > limit)) return `${field} debe ser texto de hasta ${limit} caracteres.`;
+  }
+  if (requireBenefit && !body.memberBenefit?.trim()) return 'Indica el descuento o beneficio de la membresía.';
+  return null;
 }
 
 // GET /api/experiences
@@ -98,6 +110,9 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium');
+    if (benefitError) return res.status(400).json({ success: false, message: benefitError });
+
     if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
       return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
     }
@@ -117,6 +132,9 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium' && req.body.memberBenefit !== undefined);
+    if (benefitError) return res.status(400).json({ success: false, message: benefitError });
+
     if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
       return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
     }
