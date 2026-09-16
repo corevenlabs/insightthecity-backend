@@ -41,15 +41,24 @@ function isProfileImage(file) {
     || (file.mimetype === 'image/png' && b.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])))
     || (file.mimetype === 'image/webp' && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP');
 }
+function avatarFileFromRequest(req) {
+  if (req.file) return req.file;
+  const encoded = req.body?.jpegBase64;
+  if (typeof encoded !== 'string' || !encoded.length || encoded.length > 7 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return null;
+  const buffer = Buffer.from(encoded, 'base64');
+  if (buffer.length > 5 * 1024 * 1024) return null;
+  return { buffer, mimetype: 'image/jpeg' };
+}
 async function updateAvatar(req, res, next) {
   try {
     const current = await users.findById(req.user.id);
     if (!current || !current.is_active) return res.status(401).json({ success: false, message: 'Sesión no válida' });
-    if (!isProfileImage(req.file)) return res.status(400).json({ success: false, message: 'Selecciona una foto JPG, PNG o WebP válida' });
+    const file = avatarFileFromRequest(req);
+    if (!isProfileImage(file)) return res.status(400).json({ success: false, message: 'Selecciona una foto JPG, PNG o WebP válida' });
     const extensions = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
-    const url = await uploadImage({ ...req.file, originalname: `avatar${extensions[req.file.mimetype]}` }, `avatars/${req.user.id}`);
+    const url = await uploadImage({ ...file, originalname: `avatar${extensions[file.mimetype]}` }, `avatars/${req.user.id}`);
     await db.query('UPDATE users SET avatar_url = $2 WHERE id = $1', [req.user.id, url]);
     res.json({ success: true, user: await users.findById(req.user.id) });
   } catch (error) { next(error); }
 }
-module.exports = { updateProfile, updateAvatar, validateProfile, isProfileImage };
+module.exports = { updateProfile, updateAvatar, validateProfile, isProfileImage, avatarFileFromRequest };

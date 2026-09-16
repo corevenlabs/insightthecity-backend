@@ -20,7 +20,7 @@ router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.post("/me/activate-premium", requireUserAuth, activatePremium);
 
 const { updateProfile, updateAvatar } = require('../controllers/profile.controller');
-const avatarUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+const avatarUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, fieldSize: 7 * 1024 * 1024, files: 1, fields: 1 } });
 router.patch('/me', requireUserAuth, updateProfile);
 router.post('/me/avatar', requireUserAuth, (req, res, next) => {
   avatarUpload.single('file')(req, res, (error) => {

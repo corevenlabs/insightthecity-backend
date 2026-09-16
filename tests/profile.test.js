@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProfile, isProfileImage, updateProfile } = require('../controllers/profile.controller');
+const { validateProfile, isProfileImage, updateProfile, avatarFileFromRequest } = require('../controllers/profile.controller');
 const users = require('../services/users.service');
 const db = require('../config/db');
 test('perfil permite editar datos personales sin cambiar membresía ni identidad', () => {
@@ -12,6 +12,13 @@ test('avatar valida los bytes de imagen, rechaza archivos con MIME falsificado',
   assert.equal(isProfileImage({ mimetype: 'image/jpeg', buffer: Buffer.from([255,216,255,0]) }), true);
   assert.equal(isProfileImage({ mimetype: 'image/png', buffer: Buffer.from('<script>malicious</script>') }), false);
   assert.equal(isProfileImage({ mimetype: 'image/svg+xml', buffer: Buffer.from('<svg/>') }), false);
+});
+test('avatar JPEG codificado se acepta sin el archivo FormData no compatible de Expo', () => {
+  const jpeg = Buffer.from([255, 216, 255, 0]);
+  const file = avatarFileFromRequest({ body: { jpegBase64: jpeg.toString('base64') } });
+  assert.equal(isProfileImage(file), true);
+  assert.equal(avatarFileFromRequest({ body: { jpegBase64: '!!!' } }), null);
+  assert.equal(isProfileImage(avatarFileFromRequest({ body: { jpegBase64: Buffer.from('<svg/>').toString('base64') } })), false);
 });
 test('guardar perfil solo actualiza la cuenta autenticada con valores parametrizados', async () => {
   const originalFind = users.findById;
