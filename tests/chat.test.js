@@ -35,7 +35,7 @@ test('abrir chat limpia pantalla sin consultar ni borrar memoria del usuario', a
     let body;
     await controller.getChat({ user: { id: 7 } }, { json: (data) => { body = data; } }, (error) => { throw error; });
     assert.deepEqual(body.messages, []);
-    assert.match(body.greeting, /José/);
+    assert.equal(body.greeting, null);
     assert.equal(queries.length, 0);
   } finally { users.findById = original; }
 });

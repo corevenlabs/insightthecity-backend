@@ -1,12 +1,12 @@
 const usersService = require("../services/users.service");
-const { getHistory, saveMessage, respond, greetingFor } = require("../services/chat.service");
+const { getHistory, saveMessage, respond } = require("../services/chat.service");
 
 async function getChat(req, res, next) {
   try {
     const user = await usersService.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     // La memoria permanece en el servidor; cada apertura empieza con una pantalla limpia.
-    res.json({ success: true, messages: [], greeting: greetingFor(user) });
+    res.json({ success: true, messages: [], greeting: null });
   } catch (error) { next(error); }
 }
 
