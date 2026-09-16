@@ -95,3 +95,21 @@ test('saludo sin nombre pregunta cómo llamar al usuario sin inventar identidad'
   assert.match(result.reply, /Cómo te gustaría que te llame/);
   assert.equal(requests.length, 0);
 });
+
+test('elimina enlaces escritos conservando el texto descriptivo', () => {
+  assert.equal(chat.withoutLinks('Mira [RiseNY](https://riseny.co/tickets) y https://example.com.'), 'Mira RiseNY y');
+  assert.equal(chat.withoutLinks('Visita www.example.com o example.org'), 'Visita o');
+});
+test('lugares externos solo se habilitan después de consultar ITC', async () => {
+  reset();
+  const originalList = experiences.list;
+  const originalNews = news.listNews;
+  experiences.list = async () => ({ rows: [] });
+  news.listNews = async () => ({ items: [] });
+  responses.push({ id: 'search', output: [{ type: 'function_call', name: 'search_app_content', call_id: 'call1', arguments: '{"query":"museo"}' }] }, { id: 'answer', output: [], output_text: 'No encontré una opción adecuada en ITC.' });
+  try {
+    await chat.respond({ user: {}, history: [{ role: 'user', message: 'Busco museos' }] });
+    assert.deepEqual(requests[0].tools.map((tool) => tool.name), ['search_app_content']);
+    assert.deepEqual(requests[1].tools.map((tool) => tool.name), ['search_app_content', 'search_places']);
+  } finally { experiences.list = originalList; news.listNews = originalNews; }
+});

@@ -223,3 +223,8 @@ WHERE regexp_replace(lower(e.title), '[^a-z0-9]', '', 'g') = 'riseny'
 -- Las tarjetas muestran beneficio solo con autorización explícita del administrador.
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS show_benefit_on_card BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS card_benefit VARCHAR(60);
+
+-- Perfil editable de usuarios; conserva todas las cuentas existentes.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS home_area VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT[] NOT NULL DEFAULT '{}';

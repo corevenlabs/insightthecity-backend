@@ -4,19 +4,19 @@ const crypto = require("crypto");
 
 const DRIVER = process.env.UPLOAD_DRIVER || "local";
 
-function buildKey(originalname) {
+function buildKey(originalname, prefix = 'experiences') {
   const ext = (path.extname(originalname || "") || ".jpg").toLowerCase();
   const rand = crypto.randomBytes(6).toString("hex");
-  return `experiences/${Date.now()}-${rand}${ext}`;
+  return `${prefix}/${Date.now()}-${rand}${ext}`;
 }
 
 // Sube un buffer y devuelve la URL pública.
-async function uploadImage(file) {
+async function uploadImage(file, prefix = 'experiences') {
   if (!file || !file.buffer) {
     throw new Error("Archivo inválido");
   }
 
-  const key = buildKey(file.originalname);
+  const key = buildKey(file.originalname, prefix);
 
   if (DRIVER === "gcs") {
     const storage = require("../config/storage");
@@ -35,12 +35,12 @@ async function uploadImage(file) {
 
   // Driver local (desarrollo)
   const filename = key.split("/").pop();
-  const dir = path.join(__dirname, "..", "uploads", "experiences");
+  const dir = path.join(__dirname, "..", "uploads", prefix);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, filename), file.buffer);
 
   const base = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
-  return `${base}/uploads/experiences/${filename}`;
+  return `${base}/uploads/${prefix}/${filename}`;
 }
 
 module.exports = { uploadImage };

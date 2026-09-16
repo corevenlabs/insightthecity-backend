@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 // Auth de usuarios de la app (distinto de los admins del panel).
 // La tabla `users` guarda name, email, password_hash, is_premium, is_active.
 
-const PUBLIC_FIELDS = "id, name, email, is_premium, is_active, language, created_at";
+const PUBLIC_FIELDS = "id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests";
 
 // Columnas por las que el panel puede ordenar (whitelist anti-inyección).
 const SORTABLE = new Set(["id", "name", "email", "is_premium", "is_active", "created_at"]);
