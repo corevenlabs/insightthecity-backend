@@ -18,9 +18,10 @@ test('saludo conversa sin búsquedas obligatorias y recibe perfil y contexto pre
   responses.push({ id: 'hello', output: [], output_text: 'Hola, José, ¿cómo estás?' });
   const result = await chat.respond({ user: { name: 'José Pérez', language: 'es', is_premium: true }, history: [
     { role: 'user', message: 'Mi presupuesto son 80 dólares para dos.' },
-    { role: 'assistant', message: 'Perfecto.' }, { role: 'user', message: 'Hola' },
+    { role: 'assistant', message: 'Perfecto.' }, { role: 'user', message: 'Algo tranquilo' },
   ] });
   assert.equal(requests[0].tool_choice, 'auto');
+  assert.match(requests[0].instructions, /incluye este nombre/);
   assert.match(requests[0].instructions, /José/);
   assert.match(requests[0].instructions, /membresía ITC Club activa/);
   assert.match(requests[0].input[0].content, /80 dólares/);
@@ -78,4 +79,19 @@ test('fallo del catálogo permite responder sin inventar datos ni romper la conv
     assert.match(JSON.parse(requests[1].input[0].output).error, /No inventes/);
     assert.deepEqual(result.appItems, []);
   } finally { experiences.list = originalList; news.listNews = originalNews; }
+});
+
+test('hola reconoce el perfil y nunca ofrece planes ni depende de la IA', async () => {
+  reset();
+  const result = await chat.respond({ user: { name: 'José Pérez', language: 'es' }, history: [{ role: 'user', message: 'hola' }] });
+  assert.equal(result.reply, '¡Hola, José! ¿Cómo estás?');
+  assert.deepEqual(result.appItems, []);
+  assert.deepEqual(result.places, []);
+  assert.equal(requests.length, 0);
+});
+test('saludo sin nombre pregunta cómo llamar al usuario sin inventar identidad', async () => {
+  reset();
+  const result = await chat.respond({ user: { name: null, language: 'es' }, history: [{ role: 'user', message: '¡Hola!' }] });
+  assert.match(result.reply, /Cómo te gustaría que te llame/);
+  assert.equal(requests.length, 0);
 });
