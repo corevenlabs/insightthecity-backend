@@ -5,9 +5,11 @@ const db = require("../config/db");
 
 (async () => {
   try {
-    const sql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
-    await db.query(sql);
-    console.log("✅ Migración aplicada (schema.sql)");
+    for (const file of ["schema.sql", "experience-gallery.sql"]) {
+      const sql = fs.readFileSync(path.join(__dirname, file), "utf8");
+      await db.query(sql);
+      console.log(`✅ Migración aplicada (${file})`);
+    }
   } catch (err) {
     console.error("❌ Error en migración:", err.message);
     process.exitCode = 1;

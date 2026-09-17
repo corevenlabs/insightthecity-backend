@@ -10,6 +10,7 @@ function serialize(row) {
     category: row.category,
     tags: tagsForRecord(row),
     image: row.image_url,
+    images: row.access === 'premium' ? [row.image_url, ...(Array.isArray(row.gallery_urls) ? row.gallery_urls : [])].filter(Boolean) : [row.image_url].filter(Boolean),
     date: row.date_label,
     location: row.location,
     region: row.region,
@@ -40,7 +41,8 @@ function deserialize(body) {
     title: body.title,
     category: body.tags?.length ? normalizeTags(body.tags)[0] : body.category,
     tags: body.tags,
-    image_url: body.image ?? body.image_url,
+    image_url: body.images !== undefined ? body.images[0] ?? null : body.image ?? body.image_url,
+    gallery_urls: body.images !== undefined ? body.images.slice(1) : undefined,
     date_label: body.date ?? body.date_label,
     location: body.location,
     region: body.region,
@@ -71,6 +73,21 @@ function validateMemberBenefit(body, requireBenefit) {
   if (body.cardBenefit && /[\r\n]/.test(body.cardBenefit)) return 'El beneficio de la tarjeta debe ser un texto breve de una sola línea.';
   if (body.showBenefitOnCard === true && !body.cardBenefit?.trim()) return 'Escribe el beneficio breve que quieres mostrar en la tarjeta.';
   if (requireBenefit && !body.memberBenefit?.trim()) return 'Indica el descuento o beneficio de la membresía.';
+  return null;
+}
+
+function validateGallery(body, creating) {
+  if (body.images === undefined) {
+    if (creating && body.access === 'premium' && body.isPublished !== false) return 'Agrega al menos 4 fotos para publicar una experiencia Premium.';
+    return null;
+  }
+  if (!Array.isArray(body.images) || body.images.length > 8 || body.images.some((url) => {
+    if (typeof url !== 'string' || url.length > 500) return true;
+    try { return !['http:', 'https:'].includes(new URL(url).protocol); } catch { return true; }
+  })) return 'La galería acepta hasta 8 URLs de imágenes válidas.';
+  if (new Set(body.images).size !== body.images.length) return 'No repitas la misma foto en la galería.';
+  if (body.access === 'premium' && body.isPublished !== false && body.images.length < 4) return 'Agrega al menos 4 fotos para publicar una experiencia Premium.';
+  if (body.access === 'free' && body.images.length > 1) return 'Solo las experiencias Premium pueden tener galería.';
   return null;
 }
 
@@ -119,6 +136,8 @@ const createExperience = async (req, res, next) => {
   try {
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium');
     if (benefitError) return res.status(400).json({ success: false, message: benefitError });
+    const galleryError = validateGallery(req.body, true);
+    if (galleryError) return res.status(400).json({ success: false, message: galleryError });
 
     if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
       return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
@@ -141,6 +160,8 @@ const updateExperience = async (req, res, next) => {
   try {
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium' && req.body.memberBenefit !== undefined);
     if (benefitError) return res.status(400).json({ success: false, message: benefitError });
+    const galleryError = validateGallery(req.body, false);
+    if (galleryError) return res.status(400).json({ success: false, message: galleryError });
 
     if (req.body.tags !== undefined && (!Array.isArray(req.body.tags) || req.body.tags.length > 50 || req.body.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60) || req.body.tags.length === 0)) {
       return res.status(400).json({ success: false, message: "Selecciona entre 1 y 50 etiquetas de hasta 60 caracteres." });
@@ -169,6 +190,9 @@ const deleteExperience = async (req, res, next) => {
 };
 
 module.exports = {
+  serialize,
+  deserialize,
+  validateGallery,
   listExperiences,
   getExperience,
   createExperience,

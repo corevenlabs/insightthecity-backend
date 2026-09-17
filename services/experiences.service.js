@@ -146,6 +146,9 @@ async function create(data) {
     );
     await client.query(`UPDATE experiences SET tags = $2 WHERE id = $1`, [id, normalizeTags(data.tags ?? [data.category].filter(Boolean))]);
     await replaceIncludes(client, id, data.includes);
+    if (data.gallery_urls !== undefined) {
+      await client.query(`UPDATE experiences SET gallery_urls = $2::jsonb WHERE id = $1`, [id, JSON.stringify(data.gallery_urls)]);
+    }
     await saveMemberBenefit(client, id, data);
     await client.query("COMMIT");
   } catch (err) {
@@ -211,6 +214,9 @@ async function update(id, data) {
     }
     if (data.includes !== undefined) {
       await replaceIncludes(client, id, data.includes);
+    }
+    if (data.gallery_urls !== undefined) {
+      await client.query(`UPDATE experiences SET gallery_urls = $2::jsonb WHERE id = $1`, [id, JSON.stringify(data.gallery_urls)]);
     }
     await saveMemberBenefit(client, id, data);
     await client.query("COMMIT");
