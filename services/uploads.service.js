@@ -43,4 +43,30 @@ async function uploadImage(file, prefix = 'experiences') {
   return `${base}/uploads/${prefix}/${filename}`;
 }
 
-module.exports = { uploadImage };
+async function uploadPrivatePdf(file) {
+  if (!file?.buffer || file.mimetype !== 'application/pdf') throw new Error('Archivo PDF inválido');
+  const key = buildKey(file.originalname || 'guia.pdf', 'guides');
+  if (DRIVER === 'gcs') {
+    const storage = require('../config/storage');
+    const bucketName = process.env.GCS_BUCKET;
+    if (!bucketName) throw new Error('GCS_BUCKET no configurado');
+    await storage.bucket(bucketName).file(key).save(file.buffer, { contentType: 'application/pdf', resumable: false, metadata: { cacheControl: 'private, no-store' } });
+    return { key, name: file.originalname, size: file.size };
+  }
+  const dir = path.join(__dirname, '..', 'uploads', 'guides');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, path.basename(key)), file.buffer);
+  return { key, name: file.originalname, size: file.size };
+}
+
+async function getPrivateDownloadUrl(key) {
+  if (DRIVER === 'gcs') {
+    const storage = require('../config/storage');
+    const [url] = await storage.bucket(process.env.GCS_BUCKET).file(key).getSignedUrl({ action: 'read', expires: Date.now() + 10 * 60 * 1000, responseType: 'application/pdf' });
+    return url;
+  }
+  const base = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+  return `${base}/uploads/guides/${path.basename(key)}`;
+}
+
+module.exports = { uploadImage, uploadPrivatePdf, getPrivateDownloadUrl };

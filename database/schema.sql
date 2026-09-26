@@ -305,3 +305,24 @@ CREATE TABLE IF NOT EXISTS benefit_redemptions (
 
 CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_lookup ON benefit_redemptions (token_hash);
 CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_user_experience ON benefit_redemptions (user_id, experience_id);
+
+CREATE TABLE IF NOT EXISTS guides (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  category VARCHAR(80),
+  language VARCHAR(2) NOT NULL DEFAULT 'es' CHECK (language IN ('es','en','pt')),
+  region VARCHAR(2) NOT NULL DEFAULT 'NY' CHECK (region IN ('NY','NJ')),
+  access VARCHAR(10) NOT NULL DEFAULT 'premium' CHECK (access IN ('free','premium')),
+  cover_url VARCHAR(500),
+  pdf_key VARCHAR(500) NOT NULL,
+  pdf_name VARCHAR(255),
+  pdf_size BIGINT NOT NULL DEFAULT 0,
+  page_count INTEGER,
+  is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+  is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  downloads INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_guides_published ON guides(is_published);
