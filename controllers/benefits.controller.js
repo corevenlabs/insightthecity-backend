@@ -28,7 +28,7 @@ function validationPage(record, token, currentState) {
 async function issueCode(req, res, next) {
   try {
     const result = await service.issue(req.params.experienceId, req.user.id);
-    if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+    if (result.error) return res.status(result.status).json({ success: false, message: result.error, code: result.code });
     const validationUrl = `${baseUrl(req)}/benefit/${encodeURIComponent(result.token)}`;
     const qrDataUrl = await QRCode.toDataURL(validationUrl, { width: 640, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#050505', light: '#FFFFFF' } });
     res.status(201).json({ success: true, qrDataUrl, validationUrl, expiresAt: result.expires_at, validForHours: service.VALIDITY_HOURS, reference: `ITC-${result.id}`, title: result.title, benefit: result.member_benefit, instructions: result.benefit_instructions });
@@ -51,4 +51,10 @@ async function redeemCode(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { issueCode, showCode, redeemCode, validationPage };
+async function adminDashboard(req, res, next) {
+  try {
+    res.json(await service.adminDashboard({ region: req.query.region, state: req.query.state, q: req.query.q, from: req.query.from, to: req.query.to }));
+  } catch (error) { next(error); }
+}
+
+module.exports = { issueCode, showCode, redeemCode, adminDashboard, validationPage };

@@ -19,6 +19,8 @@ const SORTABLE = new Set([
 
 const BASE_SELECT = `
   SELECT e.*,
+    (SELECT COUNT(*)::int FROM benefit_redemptions r WHERE r.experience_id = e.id AND r.redeemed_at IS NOT NULL) AS coupon_redeemed,
+    (SELECT COUNT(*)::int FROM benefit_redemptions r WHERE r.experience_id = e.id AND r.redeemed_at IS NULL AND r.revoked_at IS NULL AND r.expires_at > NOW()) AS coupon_reserved,
     COALESCE(
       (SELECT json_agg(i.item ORDER BY i.sort_order, i.id)
          FROM experience_includes i
@@ -53,6 +55,22 @@ async function saveMemberBenefit(client, id, data) {
       data.benefit_url !== undefined, data.benefit_url ?? null,
       data.benefit_cta !== undefined, data.benefit_cta ?? null,
       data.benefit_instructions !== undefined, data.benefit_instructions ?? null]);
+  }
+  if (['coupon_inventory_mode', 'coupon_total', 'coupon_per_user', 'coupon_low_stock', 'coupon_starts_at', 'coupon_ends_at', 'coupon_active'].some((key) => data[key] !== undefined)) {
+    await client.query(`UPDATE experiences SET
+      coupon_inventory_mode = COALESCE($2, coupon_inventory_mode),
+      coupon_total = CASE WHEN $3::boolean THEN $4::integer ELSE coupon_total END,
+      coupon_per_user = COALESCE($5::integer, coupon_per_user),
+      coupon_low_stock = COALESCE($6::integer, coupon_low_stock),
+      coupon_starts_at = CASE WHEN $7::boolean THEN $8::timestamptz ELSE coupon_starts_at END,
+      coupon_ends_at = CASE WHEN $9::boolean THEN $10::timestamptz ELSE coupon_ends_at END,
+      coupon_active = COALESCE($11::boolean, coupon_active)
+      WHERE id = $1`, [id, data.coupon_inventory_mode ?? null,
+      data.coupon_total !== undefined, data.coupon_total ?? null,
+      data.coupon_per_user ?? null, data.coupon_low_stock ?? null,
+      data.coupon_starts_at !== undefined, data.coupon_starts_at ?? null,
+      data.coupon_ends_at !== undefined, data.coupon_ends_at ?? null,
+      data.coupon_active === undefined ? null : Boolean(data.coupon_active)]);
   }
 }
 

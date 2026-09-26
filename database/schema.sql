@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS experiences (
   benefit_url    VARCHAR(1000),
   benefit_cta    VARCHAR(80),
   benefit_instructions TEXT,
+  coupon_inventory_mode VARCHAR(12) NOT NULL DEFAULT 'unlimited'
+                 CHECK (coupon_inventory_mode IN ('limited', 'unlimited')),
+  coupon_total   INTEGER CHECK (coupon_total IS NULL OR coupon_total >= 0),
+  coupon_per_user INTEGER NOT NULL DEFAULT 1 CHECK (coupon_per_user >= 1),
+  coupon_low_stock INTEGER NOT NULL DEFAULT 5 CHECK (coupon_low_stock >= 0),
+  coupon_starts_at TIMESTAMPTZ,
+  coupon_ends_at TIMESTAMPTZ,
+  coupon_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -43,6 +51,13 @@ ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_action VARCHAR(12) NOT 
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_url VARCHAR(1000);
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_cta VARCHAR(80);
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_instructions TEXT;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_inventory_mode VARCHAR(12) NOT NULL DEFAULT 'unlimited';
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_total INTEGER;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_per_user INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_low_stock INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_starts_at TIMESTAMPTZ;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_ends_at TIMESTAMPTZ;
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS coupon_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 DO $$
 BEGIN
@@ -51,6 +66,24 @@ BEGIN
   ) THEN
     ALTER TABLE experiences
       ADD CONSTRAINT experiences_region_check CHECK (region IN ('NY', 'NJ'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'experiences_coupon_inventory_mode_check') THEN
+    ALTER TABLE experiences ADD CONSTRAINT experiences_coupon_inventory_mode_check
+      CHECK (coupon_inventory_mode IN ('limited', 'unlimited'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'experiences_coupon_total_check') THEN
+    ALTER TABLE experiences ADD CONSTRAINT experiences_coupon_total_check
+      CHECK (coupon_total IS NULL OR coupon_total >= 0);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'experiences_coupon_per_user_check') THEN
+    ALTER TABLE experiences ADD CONSTRAINT experiences_coupon_per_user_check CHECK (coupon_per_user >= 1);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'experiences_coupon_low_stock_check') THEN
+    ALTER TABLE experiences ADD CONSTRAINT experiences_coupon_low_stock_check CHECK (coupon_low_stock >= 0);
   END IF;
 END $$;
 

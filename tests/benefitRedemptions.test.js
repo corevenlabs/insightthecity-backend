@@ -29,6 +29,14 @@ test('panel exige HTTPS para enlace externo y acepta QR', () => {
   assert.equal(experiences.validateMemberBenefit({ benefitAction: 'qr', benefitInstructions: 'Mostrar al personal' }, false), null);
 });
 
+test('inventario QR valida cantidades, límites y fechas', () => {
+  assert.equal(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited', couponTotal: 50, couponPerUser: 1, couponLowStock: 10 }, false), null);
+  assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited' }, false), /cantidad total/i);
+  assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited', couponTotal: -1 }, false), /couponTotal/);
+  assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'unlimited', couponPerUser: 0 }, false), /couponPerUser/);
+  assert.match(experiences.validateMemberBenefit({ couponStartsAt: '2026-09-27T12:00:00Z', couponEndsAt: '2026-09-26T12:00:00Z' }, false), /posterior/);
+});
+
 test('la página escaneada no expone datos personales y solo permite canjear códigos válidos', () => {
   const record = { title: 'Museo', member_benefit: '20% OFF', member_benefit_details: 'Una visita', location: 'NY', expires_at: new Date(Date.now() + 60_000) };
   const valid = validationPage(record, 'secret', 'valid');

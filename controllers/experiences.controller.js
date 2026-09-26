@@ -4,6 +4,18 @@ const service = require("../services/experiences.service");
 // Fila DB -> forma de la API (coincide con el tipo Experience de la app Expo).
 function serialize(row) {
   if (!row) return null;
+  const couponRedeemed = Number(row.coupon_redeemed || 0);
+  const couponReserved = Number(row.coupon_reserved || 0);
+  const couponAvailable = row.coupon_inventory_mode === 'limited'
+    ? Math.max(0, Number(row.coupon_total || 0) - couponRedeemed - couponReserved)
+    : null;
+  const now = Date.now();
+  const couponInWindow = (!row.coupon_starts_at || new Date(row.coupon_starts_at).getTime() <= now)
+    && (!row.coupon_ends_at || new Date(row.coupon_ends_at).getTime() > now);
+  const couponStatus = row.benefit_action !== 'qr' ? null
+    : !row.coupon_active || !couponInWindow ? 'paused'
+    : couponAvailable === 0 ? 'sold_out'
+    : couponAvailable !== null && couponAvailable <= Number(row.coupon_low_stock || 0) ? 'low_stock' : 'available';
   return {
     id: row.id,
     title: row.title,
@@ -26,6 +38,17 @@ function serialize(row) {
     benefitUrl: row.benefit_url ?? null,
     benefitCta: row.benefit_cta ?? null,
     benefitInstructions: row.benefit_instructions ?? null,
+    couponInventoryMode: row.coupon_inventory_mode || 'unlimited',
+    couponTotal: row.coupon_total == null ? null : Number(row.coupon_total),
+    couponPerUser: Number(row.coupon_per_user || 1),
+    couponLowStock: Number(row.coupon_low_stock || 0),
+    couponStartsAt: row.coupon_starts_at ?? null,
+    couponEndsAt: row.coupon_ends_at ?? null,
+    couponActive: row.coupon_active !== false,
+    couponReserved,
+    couponRedeemed,
+    couponAvailable,
+    couponStatus,
     section: row.section,
     isFeatured: row.is_featured,
     sortOrder: row.sort_order,
@@ -61,6 +84,13 @@ function deserialize(body) {
     benefit_url: body.benefitUrl === undefined ? undefined : body.benefitUrl?.trim() || null,
     benefit_cta: body.benefitCta === undefined ? undefined : body.benefitCta?.trim() || null,
     benefit_instructions: body.benefitInstructions === undefined ? undefined : body.benefitInstructions?.trim() || null,
+    coupon_inventory_mode: body.couponInventoryMode,
+    coupon_total: body.couponTotal,
+    coupon_per_user: body.couponPerUser,
+    coupon_low_stock: body.couponLowStock,
+    coupon_starts_at: body.couponStartsAt,
+    coupon_ends_at: body.couponEndsAt,
+    coupon_active: body.couponActive,
     section: body.section,
     is_featured: body.isFeatured ?? body.is_featured,
     sort_order: body.sortOrder ?? body.sort_order,
@@ -90,6 +120,12 @@ function validateMemberBenefit(body, requireBenefit) {
   }
   if (body.benefitCta != null && (typeof body.benefitCta !== 'string' || body.benefitCta.length > 80)) return 'El texto del botón debe tener hasta 80 caracteres.';
   if (body.benefitInstructions != null && (typeof body.benefitInstructions !== 'string' || body.benefitInstructions.length > 1000)) return 'Las instrucciones deben tener hasta 1000 caracteres.';
+  if (body.couponInventoryMode !== undefined && !['limited', 'unlimited'].includes(body.couponInventoryMode)) return 'Selecciona inventario limitado o ilimitado.';
+  for (const [field, minimum] of [['couponTotal', 0], ['couponLowStock', 0], ['couponPerUser', 1]]) {
+    if (body[field] !== undefined && (!Number.isInteger(body[field]) || body[field] < minimum)) return `${field} debe ser un número entero mayor o igual a ${minimum}.`;
+  }
+  if (body.benefitAction === 'qr' && body.couponInventoryMode === 'limited' && !Number.isInteger(body.couponTotal)) return 'Indica la cantidad total de cupones.';
+  if (body.couponStartsAt && body.couponEndsAt && new Date(body.couponStartsAt) >= new Date(body.couponEndsAt)) return 'La fecha de finalización debe ser posterior al inicio.';
   return null;
 }
 
