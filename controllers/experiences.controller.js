@@ -22,6 +22,10 @@ function serialize(row) {
     cardBenefit: row.card_benefit ?? null,
     memberBenefit: row.member_benefit ?? null,
     memberBenefitDetails: row.member_benefit_details ?? null,
+    benefitAction: row.benefit_action || 'none',
+    benefitUrl: row.benefit_url ?? null,
+    benefitCta: row.benefit_cta ?? null,
+    benefitInstructions: row.benefit_instructions ?? null,
     section: row.section,
     isFeatured: row.is_featured,
     sortOrder: row.sort_order,
@@ -53,6 +57,10 @@ function deserialize(body) {
     card_benefit: body.cardBenefit === undefined ? undefined : body.cardBenefit?.trim() || null,
     member_benefit: body.memberBenefit === undefined ? undefined : body.memberBenefit?.trim() || null,
     member_benefit_details: body.memberBenefitDetails === undefined ? undefined : body.memberBenefitDetails?.trim() || null,
+    benefit_action: body.benefitAction,
+    benefit_url: body.benefitUrl === undefined ? undefined : body.benefitUrl?.trim() || null,
+    benefit_cta: body.benefitCta === undefined ? undefined : body.benefitCta?.trim() || null,
+    benefit_instructions: body.benefitInstructions === undefined ? undefined : body.benefitInstructions?.trim() || null,
     section: body.section,
     is_featured: body.isFeatured ?? body.is_featured,
     sort_order: body.sortOrder ?? body.sort_order,
@@ -73,6 +81,15 @@ function validateMemberBenefit(body, requireBenefit) {
   if (body.cardBenefit && /[\r\n]/.test(body.cardBenefit)) return 'El beneficio de la tarjeta debe ser un texto breve de una sola línea.';
   if (body.showBenefitOnCard === true && !body.cardBenefit?.trim()) return 'Escribe el beneficio breve que quieres mostrar en la tarjeta.';
   if (requireBenefit && !body.memberBenefit?.trim()) return 'Indica el descuento o beneficio de la membresía.';
+  if (body.benefitAction !== undefined && !['none', 'external', 'qr'].includes(body.benefitAction)) return 'Selecciona un método válido para obtener el beneficio.';
+  if (body.benefitAction === 'external') {
+    try {
+      const url = new URL(body.benefitUrl);
+      if (url.protocol !== 'https:') throw new Error();
+    } catch { return 'Agrega un enlace seguro que comience con https:// para obtener el beneficio.'; }
+  }
+  if (body.benefitCta != null && (typeof body.benefitCta !== 'string' || body.benefitCta.length > 80)) return 'El texto del botón debe tener hasta 80 caracteres.';
+  if (body.benefitInstructions != null && (typeof body.benefitInstructions !== 'string' || body.benefitInstructions.length > 1000)) return 'Las instrucciones deben tener hasta 1000 caracteres.';
   return null;
 }
 
@@ -192,6 +209,7 @@ const deleteExperience = async (req, res, next) => {
 module.exports = {
   serialize,
   deserialize,
+  validateMemberBenefit,
   validateGallery,
   listExperiences,
   getExperience,

@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS experiences (
   is_paid_event  BOOLEAN NOT NULL DEFAULT FALSE,    -- entrada vendida fuera de ITC
   ticket_url     VARCHAR(1000),                     -- enlace externo de compra
   ticket_cta     VARCHAR(80),                       -- texto futuro del botón en la app
+  benefit_action VARCHAR(12) NOT NULL DEFAULT 'none'
+                 CHECK (benefit_action IN ('none', 'external', 'qr')),
+  benefit_url    VARCHAR(1000),
+  benefit_cta    VARCHAR(80),
+  benefit_instructions TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -34,6 +39,10 @@ ALTER TABLE experiences ADD COLUMN IF NOT EXISTS is_paid_event BOOLEAN NOT NULL 
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_url VARCHAR(1000);
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS ticket_cta VARCHAR(80);
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS region VARCHAR(2) NOT NULL DEFAULT 'NY';
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_action VARCHAR(12) NOT NULL DEFAULT 'none';
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_url VARCHAR(1000);
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_cta VARCHAR(80);
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS benefit_instructions TEXT;
 
 DO $$
 BEGIN
@@ -42,6 +51,17 @@ BEGIN
   ) THEN
     ALTER TABLE experiences
       ADD CONSTRAINT experiences_region_check CHECK (region IN ('NY', 'NJ'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'experiences_benefit_action_check'
+  ) THEN
+    ALTER TABLE experiences
+      ADD CONSTRAINT experiences_benefit_action_check
+      CHECK (benefit_action IN ('none', 'external', 'qr'));
   END IF;
 END $$;
 
@@ -152,6 +172,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(2) NOT NULL DEFAULT 'es';
 
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(64) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
   id         SERIAL PRIMARY KEY,
   user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -228,3 +256,19 @@ ALTER TABLE experiences ADD COLUMN IF NOT EXISTS card_benefit VARCHAR(60);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS home_area VARCHAR(100) NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT[] NOT NULL DEFAULT '{}';
+
+-- Códigos temporales de beneficios ITC Club. El token se guarda como hash;
+-- el valor escaneable solo existe en el QR entregado al usuario.
+CREATE TABLE IF NOT EXISTS benefit_redemptions (
+  id            BIGSERIAL PRIMARY KEY,
+  experience_id VARCHAR(120) NOT NULL REFERENCES experiences(id) ON DELETE CASCADE,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash    VARCHAR(64) UNIQUE NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at    TIMESTAMPTZ NOT NULL,
+  redeemed_at   TIMESTAMPTZ,
+  revoked_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_lookup ON benefit_redemptions (token_hash);
+CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_user_experience ON benefit_redemptions (user_id, experience_id);

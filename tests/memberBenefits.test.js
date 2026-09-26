@@ -23,7 +23,7 @@ test('guarda y devuelve descuento y condiciones independientes de Incluye', asyn
   service.create = async (data) => { payload = data; return { ...data, id: 'riseny', tags: ['Museo'], includes: data.includes }; };
   try {
     const res = response();
-    await controller.createExperience({ body: { title: 'RiseNY', access: 'premium', tags: ['Museo'], memberBenefit: ' 20% de descuento ', memberBenefitDetails: ' Lunes a jueves ', includes: ['Entrada general'] } }, res, (error) => { throw error; });
+    await controller.createExperience({ body: { title: 'RiseNY', access: 'premium', isPublished: false, tags: ['Museo'], memberBenefit: ' 20% de descuento ', memberBenefitDetails: ' Lunes a jueves ', includes: ['Entrada general'] } }, res, (error) => { throw error; });
     assert.equal(res.code, 201);
     assert.equal(payload.member_benefit, '20% de descuento');
     assert.equal(res.body.memberBenefit, '20% de descuento');
@@ -64,7 +64,7 @@ test('tarjetas exigen autorización explícita y un texto corto independiente', 
     assert.equal(hidden.body.showBenefitOnCard, false);
     assert.equal(hidden.body.cardBenefit, null);
     const visible = response();
-    await controller.createExperience({ body: { title: 'Ejemplo', access: 'premium', memberBenefit: 'Descuento detallado', showBenefitOnCard: true, cardBenefit: ' 20% de descuento ' } }, visible, (error) => { throw error; });
+    await controller.createExperience({ body: { title: 'Ejemplo', access: 'premium', isPublished: false, memberBenefit: 'Descuento detallado', showBenefitOnCard: true, cardBenefit: ' 20% de descuento ' } }, visible, (error) => { throw error; });
     assert.equal(visible.code, 201);
     assert.equal(visible.body.showBenefitOnCard, true);
     assert.equal(visible.body.cardBenefit, '20% de descuento');

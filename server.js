@@ -13,6 +13,7 @@ const usersRouter = require("./routes/users.routes");
 const uploadsRouter = require("./routes/uploads.routes");
 const newsRouter = require("./routes/news.routes");
 const partnershipsRouter = require("./routes/partnerships.routes");
+const benefitsRouter = require("./routes/benefits.routes");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
 
@@ -38,6 +39,7 @@ app.use("/api/users", usersRouter);
 app.use("/api/uploads", uploadsRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/partnerships", partnershipsRouter);
+app.use(benefitsRouter);
 
 app.use(manejadorErrors)
 

@@ -12,10 +12,13 @@ const {
   remove,
 } = require("../controllers/users.controller");
 const { requireAuth, requireUserAuth } = require("../middleware/auth");
+const passwordReset = require('../controllers/password-reset.controller');
 
 // --- Auth de usuarios de la app móvil ---
 router.post("/register", register);
 router.post("/login", login);
+router.post('/password-reset/request', passwordReset.requestReset);
+router.post('/password-reset/confirm', passwordReset.resetPassword);
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.post("/me/activate-premium", requireUserAuth, activatePremium);
 

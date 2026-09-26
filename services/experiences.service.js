@@ -35,12 +35,25 @@ async function saveMemberBenefit(client, id, data) {
       card_benefit = CASE WHEN $3::boolean THEN $4::text ELSE card_benefit END
       WHERE id = $1`, [id, data.show_benefit_on_card ?? null, data.card_benefit !== undefined, data.card_benefit ?? null]);
   }
-  if (data.member_benefit === undefined && data.member_benefit_details === undefined) return;
-  await client.query(`UPDATE experiences SET
-    member_benefit = CASE WHEN $2::boolean THEN $3::text ELSE member_benefit END,
-    member_benefit_details = CASE WHEN $4::boolean THEN $5::text ELSE member_benefit_details END
-    WHERE id = $1`, [id, data.member_benefit !== undefined, data.member_benefit ?? null,
-    data.member_benefit_details !== undefined, data.member_benefit_details ?? null]);
+  if (data.member_benefit !== undefined || data.member_benefit_details !== undefined) {
+    await client.query(`UPDATE experiences SET
+      member_benefit = CASE WHEN $2::boolean THEN $3::text ELSE member_benefit END,
+      member_benefit_details = CASE WHEN $4::boolean THEN $5::text ELSE member_benefit_details END
+      WHERE id = $1`, [id, data.member_benefit !== undefined, data.member_benefit ?? null,
+      data.member_benefit_details !== undefined, data.member_benefit_details ?? null]);
+  }
+
+  if (data.benefit_action !== undefined || data.benefit_url !== undefined || data.benefit_cta !== undefined || data.benefit_instructions !== undefined) {
+    await client.query(`UPDATE experiences SET
+      benefit_action = COALESCE($2, benefit_action),
+      benefit_url = CASE WHEN $3::boolean THEN $4::text ELSE benefit_url END,
+      benefit_cta = CASE WHEN $5::boolean THEN $6::text ELSE benefit_cta END,
+      benefit_instructions = CASE WHEN $7::boolean THEN $8::text ELSE benefit_instructions END
+      WHERE id = $1`, [id, data.benefit_action ?? null,
+      data.benefit_url !== undefined, data.benefit_url ?? null,
+      data.benefit_cta !== undefined, data.benefit_cta ?? null,
+      data.benefit_instructions !== undefined, data.benefit_instructions ?? null]);
+  }
 }
 
 async function replaceIncludes(client, experienceId, includes) {
