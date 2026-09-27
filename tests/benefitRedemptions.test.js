@@ -31,7 +31,10 @@ test('panel exige HTTPS para enlace externo y acepta QR', () => {
 
 test('inventario QR valida cantidades, límites y fechas', () => {
   assert.equal(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited', couponTotal: 50, couponPerUser: 1, couponLowStock: 10 }, false), null);
+  assert.equal(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'unlimited', couponTotal: null, couponPerUser: 1, couponLowStock: 0 }, false), null);
+  assert.equal(experiences.validateMemberBenefit({ benefitAction: 'external', benefitUrl: 'https://example.com', couponTotal: null }, false), null);
   assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited' }, false), /cantidad total/i);
+  assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited', couponTotal: null }, false), /cantidad total/i);
   assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'limited', couponTotal: -1 }, false), /couponTotal/);
   assert.match(experiences.validateMemberBenefit({ benefitAction: 'qr', couponInventoryMode: 'unlimited', couponPerUser: 0 }, false), /couponPerUser/);
   assert.match(experiences.validateMemberBenefit({ couponStartsAt: '2026-09-27T12:00:00Z', couponEndsAt: '2026-09-26T12:00:00Z' }, false), /posterior/);

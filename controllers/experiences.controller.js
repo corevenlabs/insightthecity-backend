@@ -122,7 +122,8 @@ function validateMemberBenefit(body, requireBenefit) {
   if (body.benefitInstructions != null && (typeof body.benefitInstructions !== 'string' || body.benefitInstructions.length > 1000)) return 'Las instrucciones deben tener hasta 1000 caracteres.';
   if (body.couponInventoryMode !== undefined && !['limited', 'unlimited'].includes(body.couponInventoryMode)) return 'Selecciona inventario limitado o ilimitado.';
   for (const [field, minimum] of [['couponTotal', 0], ['couponLowStock', 0], ['couponPerUser', 1]]) {
-    if (body[field] !== undefined && (!Number.isInteger(body[field]) || body[field] < minimum)) return `${field} debe ser un número entero mayor o igual a ${minimum}.`;
+    const isEmptyOptionalTotal = field === 'couponTotal' && body[field] === null;
+    if (body[field] !== undefined && !isEmptyOptionalTotal && (!Number.isInteger(body[field]) || body[field] < minimum)) return `${field} debe ser un número entero mayor o igual a ${minimum}.`;
   }
   if (body.benefitAction === 'qr' && body.couponInventoryMode === 'limited' && !Number.isInteger(body.couponTotal)) return 'Indica la cantidad total de cupones.';
   if (body.couponStartsAt && body.couponEndsAt && new Date(body.couponStartsAt) >= new Date(body.couponEndsAt)) return 'La fecha de finalización debe ser posterior al inicio.';
