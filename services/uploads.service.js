@@ -59,14 +59,18 @@ async function uploadPrivatePdf(file) {
   return { key, name: file.originalname, size: file.size };
 }
 
-async function getPrivateDownloadUrl(key) {
+function streamPrivatePdf(key, response) {
+  let stream;
   if (DRIVER === 'gcs') {
     const storage = require('../config/storage');
-    const [url] = await storage.bucket(process.env.GCS_BUCKET).file(key).getSignedUrl({ action: 'read', expires: Date.now() + 10 * 60 * 1000, responseType: 'application/pdf' });
-    return url;
+    const bucketName = process.env.GCS_BUCKET;
+    if (!bucketName) throw new Error('GCS_BUCKET no configurado');
+    stream = storage.bucket(bucketName).file(key).createReadStream();
+  } else {
+    stream = fs.createReadStream(path.join(__dirname, '..', 'uploads', 'guides', path.basename(key)));
   }
-  const base = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-  return `${base}/uploads/guides/${path.basename(key)}`;
+  stream.pipe(response);
+  return stream;
 }
 
-module.exports = { uploadImage, uploadPrivatePdf, getPrivateDownloadUrl };
+module.exports = { uploadImage, uploadPrivatePdf, streamPrivatePdf };

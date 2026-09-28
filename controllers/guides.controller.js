@@ -1,9 +1,11 @@
 const service=require('../services/guides.service');
-const {uploadPrivatePdf}=require('../services/uploads.service');
+const {uploadPrivatePdf,streamPrivatePdf}=require('../services/uploads.service');
+const {createGuideDownloadToken,verifyGuideDownloadToken}=require('../services/guide-download-token.service');
 const list=async(req,res,next)=>{try{res.json(await service.list(Boolean(req.admin)));}catch(e){next(e)}};
 const upload=async(req,res,next)=>{try{if(!req.file)return res.status(400).json({message:'Selecciona un PDF.'});res.json(await uploadPrivatePdf(req.file));}catch(e){next(e)}};
 const create=async(req,res,next)=>{try{if(!req.body.title||!req.body.pdfKey)return res.status(400).json({message:'Título y PDF son obligatorios.'});res.status(201).json(await service.save(null,req.body));}catch(e){next(e)}};
 const update=async(req,res,next)=>{try{const g=await service.save(req.params.id,req.body);if(!g)return res.status(404).json({message:'Guía no encontrada'});res.json(g);}catch(e){next(e)}};
 const remove=async(req,res,next)=>{try{res.json({success:await service.remove(req.params.id)});}catch(e){next(e)}};
-const download=async(req,res,next)=>{try{const data=await service.download(req.params.id,req.user.id);if(!data)return res.status(404).json({message:'Guía no encontrada'});res.json({url:data.url});}catch(e){next(e)}};
-module.exports={list,upload,create,update,remove,download};
+const download=async(req,res,next)=>{try{const guide=await service.download(req.params.id,req.user.id);if(!guide)return res.status(404).json({message:'Guía no encontrada'});const ticket=createGuideDownloadToken(guide.id,req.user.id);const base=process.env.PUBLIC_BASE_URL||`${req.protocol}://${req.get('host')}`;res.json({url:`${base}/api/guides/${guide.id}/file?ticket=${encodeURIComponent(ticket)}`});}catch(e){next(e)}};
+const file=async(req,res,next)=>{try{verifyGuideDownloadToken(req.query.ticket,req.params.id);const guide=await service.get(req.params.id);if(!guide||!guide.isPublished)return res.status(404).send('Guía no encontrada');res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(guide.pdfName||'guia.pdf')}`);res.setHeader('Cache-Control','private, no-store');const stream=streamPrivatePdf(guide.pdfKey,res);stream.on('error',next);}catch(e){e.status=401;next(e)}};
+module.exports={list,upload,create,update,remove,download,file};
