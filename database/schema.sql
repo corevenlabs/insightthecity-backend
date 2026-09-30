@@ -325,4 +325,29 @@ CREATE TABLE IF NOT EXISTS guides (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE guides ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE guides ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'usd';
+ALTER TABLE guides ADD COLUMN IF NOT EXISTS individual_purchase_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE guides ADD COLUMN IF NOT EXISTS included_in_membership BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE guides DROP CONSTRAINT IF EXISTS guides_price_cents_check;
+ALTER TABLE guides ADD CONSTRAINT guides_price_cents_check CHECK (price_cents >= 50);
+ALTER TABLE guides DROP CONSTRAINT IF EXISTS guides_currency_check;
+ALTER TABLE guides ADD CONSTRAINT guides_currency_check CHECK (currency ~ '^[a-z]{3}$');
 CREATE INDEX IF NOT EXISTS idx_guides_published ON guides(is_published);
+
+CREATE TABLE IF NOT EXISTS guide_purchases (
+  id BIGSERIAL PRIMARY KEY,
+  guide_id BIGINT NOT NULL REFERENCES guides(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL DEFAULT 'stripe',
+  transaction_id VARCHAR(255) NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'usd',
+  status VARCHAR(20) NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','refunded','canceled')),
+  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (provider, transaction_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guide_purchases_user ON guide_purchases(user_id, purchased_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_guide_purchases_owned
+  ON guide_purchases(user_id, guide_id) WHERE status = 'paid';
