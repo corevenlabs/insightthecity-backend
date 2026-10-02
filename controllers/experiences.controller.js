@@ -57,6 +57,7 @@ function serialize(row) {
     isPaidEvent: row.is_paid_event,
     ticketUrl: row.ticket_url,
     ticketCta: row.ticket_cta,
+    isAgeRestricted: row.is_age_restricted === true,
     updatedAt: row.updated_at,
   };
 }
@@ -99,6 +100,7 @@ function deserialize(body) {
     is_paid_event: body.isPaidEvent ?? body.is_paid_event,
     ticket_url: body.ticketUrl ?? body.ticket_url,
     ticket_cta: body.ticketCta ?? body.ticket_cta,
+    is_age_restricted: body.isAgeRestricted,
     includes: body.includes,
   };
 }
@@ -108,6 +110,7 @@ function validateMemberBenefit(body, requireBenefit) {
     if (body[field] != null && (typeof body[field] !== 'string' || body[field].length > limit)) return `${field} debe ser texto de hasta ${limit} caracteres.`;
   }
   if (body.showBenefitOnCard !== undefined && typeof body.showBenefitOnCard !== 'boolean') return 'La opción de mostrar beneficio debe ser verdadero o falso.';
+  if (body.isAgeRestricted !== undefined && typeof body.isAgeRestricted !== 'boolean') return 'La opción 21+ debe ser verdadero o falso.';
   if (body.cardBenefit && /[\r\n]/.test(body.cardBenefit)) return 'El beneficio de la tarjeta debe ser un texto breve de una sola línea.';
   if (body.showBenefitOnCard === true && !body.cardBenefit?.trim()) return 'Escribe el beneficio breve que quieres mostrar en la tarjeta.';
   if (requireBenefit && !body.memberBenefit?.trim()) return 'Indica el descuento o beneficio de la membresía.';

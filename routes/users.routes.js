@@ -5,7 +5,7 @@ const {
   register,
   login,
   me,
-  activatePremium,
+  deleteMe,
   list,
   getOne,
   update,
@@ -20,7 +20,7 @@ router.post("/login", login);
 router.post('/password-reset/request', passwordReset.requestReset);
 router.post('/password-reset/confirm', passwordReset.resetPassword);
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
-router.post("/me/activate-premium", requireUserAuth, activatePremium);
+router.delete("/me", requireUserAuth, deleteMe);
 
 const { updateProfile, updateAvatar } = require('../controllers/profile.controller');
 const avatarUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, fieldSize: 7 * 1024 * 1024, files: 1, fields: 1 } });

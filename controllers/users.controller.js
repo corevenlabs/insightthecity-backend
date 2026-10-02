@@ -1,4 +1,5 @@
 const usersService = require("../services/users.service");
+const subscriptions = require("../services/subscription.service");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -13,12 +14,15 @@ function serialize(u) {
     is_active: u.is_active,
     language: u.language || "es",
     created_at: u.created_at,
+    subscription_status: u.subscription_status ?? null,
+    subscription_current_period_end: u.subscription_current_period_end ?? null,
+    subscription_cancel_at_period_end: u.subscription_cancel_at_period_end === true,
   };
 }
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, language = "es" } = req.body || {};
+    const { name, email, password, language = "es", acceptLegal } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "email y password requeridos" });
@@ -28,6 +32,10 @@ const register = async (req, res, next) => {
     }
     if (String(password).length < 8) {
       return res.status(400).json({ success: false, message: "La contraseña debe tener al menos 8 caracteres" });
+    }
+    // Consentimiento afirmativo a Términos y Privacidad (casilla en la app).
+    if (acceptLegal !== true) {
+      return res.status(400).json({ success: false, message: "Debes aceptar los Términos y la Política de Privacidad" });
     }
     if (!["es", "en", "pt"].includes(language)) {
       return res.status(400).json({ success: false, message: "Idioma no válido" });
@@ -66,22 +74,24 @@ const login = async (req, res, next) => {
 
 const me = async (req, res, next) => {
   try {
+    await subscriptions.syncIfStale(req.user.id);
     const user = await usersService.findById(req.user.id);
     // Si la cuenta ya no existe o fue desactivada, forzamos cierre de sesión.
     if (!user || user.is_active === false) {
       return res.status(401).json({ success: false, message: "Sesión no válida" });
     }
-    res.json({ success: true, user });
+    res.json({ success: true, user: usersService.publicUser(user) });
   } catch (err) {
     next(err);
   }
 };
 
-const activatePremium = async (req, res, next) => {
+// DELETE /api/users/me { password } — el usuario elimina su cuenta desde la app.
+const deleteMe = async (req, res, next) => {
   try {
-    const user = await usersService.activatePremium(req.user.id);
-    if (!user) return res.status(404).json({ success: false, message: "Usuario no encontrado" });
-    res.json({ success: true, user });
+    const deleted = await usersService.deleteOwnAccount(req.user.id, req.body?.password);
+    if (!deleted) return res.status(400).json({ success: false, message: "La contraseña no es correcta" });
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
@@ -146,4 +156,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, me, activatePremium, list, getOne, update, remove };
+module.exports = { register, login, me, deleteMe, list, getOne, update, remove };

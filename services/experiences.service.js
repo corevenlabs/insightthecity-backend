@@ -31,6 +31,9 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  if (data.is_age_restricted !== undefined) {
+    await client.query(`UPDATE experiences SET is_age_restricted = $2 WHERE id = $1`, [id, Boolean(data.is_age_restricted)]);
+  }
   if (data.show_benefit_on_card !== undefined || data.card_benefit !== undefined) {
     await client.query(`UPDATE experiences SET
       show_benefit_on_card = COALESCE($2::boolean, show_benefit_on_card),

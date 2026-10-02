@@ -351,3 +351,52 @@ CREATE TABLE IF NOT EXISTS guide_purchases (
 CREATE INDEX IF NOT EXISTS idx_guide_purchases_user ON guide_purchases(user_id, purchased_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_guide_purchases_owned
   ON guide_purchases(user_id, guide_id) WHERE status = 'paid';
+
+-- ============================================================
+-- Cumplimiento legal (NY / NJ): documentos legales versionados,
+-- consentimientos y estado real de la suscripción en Stripe.
+-- ============================================================
+
+-- Cada fila es una versión. Las publicadas (published_at) son inmutables;
+-- la vigente es la publicada más reciente por slug + idioma.
+CREATE TABLE IF NOT EXISTS legal_documents (
+  id           BIGSERIAL PRIMARY KEY,
+  slug         VARCHAR(30) NOT NULL CHECK (slug IN ('terms', 'privacy', 'subscription', 'accessibility')),
+  language     VARCHAR(2) NOT NULL DEFAULT 'es' CHECK (language IN ('es', 'en', 'pt')),
+  version      INTEGER NOT NULL,
+  title        VARCHAR(200) NOT NULL,
+  content      TEXT NOT NULL,
+  published_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (slug, language, version)
+);
+CREATE INDEX IF NOT EXISTS idx_legal_documents_current ON legal_documents (slug, language, published_at DESC);
+
+-- Prueba de aceptación: qué versión aceptó cada usuario y en qué contexto.
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_id BIGINT REFERENCES legal_documents(id) ON DELETE SET NULL,
+  slug        VARCHAR(30) NOT NULL,
+  version     INTEGER,
+  context     VARCHAR(20) NOT NULL CHECK (context IN ('register', 'subscription')),
+  accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user ON legal_acceptances (user_id, accepted_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_amount_cents INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_currency VARCHAR(3);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_interval VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_synced_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_sent_for VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS autorenew_consent_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_stripe_subscription ON users (stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
+
+-- Experiencias con alcohol u otro contenido 21+: la app muestra el aviso de edad.
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS is_age_restricted BOOLEAN NOT NULL DEFAULT FALSE;
