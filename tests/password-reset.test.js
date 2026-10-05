@@ -3,11 +3,13 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const service = require('../services/password-reset.service');
+const mailer = require('../services/password-reset-mail.service');
 
 test('recuperación envía código, rechaza uno incorrecto y consume el correcto una sola vez', async () => {
   const originalQuery = db.query;
   const originalConnect = db.connect;
-  const originalFetch = global.fetch;
+  const originalSend = mailer.send;
+  const originalConfigured = mailer.isConfigured;
   const originalKey = process.env.RESEND_API_KEY;
   const originalFrom = process.env.PASSWORD_RESET_FROM;
   const originalSecret = process.env.JWT_SECRET;
@@ -19,9 +21,9 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
     process.env.RESEND_API_KEY = 'test-key';
     process.env.PASSWORD_RESET_FROM = 'ITC Club <test@example.com>';
     process.env.JWT_SECRET = 'test-secret';
-    global.fetch = async (_url, request) => {
-      sentCode = JSON.parse(request.body).text.match(/\b\d{8}\b/)[0];
-      return { ok: true };
+    mailer.isConfigured = () => true;
+    mailer.send = async (message) => {
+      sentCode = message.text.match(/\b\d{8}\b/)[0];
     };
     db.query = async (sql, values) => {
       if (sql.includes('SELECT id, email, language')) return { rows: [user] };
@@ -53,7 +55,8 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
   } finally {
     db.query = originalQuery;
     db.connect = originalConnect;
-    global.fetch = originalFetch;
+    mailer.send = originalSend;
+    mailer.isConfigured = originalConfigured;
     for (const [key, value] of Object.entries({ RESEND_API_KEY: originalKey, PASSWORD_RESET_FROM: originalFrom, JWT_SECRET: originalSecret })) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }

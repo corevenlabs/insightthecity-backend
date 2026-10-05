@@ -1,6 +1,7 @@
 const { createHmac, randomInt, timingSafeEqual } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const mailer = require('./password-reset-mail.service');
 
 const RESET_MINUTES = 15;
 const REQUEST_DELAY_SECONDS = 60;
@@ -17,22 +18,15 @@ function emailText(code, language) {
 }
 
 async function sendCode(email, code, language) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: process.env.PASSWORD_RESET_FROM,
+  await mailer.send({
       to: [email],
       subject: language === 'en' ? 'Your ITC Club password reset code' : language === 'pt' ? 'Seu código de recuperação ITC Club' : 'Tu código de recuperación ITC Club',
       text: emailText(code, language),
-    }),
-    signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error('No se pudo enviar el correo de recuperación');
 }
 
 async function requestReset(email) {
-  if (!process.env.RESEND_API_KEY || !process.env.PASSWORD_RESET_FROM) {
+  if (!mailer.isConfigured()) {
     const error = new Error('La recuperación por correo aún no está disponible');
     error.status = 503;
     throw error;
@@ -61,7 +55,7 @@ async function requestReset(email) {
   } catch (error) {
     await db.query('DELETE FROM password_reset_codes WHERE user_id = $1 AND code_hash = $2', [user.id, codeHash]);
     // La respuesta pública sigue siendo genérica para no revelar si la cuenta existe.
-    console.error('No se pudo enviar un correo de recuperación:', error.message);
+    console.error('No se pudo enviar un correo de recuperación:', error.code || 'MAIL_SEND_FAILED');
   }
 }
 

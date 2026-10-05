@@ -62,6 +62,18 @@ jobs:
           DB_SSL: "false"
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
+      - name: Preparar el secreto SMTP
+        env:
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          if [ -n "$SMTP_PASSWORD" ]; then
+            if ! gcloud secrets describe SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null 2>&1; then
+              gcloud secrets create SMTP_PASSWORD --replication-policy automatic --project "$PROJECT_ID"
+            fi
+            printf '%s' "$SMTP_PASSWORD" | gcloud secrets versions add SMTP_PASSWORD --data-file=- --project "$PROJECT_ID"
+          fi
+          gcloud secrets versions describe latest --secret SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null
+
       - name: Desplegar en Cloud Run
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
@@ -71,8 +83,8 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --add-cloudsql-instances "$SQL_INSTANCE" \
-            --set-env-vars "DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID}" \
-            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest" \
+            --set-env-vars "DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID},SMTP_HOST=gvam1027.siteground.biz,SMTP_PORT=465,SMTP_USER=noreply@insightthecity.com,PASSWORD_RESET_FROM=ITC Club <noreply@insightthecity.com>" \
+            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest" \
             --min-instances 0 \
             --max-instances 4 \
             --memory 512Mi
