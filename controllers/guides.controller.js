@@ -2,6 +2,7 @@ const service = require('../services/guides.service');
 const stripeService = require('../services/stripe.service');
 const { uploadPrivatePdf, streamPrivatePdf } = require('../services/uploads.service');
 const { createGuideDownloadToken, verifyGuideDownloadToken } = require('../services/guide-download-token.service');
+const { isAllowedAppUrl, publicBaseUrl } = require('../utils/appReturn');
 
 const list = async (req, res, next) => {
   try { res.json(await service.list(Boolean(req.admin))); } catch (error) { next(error); }
@@ -49,6 +50,8 @@ const download = async (req, res, next) => {
 
 const createPurchaseSession = async (req, res, next) => {
   try {
+    const appReturnUrl = req.body?.returnUrl;
+    if (!isAllowedAppUrl(appReturnUrl)) return res.status(400).json({ message: 'URL de retorno inválida.' });
     const [guide, user] = await Promise.all([service.get(req.params.id), service.getUser(req.user.id)]);
     if (!guide?.isPublished) return res.status(404).json({ message: 'Guía no encontrada' });
     if (!user?.is_active) return res.status(403).json({ message: 'Tu cuenta no está activa.' });
@@ -58,7 +61,7 @@ const createPurchaseSession = async (req, res, next) => {
     if (!guide.individualPurchaseEnabled) {
       return res.status(409).json({ message: 'Esta guía solo está disponible con ITC Club.' });
     }
-    const session = await stripeService.createGuideCheckoutSession({ guide, user });
+    const session = await stripeService.createGuideCheckoutSession({ guide, user, baseUrl: publicBaseUrl(req), appReturnUrl });
     res.json({ checkoutUrl: session.url, sessionId: session.id });
   } catch (error) { next(error); }
 };

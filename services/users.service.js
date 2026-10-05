@@ -1,11 +1,41 @@
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const legal = require("./legal.service");
+const stripeService = require("./stripe.service");
+const { deletePrefix } = require("./uploads.service");
 
 // Auth de usuarios de la app (distinto de los admins del panel).
 // La tabla `users` guarda name, email, password_hash, is_premium, is_active.
 
-const PUBLIC_FIELDS = "id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests";
+const PUBLIC_FIELDS = `id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests,
+  subscription_status, subscription_current_period_end, subscription_cancel_at_period_end,
+  subscription_amount_cents, subscription_currency, subscription_interval,
+  (stripe_customer_id IS NOT NULL) AS has_billing_account`;
+
+// Fila completa -> datos que puede ver el propio usuario (sin hashes ni ids de Stripe).
+function publicUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    is_premium: row.is_premium,
+    is_active: row.is_active,
+    language: row.language || "es",
+    created_at: row.created_at,
+    avatar_url: row.avatar_url ?? null,
+    home_area: row.home_area ?? "",
+    interests: row.interests ?? [],
+    subscription_status: row.subscription_status ?? null,
+    subscription_current_period_end: row.subscription_current_period_end ?? null,
+    subscription_cancel_at_period_end: row.subscription_cancel_at_period_end === true,
+    subscription_amount_cents: row.subscription_amount_cents ?? null,
+    subscription_currency: row.subscription_currency ?? null,
+    subscription_interval: row.subscription_interval ?? null,
+    has_billing_account: row.has_billing_account ?? Boolean(row.stripe_customer_id),
+  };
+}
 
 // Columnas por las que el panel puede ordenar (whitelist anti-inyección).
 const SORTABLE = new Set(["id", "name", "email", "is_premium", "is_active", "created_at"]);
@@ -31,7 +61,8 @@ async function findById(id) {
   return rows[0] || null;
 }
 
-// Crea una cuenta. Devuelve { token, user } o lanza { status, message }.
+// Crea una cuenta y registra la aceptación de Términos y Privacidad vigentes.
+// Devuelve { token, user } o lanza { status, message }.
 async function register({ name, email, password, language = "es" }) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const password_hash = await bcrypt.hash(password, 10);
@@ -43,15 +74,29 @@ async function register({ name, email, password, language = "es" }) {
     throw err;
   }
 
-  const { rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, language)
-     VALUES ($1, $2, $3, $4)
-     RETURNING ${PUBLIC_FIELDS}`,
-    [name ? String(name).trim() : null, normalizedEmail, password_hash, language]
-  );
+  const client = await db.connect();
+  let user;
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `INSERT INTO users (name, email, password_hash, language)
+       VALUES ($1, $2, $3, $4)
+       RETURNING ${PUBLIC_FIELDS}`,
+      [name ? String(name).trim() : null, normalizedEmail, password_hash, language]
+    );
+    user = rows[0];
+    await legal.recordAcceptance(client, {
+      userId: user.id, language, context: "register", slugs: legal.REGISTER_SLUGS,
+    });
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 
-  const user = rows[0];
-  return { token: signToken(user), user };
+  return { token: signToken(user), user: publicUser(user) };
 }
 
 // Verifica credenciales. Devuelve { token, user }, null si no coinciden,
@@ -70,16 +115,7 @@ async function login(email, password) {
     throw err;
   }
 
-  const publicUser = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    is_premium: user.is_premium,
-    is_active: user.is_active,
-    language: user.language || "es",
-    created_at: user.created_at,
-  };
-  return { token: signToken(publicUser), user: publicUser };
+  return { token: signToken(user), user: publicUser(user) };
 }
 
 // ---- Administración (panel) ----
@@ -156,17 +192,48 @@ async function adminUpdate(id, { is_premium, is_active, name }) {
   return rows[0] || null;
 }
 
-async function activatePremium(id) {
+// Borra la cuenta y sus datos personales. Primero cancela la suscripción en Stripe:
+// si eso falla no se borra nada, para no dejar a alguien pagando sin cuenta.
+async function remove(id) {
   const { rows } = await db.query(
-    `UPDATE users SET is_premium = TRUE WHERE id = $1 RETURNING ${PUBLIC_FIELDS}`,
+    `SELECT stripe_subscription_id, subscription_status FROM users WHERE id = $1`,
     [id]
   );
-  return rows[0] || null;
+  const user = rows[0];
+  if (!user) return false;
+
+  if (user.stripe_subscription_id && !["canceled", "incomplete_expired"].includes(user.subscription_status)) {
+    await stripeService.cancelSubscriptionNow(user.stripe_subscription_id);
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    // chat_messages usa ON DELETE SET NULL: se borran explícitamente (contienen texto del usuario).
+    await client.query(`DELETE FROM chat_messages WHERE user_id = $1`, [id]);
+    await client.query(`DELETE FROM users WHERE id = $1`, [id]);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  try {
+    await deletePrefix(`avatars/${id}`);
+  } catch (err) {
+    console.error(`[users] No se pudieron borrar las fotos de perfil de ${id}:`, err.message);
+  }
+  return true;
 }
 
-async function remove(id) {
-  const { rowCount } = await db.query(`DELETE FROM users WHERE id = $1`, [id]);
-  return rowCount > 0;
+// Baja solicitada por el propio usuario: exige la contraseña actual.
+async function deleteOwnAccount(id, password) {
+  const { rows } = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [id]);
+  const hash = rows[0]?.password_hash;
+  if (!hash || !(await bcrypt.compare(String(password || ""), hash))) return false;
+  return remove(id);
 }
 
 module.exports = {
@@ -176,6 +243,7 @@ module.exports = {
   findByEmail,
   listForAdmin,
   adminUpdate,
-  activatePremium,
   remove,
+  deleteOwnAccount,
+  publicUser,
 };

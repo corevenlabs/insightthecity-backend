@@ -1,54 +1,37 @@
 const express = require("express");
 const router = express.Router();
-const Stripe = require("stripe");
-const db = require("../config/db");
 
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const stripeService = require("../services/stripe.service");
+const subscriptions = require("../services/subscription.service");
 
+// Mantiene la membresía al día con Stripe (renovaciones, cobros fallidos, cancelaciones).
+// Se monta con express.raw: la firma se verifica sobre el body original.
 router.post("/", async (req, res) => {
-
-    const sig = req.headers["stripe-signature"];
-
     let event;
-
     try {
-        event = stripe.webhooks.constructEvent(
-            req.body,
-            sig,
-            process.env.STRIPE_WEBHOOK_SECRET
-        );
-
-        console.log("Webhook received:", event.type);
-
+        event = stripeService.constructWebhookEvent(req.body, req.headers["stripe-signature"]);
     } catch (err) {
-
-        console.log(
-            "Webhook signature error:",
-            err.message
-        );
-
-        return res
-            .status(400)
-            .send(`Webhook Error: ${err.message}`);
+        console.error("[stripe webhook] Firma inválida:", err.message);
+        return res.status(400).send("Webhook signature error");
     }
 
-    if (event.type === "checkout.session.completed") {
-
-        const session = event.data.object;
-
-        console.log("Checkout completed");
-        console.log("Email:", session.customer_email);
-
-        try {
-            const result = await db.query(
-                "UPDATE users SET is_premium = TRUE WHERE email = $1",
-                [session.customer_email]
-            );
-            console.log("Rows affected:", result.rowCount);
-            console.log("User upgraded:", session.customer_email);
-        } catch (err) {
-            console.log("DB error:", err);
+    try {
+        if (event.type === "checkout.session.completed") {
+            const session = event.data.object;
+            if (session.mode === "subscription" && session.client_reference_id) {
+                await subscriptions.confirmCheckout(session.client_reference_id, session.id);
+            }
+        } else if (
+            event.type === "customer.subscription.created" ||
+            event.type === "customer.subscription.updated" ||
+            event.type === "customer.subscription.deleted"
+        ) {
+            await subscriptions.applyFromWebhook(event.data.object);
         }
+    } catch (err) {
+        // 500 hace que Stripe reintente el evento.
+        console.error(`[stripe webhook] Error procesando ${event.type}:`, err.message);
+        return res.status(500).json({ received: false });
     }
 
     res.json({ received: true });

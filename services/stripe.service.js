@@ -1,28 +1,66 @@
 const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-async function createCheckoutSession({ email }) {
-    const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        payment_method_types: ['card'],
-        line_items: [
-            {
-                price: process.env.STRIPE_PRICE_ID,
-                quantity: 1,
-            },
-        ],
-        customer_email: email,
-        success_url: 'https://success.miapp.com',
-        cancel_url: 'https://cancel.miapp.com',
-    });
-
-    return session.url;
+// Cliente perezoso: permite arrancar (y testear) sin STRIPE_SECRET_KEY.
+let stripe = null;
+function client() {
+    if (!stripe) stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    return stripe;
+}
+function setClient(mock) {
+    stripe = mock;
 }
 
-async function createGuideCheckoutSession({ guide, user }) {
-    const session = await stripe.checkout.sessions.create({
+// URL de la página puente que devuelve al usuario a la app tras Stripe.
+// Stripe exige https en success_url, así que no puede apuntar al esquema itcclub://.
+function returnUrl(baseUrl, appReturnUrl, query) {
+    return `${baseUrl}/api/payment/return?to=${encodeURIComponent(appReturnUrl)}&${query}`;
+}
+
+// Precio del plan ITC Club, leído de Stripe para que la app muestre exactamente
+// lo que se va a cobrar (requisito de divulgación de la ley de renovación automática).
+let planCache = null;
+async function getPlan() {
+    if (planCache && planCache.expiresAt > Date.now()) return planCache.plan;
+    const price = await client().prices.retrieve(process.env.STRIPE_PRICE_ID);
+    const plan = {
+        amountCents: price.unit_amount,
+        currency: price.currency,
+        interval: price.recurring?.interval || 'month',
+        intervalCount: price.recurring?.interval_count || 1,
+    };
+    planCache = { plan, expiresAt: Date.now() + 10 * 60 * 1000 };
+    return plan;
+}
+
+async function ensureCustomer(user) {
+    if (user.stripe_customer_id) return user.stripe_customer_id;
+    const customer = await client().customers.create({
+        email: user.email,
+        name: user.name || undefined,
+        metadata: { user_id: String(user.id) },
+    });
+    return customer.id;
+}
+
+async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, renewalNotice }) {
+    const session = await client().checkout.sessions.create({
+        mode: 'subscription',
+        customer: customerId,
+        client_reference_id: String(user.id),
+        line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+        metadata: { purchase_type: 'subscription', user_id: String(user.id) },
+        subscription_data: { metadata: { user_id: String(user.id) } },
+        // Recordatorio de renovación automática junto al botón de pago.
+        custom_text: { submit: { message: renewalNotice } },
+        success_url: returnUrl(baseUrl, appReturnUrl, 'result=success&session_id={CHECKOUT_SESSION_ID}'),
+        cancel_url: returnUrl(baseUrl, appReturnUrl, 'result=cancel'),
+    });
+    return { id: session.id, url: session.url };
+}
+
+async function createGuideCheckoutSession({ guide, user, baseUrl, appReturnUrl }) {
+    const session = await client().checkout.sessions.create({
         mode: 'payment',
-        payment_method_types: ['card'],
         line_items: [{
             price_data: {
                 currency: guide.currency,
@@ -44,18 +82,49 @@ async function createGuideCheckoutSession({ guide, user }) {
             price_cents: String(guide.priceCents),
             currency: guide.currency,
         },
-        success_url: `https://success.miapp.com/guide-purchase?session_id={CHECKOUT_SESSION_ID}&guide_id=${guide.id}`,
-        cancel_url: `https://cancel.miapp.com/guide-purchase?guide_id=${guide.id}`,
+        success_url: returnUrl(baseUrl, appReturnUrl, `result=success&session_id={CHECKOUT_SESSION_ID}&guide_id=${guide.id}`),
+        cancel_url: returnUrl(baseUrl, appReturnUrl, `result=cancel&guide_id=${guide.id}`),
     });
     return { id: session.id, url: session.url };
 }
 
-async function retrieveCheckoutSession(sessionId) {
-    return stripe.checkout.sessions.retrieve(sessionId);
+async function retrieveCheckoutSession(sessionId, options) {
+    return client().checkout.sessions.retrieve(sessionId, options);
+}
+
+async function retrieveSubscription(subscriptionId) {
+    return client().subscriptions.retrieve(subscriptionId);
+}
+
+async function cancelSubscriptionNow(subscriptionId) {
+    try {
+        return await client().subscriptions.cancel(subscriptionId);
+    } catch (error) {
+        // Ya cancelada o inexistente en Stripe: no hay cobro pendiente que detener.
+        if (error?.code === 'resource_missing') return null;
+        throw error;
+    }
+}
+
+async function createPortalSession({ customerId, returnUrl: url }) {
+    const session = await client().billingPortal.sessions.create({ customer: customerId, return_url: url });
+    return session.url;
+}
+
+function constructWebhookEvent(rawBody, signature) {
+    return client().webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
 }
 
 module.exports = {
+    setClient,
+    returnUrl,
+    getPlan,
+    ensureCustomer,
     createCheckoutSession,
     createGuideCheckoutSession,
     retrieveCheckoutSession,
+    retrieveSubscription,
+    cancelSubscriptionNow,
+    createPortalSession,
+    constructWebhookEvent,
 };

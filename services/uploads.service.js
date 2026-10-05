@@ -73,4 +73,17 @@ function streamPrivatePdf(key, response) {
   return stream;
 }
 
-module.exports = { uploadImage, uploadPrivatePdf, streamPrivatePdf };
+// Borra todo lo subido bajo un prefijo (p. ej. las fotos de perfil de un usuario eliminado).
+async function deletePrefix(prefix) {
+  if (!/^[a-z]+\/\d+$/.test(prefix)) throw new Error("Prefijo inválido");
+  if (DRIVER === "gcs") {
+    const storage = require("../config/storage");
+    const bucketName = process.env.GCS_BUCKET;
+    if (!bucketName) return;
+    await storage.bucket(bucketName).deleteFiles({ prefix: `${prefix}/`, force: true });
+    return;
+  }
+  fs.rmSync(path.join(__dirname, "..", "uploads", prefix), { recursive: true, force: true });
+}
+
+module.exports = { uploadImage, uploadPrivatePdf, streamPrivatePdf, deletePrefix };
