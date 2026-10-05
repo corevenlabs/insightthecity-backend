@@ -62,17 +62,8 @@ jobs:
           DB_SSL: "false"
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
-      - name: Preparar el secreto SMTP
-        env:
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        run: |
-          if [ -n "$SMTP_PASSWORD" ]; then
-            if ! gcloud secrets describe SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null 2>&1; then
-              gcloud secrets create SMTP_PASSWORD --replication-policy automatic --project "$PROJECT_ID"
-            fi
-            printf '%s' "$SMTP_PASSWORD" | gcloud secrets versions add SMTP_PASSWORD --data-file=- --project "$PROJECT_ID"
-          fi
-          gcloud secrets versions describe latest --secret SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null
+      - name: Verificar el secreto SMTP
+        run: gcloud secrets versions access latest --secret SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null
 
       - name: Desplegar en Cloud Run
         run: |
