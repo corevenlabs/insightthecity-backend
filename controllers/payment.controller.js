@@ -5,6 +5,20 @@ const legal = require('../services/legal.service');
 const { publicUser } = require('../services/users.service');
 const { isAllowedAppUrl, publicBaseUrl } = require('../utils/appReturn');
 const { escapeHtml } = require('../utils/legalMarkdown');
+const renewal = require('../services/subscription-renewal.service');
+
+async function changeRenewal(req, res, next) {
+    if (req.body?.confirm !== true || typeof req.body?.cancelAtPeriodEnd !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'Debes confirmar el cambio de renovación.' });
+    }
+    try {
+        const result = await renewal.changeRenewal(req.user.id, req.body.cancelAtPeriodEnd);
+        res.json({ success: true, user: publicUser(result.user), changed: result.changed, emailSent: result.emailSent });
+    } catch (error) {
+        if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+        next(error);
+    }
+}
 
 async function loadUser(id) {
     const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -120,6 +134,7 @@ function returnToApp(req, res) {
 }
 
 module.exports = {
+    changeRenewal,
     getPlan,
     createSubscription,
     confirmSubscription,

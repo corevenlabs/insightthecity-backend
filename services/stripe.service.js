@@ -96,6 +96,10 @@ async function retrieveSubscription(subscriptionId) {
     return client().subscriptions.retrieve(subscriptionId);
 }
 
+async function setSubscriptionRenewal(subscriptionId, cancelAtPeriodEnd) {
+    return client().subscriptions.update(subscriptionId, { cancel_at_period_end: cancelAtPeriodEnd });
+}
+
 async function cancelSubscriptionNow(subscriptionId) {
     try {
         return await client().subscriptions.cancel(subscriptionId);
@@ -124,6 +128,7 @@ module.exports = {
     createGuideCheckoutSession,
     retrieveCheckoutSession,
     retrieveSubscription,
+    setSubscriptionRenewal,
     cancelSubscriptionNow,
     createPortalSession,
     constructWebhookEvent,

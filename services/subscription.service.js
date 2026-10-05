@@ -92,13 +92,13 @@ function confirmationEmail(user, language) {
 }
 
 // Copia el estado de una suscripción de Stripe al usuario. Devuelve la fila actualizada.
-async function applySubscription(userId, subscription) {
+async function applySubscription(userId, subscription, connection = db) {
   const item = subscription.items?.data?.[0];
   const price = item?.price;
   // En versiones recientes de la API el fin de período vive en el item.
   const periodEnd = item?.current_period_end ?? subscription.current_period_end ?? null;
   const cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end || subscription.cancel_at);
-  const { rows } = await db.query(
+  const { rows } = await connection.query(
     `UPDATE users SET
        stripe_customer_id = COALESCE($2, stripe_customer_id),
        stripe_subscription_id = $3,
@@ -148,7 +148,7 @@ async function sendConfirmationOnce(user) {
   } catch (error) {
     // Libera la marca para reintentar en la próxima sincronización.
     await db.query('UPDATE users SET subscription_confirmation_sent_for = NULL WHERE id = $1', [user.id]);
-    console.error('[subscription] No se pudo enviar el acuse:', error.message);
+    console.error('[subscription] No se pudo enviar el acuse:', error.code || 'MAIL_SEND_FAILED');
   }
 }
 
@@ -168,16 +168,20 @@ async function confirmCheckout(userId, sessionId) {
 // cobro fallido retira el acceso aunque el webhook no esté configurado.
 async function syncIfStale(userId) {
   const { rows } = await db.query(
-    'SELECT stripe_subscription_id, subscription_synced_at FROM users WHERE id = $1',
+    'SELECT * FROM users WHERE id = $1',
     [userId]
   );
   const row = rows[0];
   if (!row?.stripe_subscription_id) return;
   const age = row.subscription_synced_at ? Date.now() - new Date(row.subscription_synced_at).getTime() : Infinity;
-  if (age < SYNC_MAX_AGE_MS) return;
+  if (age < SYNC_MAX_AGE_MS) {
+    await sendConfirmationOnce(row);
+    return;
+  }
   try {
     const subscription = await stripeService.retrieveSubscription(row.stripe_subscription_id);
-    await applySubscription(userId, subscription);
+    const updatedUser = await applySubscription(userId, subscription);
+    await sendConfirmationOnce(updatedUser);
   } catch (error) {
     console.error('[subscription] No se pudo sincronizar con Stripe:', error.message);
   }
