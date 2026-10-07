@@ -65,6 +65,12 @@ jobs:
       - name: Verificar el secreto SMTP
         run: gcloud secrets versions access latest --secret NOREPLY_EMAIL_PASSWORD --project "$PROJECT_ID" >/dev/null
 
+      - name: Verificar autenticación SMTP
+        run: |
+          SMTP_PASSWORD="$(gcloud secrets versions access latest --secret NOREPLY_EMAIL_PASSWORD --project "$PROJECT_ID")" \
+          SMTP_HOST=gvam1027.siteground.biz SMTP_PORT=465 SMTP_USER=noreply@insightthecity.com \
+          node scripts/verify-smtp.js
+
       - name: Desplegar en Cloud Run
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
