@@ -22,11 +22,12 @@ No usar el script para cambiar contraseñas de usuarios reales.
 
 ## Producción
 
-Crear el secreto `SMTP_PASSWORD` en Google Secret Manager del proyecto
+Crear el secreto `NOREPLY_EMAIL_PASSWORD` en Google Secret Manager del proyecto
 `itc-developer-502721`, con la contraseña real del buzón como valor.
 El workflow comprueba acceso al secreto sin mostrar su contenido. La cuenta de
 GitHub solo necesita leerlo, no crear secretos ni añadir versiones.
 El servicio de Cloud Run debe tener permiso para acceder al secreto.
+El secreto `NOREPLY_EMAIL_PASSWORD` se inyecta como `SMTP_PASSWORD` en el backend.
 El despliegue incluye host, puerto, usuario y remitente; la contraseña se inyecta
 desde Secret Manager. No se requiere una nueva versión de la app.
 

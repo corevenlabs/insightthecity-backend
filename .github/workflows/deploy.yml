@@ -63,7 +63,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
       - name: Verificar el secreto SMTP
-        run: gcloud secrets versions access latest --secret SMTP_PASSWORD --project "$PROJECT_ID" >/dev/null
+        run: gcloud secrets versions access latest --secret NOREPLY_EMAIL_PASSWORD --project "$PROJECT_ID" >/dev/null
 
       - name: Desplegar en Cloud Run
         run: |
@@ -75,7 +75,7 @@ jobs:
             --allow-unauthenticated \
             --add-cloudsql-instances "$SQL_INSTANCE" \
             --set-env-vars "DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID},SMTP_HOST=gvam1027.siteground.biz,SMTP_PORT=465,SMTP_USER=noreply@insightthecity.com,PASSWORD_RESET_FROM=ITC Club <noreply@insightthecity.com>" \
-            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest" \
+            --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest,SMTP_PASSWORD=NOREPLY_EMAIL_PASSWORD:latest" \
             --min-instances 0 \
             --max-instances 4 \
             --memory 512Mi
