@@ -39,6 +39,9 @@ app.use(express.json())
 // Sirve las imágenes subidas en desarrollo (driver local).
 app.use("/uploads", express.static(path.join(__dirname, "uploads")))
 
+app.use("/email-assets", express.static(path.join(__dirname, "public/email"), { maxAge: "7d" }));
+app.get("/app/:target", require("./controllers/app-link.controller").appLink);
+
 app.get("/health", (req, res) => res.json({ ok: true }))
 
 app.use("/api/chat", chatRouter)

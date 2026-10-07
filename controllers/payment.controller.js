@@ -127,7 +127,7 @@ function returnToApp(req, res) {
     res.type('html').send(`<!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ITC Club</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0a;color:#fff;font-family:-apple-system,system-ui,sans-serif;text-align:center}a{display:inline-block;margin-top:18px;padding:14px 22px;border-radius:12px;background:#D4AF37;color:#000;font-weight:700;text-decoration:none}</style>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0a;color:#fff;font-family:-apple-system,system-ui,sans-serif;text-align:center}a{display:inline-block;margin-top:18px;padding:14px 22px;border-radius:12px;background:#FDDD56;color:#000;font-weight:700;text-decoration:none}</style>
 </head><body><main><p>Volviendo a ITC Club… / Returning to ITC Club…</p><a href="${escapeHtml(target)}">Abrir la app / Open the app</a></main>
 <script>location.replace(${JSON.stringify(target).replace(/</g, '\\u003c')});</script>
 </body></html>`);

@@ -38,57 +38,7 @@ function renewalNotice(plan, language) {
 
 // Acuse de suscripción (NY GBL §527-a): términos de renovación y cómo cancelar.
 function confirmationEmail(user, language) {
-  const price = formatMoney(user.subscription_amount_cents, user.subscription_currency, language);
-  const period = intervalLabel(user.subscription_interval || 'month', language);
-  const renews = user.subscription_current_period_end
-    ? new Date(user.subscription_current_period_end).toISOString().slice(0, 10)
-    : null;
-  if (language === 'en') {
-    return {
-      subject: 'Your ITC Club membership is active',
-      text: [
-        `Hi${user.name ? ` ${user.name}` : ''},`,
-        '',
-        'Your ITC Club membership is active. Here are the terms you agreed to:',
-        `- Price: ${price} per ${period}, charged to the payment method you used.`,
-        `- Automatic renewal: your membership renews automatically every ${period} until you cancel.${renews ? ` Next renewal: ${renews}.` : ''}`,
-        '- How to cancel: open the app and go to Profile > My membership > Manage or cancel. Cancellation takes effect at the end of the current billing period and you keep access until then.',
-        '',
-        'If you have questions, reply to this email.',
-        'ITC Club · Insight The City',
-      ].join('\n'),
-    };
-  }
-  if (language === 'pt') {
-    return {
-      subject: 'Sua assinatura ITC Club está ativa',
-      text: [
-        `Olá${user.name ? ` ${user.name}` : ''},`,
-        '',
-        'Sua assinatura ITC Club está ativa. Estes são os termos que você aceitou:',
-        `- Preço: ${price} por ${period}, cobrado no método de pagamento utilizado.`,
-        `- Renovação automática: a assinatura é renovada automaticamente a cada ${period} até você cancelar.${renews ? ` Próxima renovação: ${renews}.` : ''}`,
-        '- Como cancelar: abra o app e vá em Perfil > Minha assinatura > Gerenciar ou cancelar. O cancelamento vale ao fim do período pago e você mantém o acesso até lá.',
-        '',
-        'Se tiver dúvidas, responda a este e-mail.',
-        'ITC Club · Insight The City',
-      ].join('\n'),
-    };
-  }
-  return {
-    subject: 'Tu membresía ITC Club está activa',
-    text: [
-      `Hola${user.name ? ` ${user.name}` : ''},`,
-      '',
-      'Tu membresía ITC Club está activa. Estos son los términos que aceptaste:',
-      `- Precio: ${price} por ${period}, cobrado al método de pago que usaste.`,
-      `- Renovación automática: tu membresía se renueva automáticamente cada ${period} hasta que la canceles.${renews ? ` Próxima renovación: ${renews}.` : ''}`,
-      '- Cómo cancelar: abre la app y ve a Perfil > Mi membresía > Administrar o cancelar. La cancelación aplica al final del período pagado y conservas el acceso hasta entonces.',
-      '',
-      'Si tienes preguntas, responde a este correo.',
-      'ITC Club · Insight The City',
-    ].join('\n'),
-  };
+  return require('./membership-email.service').membershipEmail(user, 'welcome', language);
 }
 
 // Copia el estado de una suscripción de Stripe al usuario. Devuelve la fila actualizada.
@@ -143,8 +93,7 @@ async function sendConfirmationOnce(user) {
   );
   if (!claimed.rowCount) return;
   try {
-    const { subject, text } = confirmationEmail(user, user.language || 'es');
-    await mailer.sendEmail({ to: user.email, subject, text });
+    await mailer.sendEmail({ to: user.email, ...confirmationEmail(user, user.language || 'es') });
   } catch (error) {
     // Libera la marca para reintentar en la próxima sincronización.
     await db.query('UPDATE users SET subscription_confirmation_sent_for = NULL WHERE id = $1', [user.id]);

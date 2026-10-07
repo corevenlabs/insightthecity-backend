@@ -36,14 +36,8 @@ async function changeRenewal(userId, cancel) {
 
   let emailSent = false;
   if (changed && mail.isConfigured()) {
-    const lang = ['es', 'en', 'pt'].includes(user.language) ? user.language : 'es';
-    const date = new Date(user.subscription_current_period_end).toLocaleDateString({ es: 'es-US', en: 'en-US', pt: 'pt-BR' }[lang], { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/New_York' });
-    const copy = {
-      es: cancel ? ['Renovación cancelada · ITC Club', `Cancelaste la renovación de tu membresía. Conservas tus beneficios hasta el ${date}. Tu cuenta sigue disponible. Puedes reactivar la renovación en Perfil > Mi membresía antes de que termine el período.`] : ['Renovación reactivada · ITC Club', `La renovación automática está activa nuevamente. Tu próxima renovación será el ${date}, al precio de tu plan actual. Puedes cancelarla desde Perfil > Mi membresía.`],
-      en: cancel ? ['Renewal canceled · ITC Club', `Your renewal is canceled. Your benefits remain available until ${date}. Your account remains available. You can reactivate renewal in Profile > My membership before the period ends.`] : ['Renewal reactivated · ITC Club', `Automatic renewal is active again. Your next renewal is ${date} at your current plan price. You can cancel it in Profile > My membership.`],
-      pt: cancel ? ['Renovação cancelada · ITC Club', `Sua renovação foi cancelada. Seus benefícios continuam até ${date}. Sua conta continua disponível. Você pode reativar a renovação em Perfil > Minha assinatura antes do fim do período.`] : ['Renovação reativada · ITC Club', `A renovação automática está ativa novamente. A próxima renovação será em ${date}, pelo preço do plano atual. Você pode cancelar em Perfil > Minha assinatura.`],
-    }[lang];
-    try { await mail.send({ to: [user.email], subject: copy[0], text: copy[1] }); emailSent = true; }
+    const message = require('./membership-email.service').membershipEmail(user, cancel ? 'cancel' : 'resume');
+    try { await mail.send({ to: [user.email], ...message }); emailSent = true; }
     catch (error) { console.error('No se pudo enviar la confirmación de renovación:', error.code || 'MAIL_SEND_FAILED'); }
   }
   return { user, changed, emailSent };
