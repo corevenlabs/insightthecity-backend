@@ -5,7 +5,7 @@ const db = require("../config/db");
 
 (async () => {
   try {
-    for (const file of ["schema.sql", "experience-gallery.sql"]) {
+    for (const file of ["schema.sql", "experience-gallery.sql", "partner-crm.sql"]) {
       const sql = fs.readFileSync(path.join(__dirname, file), "utf8");
       await db.query(sql);
       console.log(`✅ Migración aplicada (${file})`);

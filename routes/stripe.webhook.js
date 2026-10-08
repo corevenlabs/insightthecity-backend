@@ -16,8 +16,9 @@ router.post("/", async (req, res) => {
     }
 
     try {
-        if (event.type === "checkout.session.completed") {
+        if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
             const session = event.data.object;
+            if (session.metadata?.purchase_type === "partner" && session.payment_status === "paid") await require("../services/partner-crm.service").confirmPayment(session);
             if (session.mode === "subscription" && session.client_reference_id) {
                 await subscriptions.confirmCheckout(session.client_reference_id, session.id);
             }

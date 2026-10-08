@@ -14,10 +14,12 @@
     "admin:create": "node scripts/create-admin.js",
     "legal:seed": "node scripts/seed-legal-drafts.js",
     "test": "node --test \"tests/**/*.test.js\"",
-    "db:migrate:tags": "node database/migrate-tags.js"
+    "db:migrate:tags": "node database/migrate-tags.js",
+    "test:crm": "node --test tests/partner-crm.integration.js"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.14.0",
+    "archiver": "^8.0.0",
     "axios": "^1.18.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
@@ -29,6 +31,7 @@
     "multer": "^2.0.1",
     "nodemailer": "^10.0.15",
     "openai": "^6.42.0",
+    "pdfkit": "^0.20.2",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
     "stripe": "^22.2.1"

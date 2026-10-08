@@ -92,6 +92,8 @@ async function retrieveCheckoutSession(sessionId, options) {
     return client().checkout.sessions.retrieve(sessionId, options);
 }
 
+async function expireCheckoutSession(sessionId) { return client().checkout.sessions.expire(sessionId); }
+
 async function retrieveSubscription(subscriptionId) {
     return client().subscriptions.retrieve(subscriptionId);
 }
@@ -119,7 +121,14 @@ function constructWebhookEvent(rawBody, signature) {
     return client().webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
 }
 
+async function createPartnerCheckout({row,returnUrl,key}) {
+    return client().checkout.sessions.create({mode:'payment',customer_email:row.email,
+        line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:row.amount_cents,product_data:{name:row.offer==='founding'?'ITC CLUB · Founding Partner · 6 months':'ITC CLUB · Partner · 6 months'}}}],
+        metadata:{purchase_type:'partner',partner_id:row.id},success_url:returnUrl,cancel_url:returnUrl,
+    },{idempotencyKey:key});
+}
 module.exports = {
+    createPartnerCheckout,
     setClient,
     returnUrl,
     getPlan,
@@ -127,6 +136,7 @@ module.exports = {
     createCheckoutSession,
     createGuideCheckoutSession,
     retrieveCheckoutSession,
+    expireCheckoutSession,
     retrieveSubscription,
     setSubscriptionRenewal,
     cancelSubscriptionNow,

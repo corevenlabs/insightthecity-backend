@@ -21,18 +21,18 @@ async function createAdmin({ email, password, name }) {
 
 async function login(email, password) {
   const admin = await findByEmail(email);
-  if (!admin) return null;
+  if (!admin || !admin.is_active) return null;
 
   const ok = await bcrypt.compare(password, admin.password_hash);
   if (!ok) return null;
 
   const token = jwt.sign(
-    { id: admin.id, email: admin.email },
+    { id: admin.id, email: admin.email, type: 'staff' },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 
-  return { token, admin: { id: admin.id, email: admin.email, name: admin.name } };
+  return { token, admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role, language: admin.language, phone: admin.phone } };
 }
 
 module.exports = { login, createAdmin, findByEmail };

@@ -34,7 +34,7 @@ if (process.env.STRIPE_WEBHOOK_SECRET) {
   app.use("/api/payment/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter)
 }
 
-app.use(express.json())
+app.use(express.json({limit:"1mb"}))
 
 // Sirve las imágenes subidas en desarrollo (driver local).
 app.use("/uploads", express.static(path.join(__dirname, "uploads")))
@@ -49,6 +49,9 @@ app.use("/api/places", placesRouter)
 app.use("/api/payment", paymentRoutes);
 app.use("/api/experiences", experiencesRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/staff", require("./routes/staff.routes"));
+app.use("/api/partners", require("./routes/partner.routes"));
+app.get("/business/:id", require("./controllers/partner-preview.controller"));
 app.use("/api/users", usersRouter);
 app.use("/api/uploads", uploadsRouter);
 app.use("/api/news", newsRouter);
@@ -65,6 +68,8 @@ app.use(manejadorErrors)
 
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () =>{
+if (require.main === module) app.listen(PORT, () =>{
     console.log(`Servidor corriendo en puerto ${PORT}`)
 })
+
+module.exports=app;
