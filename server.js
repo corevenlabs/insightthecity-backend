@@ -18,11 +18,14 @@ const guidesRouter = require("./routes/guides.routes");
 const legalRouter = require("./routes/legal.routes");
 const stripeWebhookRouter = require("./routes/stripe.webhook");
 const { page: legalPage } = require("./controllers/legal.controller");
+const accountDeletion = require("./controllers/account-deletion.controller");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
 
 
 const app = express()
+// Cloud Run pone un proxy delante: así req.ip y req.protocol son los del cliente.
+app.set("trust proxy", 1)
 
 // Content-Range es necesario para la paginación de react-admin.
 app.use(cors({ exposedHeaders: ["Content-Range"] }))
@@ -66,6 +69,9 @@ app.use('/api/guides', guidesRouter);
 app.use("/api/legal", legalRouter);
 // Páginas públicas de Términos, Privacidad, etc. (URLs para las tiendas de apps).
 app.get("/legal/:slug", legalPage);
+// Eliminación de cuenta sin instalar la app (URL que se declara en Google Play).
+app.get(["/eliminar-cuenta", "/delete-account"], accountDeletion.page);
+app.post(["/eliminar-cuenta", "/delete-account"], express.urlencoded({ extended: false, limit: "10kb" }), accountDeletion.submit);
 
 app.use(manejadorErrors)
 
