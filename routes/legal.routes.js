@@ -6,6 +6,8 @@ const { requireAuth } = require("../middleware/auth");
 
 // --- Administración (panel); literales antes que "/:slug" ---
 router.get("/admin/documents", requireAuth, legal.list);
+router.get("/admin/acceptances", requireAuth, legal.acceptances);
+router.get("/admin/documents/:id", requireAuth, legal.documentVersion);
 router.post("/admin/documents", requireAuth, legal.create);
 router.put("/admin/documents/:id", requireAuth, legal.update);
 router.post("/admin/documents/:id/publish", requireAuth, legal.publish);

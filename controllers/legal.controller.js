@@ -130,4 +130,25 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { getCurrent, page, list, create, update, publish, remove };
+const acceptances = async (req, res, next) => {
+  try {
+    const { search = '', slug = '', context = '', page = '1' } = req.query;
+    if (typeof search !== 'string' || search.length > 200 || typeof slug !== 'string' || (slug && !legal.SLUGS.includes(slug)) ||
+      typeof context !== 'string' || (context && !['register', 'subscription'].includes(context)) ||
+      typeof page !== 'string' || !/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)) || Number(page) > 1000000) {
+      return res.status(400).json({ message: 'Filtros inválidos.' });
+    }
+    res.json(await legal.listAcceptances({ search: search.trim(), slug, context, page: Number(page) }));
+  } catch (err) { next(err); }
+};
+
+const documentVersion = async (req, res, next) => {
+  try {
+    if (!/^[1-9]\d*$/.test(req.params.id)) return res.status(400).json({ message: 'Documento inválido.' });
+    const document = await legal.get(req.params.id);
+    if (!document) return res.status(404).json({ message: 'Documento no encontrado.' });
+    res.json(document);
+  } catch (err) { next(err); }
+};
+
+module.exports = { getCurrent, page, list, create, update, publish, remove, acceptances, documentVersion };

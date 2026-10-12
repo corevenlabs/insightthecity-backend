@@ -105,7 +105,21 @@ async function recordAcceptance(client, { userId, language, context, slugs }) {
   }
 }
 
+async function listAcceptances({ search = '', slug = '', context = '', page = 1 }) {
+  const values = [search, slug, context];
+  const where = `WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%' OR u.id::text = $1)
+    AND ($2 = '' OR a.slug = $2) AND ($3 = '' OR a.context = $3)`;
+  const count = await db.query(`SELECT COUNT(*)::int AS total FROM legal_acceptances a JOIN users u ON u.id = a.user_id ${where}`, values);
+  const { rows } = await db.query(`SELECT a.id, a.user_id AS "userId", u.name AS "userName", u.email AS "userEmail",
+    a.slug, a.version, a.context, a.accepted_at AS "acceptedAt", a.document_id AS "documentId",
+    d.title AS "documentTitle", d.language
+    FROM legal_acceptances a JOIN users u ON u.id = a.user_id LEFT JOIN legal_documents d ON d.id = a.document_id
+    ${where} ORDER BY a.accepted_at DESC, a.id DESC LIMIT 25 OFFSET $4`, [...values, (page - 1) * 25]);
+  return { items: rows, total: count.rows[0].total, page, pageSize: 25 };
+}
+
 module.exports = {
+  listAcceptances,
   SLUGS,
   LANGUAGES,
   REGISTER_SLUGS,
