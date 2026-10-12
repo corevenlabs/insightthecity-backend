@@ -152,8 +152,17 @@ function render(
   kind,
   { client = {}, owner = {}, url, note = "", preview, language = "en" },
 ) {
+  const foundingInvitation = kind === "payment" && client.offer === "founding";
+  if (foundingInvitation) language = "en";
   const c = COPY[language] || COPY.en;
-  const [title, body, button] = c[kind];
+  let [title, body, button] = c[kind];
+  const firstName = (client.contact_name || "").trim().split(/\s+/)[0] || "there";
+  if (foundingInvitation) {
+    title = "Let’s grow together.";
+    body = `Hi ${firstName},\n\nWe’re excited to invite ${client.business_name} to join ITC CLUB as a Founding Partner.\n\nTogether, we can give our community more reasons to discover your business, visit, and come back. We’ll work with you to shape an exclusive member benefit that fits your business and creates value for both sides.`;
+    button = "Confirm your participation";
+  }
+  const bodyHtml = body.split("\n\n").map(p => `<p style="font-size:16px;line-height:1.6;color:#ddd">${escape(p)}</p>`).join("");
   const category =
     client.category === "strategic"
       ? "Strategic Partner"
@@ -164,8 +173,10 @@ function render(
     style: "currency",
     currency: "USD",
   }).format((client.amount_cents || 0) / 100);
-  const details =
-    kind === "staff"
+  const investment = `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.`;
+  const details = foundingInvitation
+    ? `<p>Business: <strong>${escape(client.business_name)}</strong><br>Partnership: <strong style="color:#FDDD56">Founding Partner</strong><br>${escape(investment)}</p>`
+    : kind === "staff"
       ? ""
       : `<p>${escape(c.business)}: <strong>${escape(client.business_name)}</strong><br>${escape(c.category)}: <strong style="color:#FDDD56">${category}</strong>${kind === "payment" ? `<br>${escape(c.amount)}: <strong>${amount}</strong>` : ""}</p>`;
   const previewHtml = preview
@@ -174,18 +185,21 @@ function render(
   const contact = owner.email
     ? `<p style="color:#ccc;font-size:14px">${escape(c.contact)}<br><strong>${escape(owner.name || owner.email)}</strong><br><a style="color:#FDDD56" href="mailto:${escape(owner.email)}">${escape(owner.email)}</a>${owner.phone ? `<br>${escape(owner.phone)}` : ""}</p>`
     : "";
-  const extra = kind === "payment" ? `${c.period} ${c.terms}` : c.help;
-  const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#080808;margin:0;padding:24px 10px;color:#fff;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" style="table-layout:fixed"><tr><td align="center"><table role="presentation" width="600" style="width:100%;max-width:600px;table-layout:fixed;background:#0A0A0A;border:1px solid #333" cellpadding="0" cellspacing="0"><tr><td style="text-align:center;padding:28px;font-size:36px;font-weight:800;color:white">ITC <span style="color:#FDDD56">CLUB</span></td></tr><tr><td><img src="${BASE()}/email-assets/new-york.jpg" width="600" alt="New York" style="width:100%;height:auto;display:block"></td></tr><tr><td style="padding:24px;overflow-wrap:break-word"><h1 style="font-size:28px;color:white">${escape(title)}</h1><p style="font-size:16px;line-height:1.6;color:#ddd">${escape(body)}</p>${details}${note ? `<p style="white-space:pre-wrap;color:#ddd">${escape(note)}</p>` : ""}${previewHtml}<table role="presentation" align="center" style="margin:24px auto"><tr><td bgcolor="#FDDD56" style="border-radius:10px"><a href="${escape(url)}" style="display:inline-block;padding:18px 28px;color:#0A0A0A;font-weight:800;text-decoration:none">${escape(button)}</a></td></tr></table><p style="font-size:14px;line-height:1.6;color:#ccc">${escape(extra)}</p><hr style="border:0;border-top:1px solid #333">${contact}<p style="font-size:13px;color:#aaa">ITC CLUB · Insight The City<br>noreply@insightthecity.com</p></td></tr></table></td></tr></table></body></html>`;
+  const extra = foundingInvitation
+    ? "Once you confirm, you’ll receive a short form to share your business details. From there, we’ll work together on your profile and member benefit to get everything ready for the app.\n\nWe see this as the beginning of a partnership we can grow over time. We’re looking forward to taking this next step with you."
+    : kind === "payment" ? `${c.period} ${c.terms}` : c.help;
+  const extraHtml = extra.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.6;color:#ccc">${escape(p)}</p>`).join("");
+  const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#080808;margin:0;padding:24px 10px;color:#fff;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" style="table-layout:fixed"><tr><td align="center"><table role="presentation" width="600" style="width:100%;max-width:600px;table-layout:fixed;background:#0A0A0A;border:1px solid #333" cellpadding="0" cellspacing="0"><tr><td style="text-align:center;padding:28px;font-size:36px;font-weight:800;color:white">ITC <span style="color:#FDDD56">CLUB</span></td></tr><tr><td><img src="${BASE()}/email-assets/new-york.jpg" width="600" alt="New York" style="width:100%;height:auto;display:block"></td></tr><tr><td style="padding:24px;overflow-wrap:break-word"><h1 style="font-size:28px;color:white">${escape(title)}</h1>${bodyHtml}${details}${note ? `<p style="white-space:pre-wrap;color:#ddd">${escape(note)}</p>` : ""}${previewHtml}<table role="presentation" align="center" style="margin:24px auto"><tr><td bgcolor="#FDDD56" style="border-radius:10px"><a href="${escape(url)}" style="display:inline-block;padding:18px 28px;color:#0A0A0A;font-weight:800;text-decoration:none">${escape(button)}</a></td></tr></table>${extraHtml}<hr style="border:0;border-top:1px solid #333">${contact}<p style="font-size:13px;color:#aaa">ITC CLUB · Insight The City<br>noreply@insightthecity.com</p></td></tr></table></td></tr></table></body></html>`;
   return {
     from: "ITC CLUB <noreply@insightthecity.com>",
-    subject: `${title} · ITC CLUB`,
+    subject: foundingInvitation ? `${client.business_name} + ITC CLUB: Let’s grow together` : `${title} · ITC CLUB`,
     html,
     text: [
       title,
       body,
       client.business_name,
       category,
-      kind === "payment" ? amount : "",
+      foundingInvitation ? investment : kind === "payment" ? amount : "",
       note,
       url,
       extra,
