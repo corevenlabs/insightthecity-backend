@@ -704,7 +704,7 @@ async function confirmPaymentLink(session) {
 }
 async function paymentLinkReturn(sessionId) {
   if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId || "")) R.fail("Pago inválido", 400);
-  const session = await require("./stripe.service").retrieveCheckoutSession(sessionId);
+  const session = await require("./stripe.service").retrievePartnerPaymentLinkSession(sessionId);
   if (!await confirmPaymentLink(session)) R.fail("El pago aún no se ha confirmado. Vuelve a tu invitación para consultar su estado.", 409);
   const row = await get(db, paymentLink.clientId(session.client_reference_id));
   return link(row);

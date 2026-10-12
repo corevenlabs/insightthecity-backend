@@ -3,7 +3,7 @@ const Stripe = require("stripe");
 router.post("/", async (req, res) => {
   let event;
   try {
-    event = new Stripe(process.env.STRIPE_SECRET_KEY).webhooks.constructEvent(
+    event = new Stripe(process.env.PARTNER_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY).webhooks.constructEvent(
       req.body, req.headers["stripe-signature"], process.env.PARTNER_STRIPE_WEBHOOK_SECRET,
     );
   } catch {

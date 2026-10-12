@@ -13,7 +13,14 @@ function gcloud(args, input) {
 }
 async function main() {
   if (!project || !process.env.GITHUB_ENV) throw new Error("Run only from the production deployment workflow");
-  const key = gcloud(["secrets", "versions", "access", "latest", "--secret", "STRIPE_SECRET_KEY"]);
+  let keySecret = "PARTNER_STRIPE_SECRET_KEY";
+  let key;
+  try { key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]); }
+  catch (err) {
+    if (!String(err.stderr).includes("NOT_FOUND")) throw err;
+    keySecret = "STRIPE_SECRET_KEY";
+    key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]);
+  }
   const stripe = new Stripe(key);
   const mode = /^(sk|rk)_test_/.test(key) ? "TEST" : /^(sk|rk)_live_/.test(key) ? "LIVE" : "UNKNOWN";
   console.log(`Configured Stripe mode: ${mode}`);
@@ -23,7 +30,13 @@ async function main() {
   for await (const item of stripe.paymentLinks.list({ limit: 100 })) {
     if (item.url === URL) { link = item; break; }
   }
-  if (!link) throw new Error("The supplied Founding Partner link is not in the configured Stripe account/mode; account and mode are printed above");
+  if (!link) {
+    if (keySecret !== "STRIPE_SECRET_KEY") throw new Error("The approved link is not in the dedicated partner Stripe account/mode");
+    // Keep memberships and future deployments working while the required partner key is supplied.
+    fs.appendFileSync(process.env.GITHUB_ENV, "FOUNDING_PARTNER_PAYMENT_LINK_ID=\nFOUNDING_PARTNER_SECRET_BINDINGS=\n");
+    console.log("Founding link remains DISABLED: supplied link not found in the membership account/mode. Configure PARTNER_STRIPE_SECRET_KEY for the account/mode containing that link. No Stripe configuration changed.");
+    return;
+  }
   const items = await stripe.paymentLinks.listLineItems(link.id, { limit: 100 });
   if (!link.active || items.data.length !== 1 || items.has_more ||
       items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
@@ -61,7 +74,7 @@ async function main() {
       after_completion: { type: "redirect", redirect: { url: returnUrl } },
     });
   }
-  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${link.id}\n`);
+  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${link.id}\nFOUNDING_PARTNER_SECRET_BINDINGS=,PARTNER_STRIPE_WEBHOOK_SECRET=${secretName}:latest,PARTNER_STRIPE_SECRET_KEY=${keySecret}:latest\n`);
   console.log("Dedicated partner configuration verified. Membership configuration unchanged.");
 }
 main().catch((err) => {
