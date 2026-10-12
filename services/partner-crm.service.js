@@ -178,27 +178,7 @@ async function create(input, actor) {
   await activity(db, row, actor, "created");
   return detail(row.id, actor);
 }
-async function termsSnapshot(c, row) {
-  if (Object.keys(row.terms_snapshot).length) return row.terms_snapshot;
-  const docs = (
-    await c.query(
-      "SELECT DISTINCT ON(language) * FROM partner_terms WHERE variant=$1 AND approved_at IS NOT NULL ORDER BY language,version DESC",
-      [row.offer],
-    )
-  ).rows;
-  if (docs.length !== 3)
-    R.fail(
-      "Faltan términos aprobados para esta oferta en inglés, español y portugués",
-      409,
-    );
-  const snapshot = Object.fromEntries(docs.map((d) => [d.language, d]));
-  await c.query("UPDATE partner_clients SET terms_snapshot=$2 WHERE id=$1", [
-    row.id,
-    JSON.stringify(snapshot),
-  ]);
-  row.terms_snapshot = snapshot;
-  return snapshot;
-}
+const termsSnapshot = require("./partner-terms.service").snapshot;
 async function action(id, input, actor) {
   const result = await transaction(async (c) => {
     const row = await get(c, id, actor, true);
@@ -541,7 +521,7 @@ async function save(token, input, submit = false) {
     if (submit) {
       if (input.accept !== true || input.authorize !== true)
         R.fail("Acepta los términos y autoriza el uso del material");
-      if (!row.terms_snapshot[lang])
+      if (!row.terms_snapshot.en)
         R.fail("Faltan los términos aprobados", 409);
       const files = (
         await c.query(
@@ -560,11 +540,12 @@ async function save(token, input, submit = false) {
         "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document,material_authorized,submission_version) VALUES($1,'submission',$2,$3,$4,$5,TRUE,$6)",
         [
           row.id,
-          lang,
+          "en",
           data.signerName,
           row.email,
           JSON.stringify({
-            ...row.terms_snapshot[lang],
+            ...row.terms_snapshot.en,
+            materialAuthorizationLanguage: lang,
             materialAuthorization: require("./partner-public-copy")
               .authorization[lang],
           }),
@@ -617,11 +598,11 @@ async function save(token, input, submit = false) {
 async function acceptCommercial(c, row, input) {
   const lang = R.language(input.language),
     name = R.clean(input.signerName, 150);
-  if (input.accept !== true || !name || !row.terms_snapshot[lang])
+  if (input.accept !== true || !name || !row.terms_snapshot.en)
     R.fail("Acepta el acuerdo e indica tu nombre");
   await c.query(
     "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document) VALUES($1,'commercial',$2,$3,$4,$5)",
-    [row.id, lang, name, row.email, JSON.stringify(row.terms_snapshot[lang])],
+    [row.id, "en", name, row.email, JSON.stringify(row.terms_snapshot.en)],
   );
   await c.query("UPDATE partner_clients SET language=$2 WHERE id=$1", [
     row.id,

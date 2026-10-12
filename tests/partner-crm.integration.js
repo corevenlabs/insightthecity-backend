@@ -144,7 +144,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     "versioned agreements pin the original document and revoke replaced links",
     async () => {
       for (const variant of ["strategic", "founding"])
-        for (const language of ["en", "es", "pt"])
+        for (const language of ["en"])
           assert.equal(
             (
               await api("/partners/terms", {
@@ -179,7 +179,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         },
       });
       assert.equal(
-        (await api("/partners/access", { token: oldToken })).body.terms.pt
+        (await api("/partners/access", { token: oldToken })).body.terms.en
           .version,
         1,
       );
@@ -306,7 +306,9 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       ).body;
       assert.equal(detail.acceptances.length, 1);
       assert.equal(detail.acceptances[0].document.version, 1);
-      assert.equal(detail.acceptances[0].language, "pt");
+      assert.equal(detail.acceptances[0].language, "en");
+      assert.equal(detail.acceptances[0].document.language, "en");
+      assert.equal(detail.acceptances[0].document.materialAuthorizationLanguage, "pt");
       assert.equal(
         detail.emails.filter((m) => m.recipient === actors.executive.email)
           .length,

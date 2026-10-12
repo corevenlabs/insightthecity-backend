@@ -111,7 +111,7 @@ router.get(
     res.json(
       (
         await db.query(
-          "SELECT t.*,a.name AS author FROM partner_terms t JOIN admins a ON a.id=t.created_by ORDER BY variant,language,version DESC",
+          "SELECT t.*,a.name AS author FROM partner_terms t JOIN admins a ON a.id=t.created_by WHERE t.language='en' ORDER BY variant,language,version DESC",
         )
       ).rows,
     ),
@@ -124,7 +124,7 @@ router.post(
     const { variant, language, title, content, approve } = req.body;
     if (
       !["regular", "founding", "strategic"].includes(variant) ||
-      !R.LANGUAGES.includes(language) ||
+      language !== "en" ||
       !R.clean(title, 250) ||
       !R.clean(content, 100000)
     )
