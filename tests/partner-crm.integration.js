@@ -172,7 +172,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         method: "POST",
         data: {
           variant: "strategic",
-          language: "pt",
+          language: "en",
           title: "TEST ONLY new version",
           content: "Changed terms",
           approve: true,
@@ -195,6 +195,29 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       );
     },
   );
+  await t.test("admin corrects client email, revokes old link and resend targets corrected address", async () => {
+    const oldToken = token(strategic);
+    const data = { action: "contact", business_name: strategic.business_name,
+      contact_name: strategic.contact_name, phone: "", language: "pt", email: "corrected@example.com" };
+    assert.equal((await api(`/partners/clients/${strategic.id}/actions`, {
+      role: "executive", method: "POST", data,
+    })).status, 403);
+    assert.equal((await api(`/partners/clients/${strategic.id}/actions`, {
+      method: "POST", data: { ...data, email: "invalid" },
+    })).status, 400);
+    const result = await api(`/partners/clients/${strategic.id}/actions`, { method: "POST", data });
+    assert.equal(result.status, 200);
+    strategic = result.body;
+    assert.equal(strategic.email, "corrected@example.com");
+    assert.equal((await api("/partners/access", { token: oldToken })).status, 401);
+    assert.equal(strategic.terms_snapshot.en.version, 1);
+    const resent = await api(`/partners/clients/${strategic.id}/actions`, {
+      method: "POST", data: { action: "resend" },
+    });
+    assert.equal(resent.status, 200);
+    strategic = resent.body;
+    assert.ok(emails.some((m) => m.to.includes("corrected@example.com")));
+  });
   const content = {
     businessName: "Strategic Cafe",
     description: "Cafe description",

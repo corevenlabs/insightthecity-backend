@@ -440,14 +440,32 @@ async function action(id, input, actor) {
       const name = R.clean(input.contact_name, 150),
         business = R.clean(input.business_name, 200);
       if (!name || !business) R.fail("Completa negocio y contacto");
+      const email = input.email === undefined ? row.email : R.email(input.email);
+      const emailChanged = email !== row.email;
+      if (emailChanged) {
+        if (actor.role !== "admin") R.fail("Solo un administrador puede cambiar el correo", 403);
+        if (row.payment_status === "pending" && row.stripe_session_id) {
+          const stripe = require("./stripe.service");
+          const session = await stripe.retrieveCheckoutSession(row.stripe_session_id);
+          if (session.payment_status === "paid") R.fail("Primero verifica el pago en Stripe", 409);
+          if (session.status === "open") await stripe.expireCheckoutSession(session.id);
+        }
+        await c.query(
+          "UPDATE partner_mail SET status='canceled' WHERE client_id=$1 AND recipient=$2 AND status IN ('pending','failed')",
+          [id, row.email],
+        );
+        await activity(c, row, actor, "email-changed", `${row.email} → ${email}`);
+      }
       await c.query(
-        "UPDATE partner_clients SET business_name=$2,contact_name=$3,phone=$4,language=$5,updated_at=NOW() WHERE id=$1",
+        "UPDATE partner_clients SET business_name=$2,contact_name=$3,phone=$4,language=$5,email=$6,link_version=CASE WHEN $7 THEN gen_random_uuid() ELSE link_version END,link_expires_at=CASE WHEN $7 THEN NOW()+INTERVAL '90 days' ELSE link_expires_at END,stripe_session_id=CASE WHEN $7 AND payment_status='pending' THEN NULL ELSE stripe_session_id END,updated_at=NOW() WHERE id=$1",
         [
           id,
           business,
           name,
           R.clean(input.phone, 60),
           R.language(input.language),
+          email,
+          emailChanged,
         ],
       );
     } else if (op === "retry-email") {
