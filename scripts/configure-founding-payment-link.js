@@ -15,11 +15,15 @@ async function main() {
   if (!project || !process.env.GITHUB_ENV) throw new Error("Run only from the production deployment workflow");
   const key = gcloud(["secrets", "versions", "access", "latest", "--secret", "STRIPE_SECRET_KEY"]);
   const stripe = new Stripe(key);
+  const mode = /^(sk|rk)_test_/.test(key) ? "TEST" : /^(sk|rk)_live_/.test(key) ? "LIVE" : "UNKNOWN";
+  console.log(`Configured Stripe mode: ${mode}`);
+  const account = await stripe.accounts.retrieve();
+  console.log(`Configured Stripe account: ${account.id}; business: ${account.business_profile?.name || account.settings?.dashboard?.display_name || "not specified"}`);
   let link;
   for await (const item of stripe.paymentLinks.list({ limit: 100 })) {
     if (item.url === URL) { link = item; break; }
   }
-  if (!link) throw new Error("The supplied Founding Partner link is not in the configured Stripe account/mode");
+  if (!link) throw new Error("The supplied Founding Partner link is not in the configured Stripe account/mode; account and mode are printed above");
   const items = await stripe.paymentLinks.listLineItems(link.id, { limit: 100 });
   if (!link.active || items.data.length !== 1 || items.has_more ||
       items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
