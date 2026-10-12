@@ -60,3 +60,9 @@ DB_HOST=127.0.0.1 DB_PORT=55439 DB_DATABASE=itc_crm_test DB_USER=<usuario-local>
 ```
 
 Stripe y SMTP se simulan en la integración; no se realizan pagos ni se envían correos a clientes. Verifica permisos y asignaciones, precios, consentimiento, archivos privados, acuerdos congelados, revocación de enlaces, Checkout idempotente, activación manual y acceso del equipo.
+
+## Enlace de pago Founding Partner
+
+El enlace aprobado es https://buy.stripe.com/cNi7sL8rIelBdFjeMd8Vi00. El despliegue verifica que pertenece a la cuenta Stripe configurada y que cobra USD 300 una sola vez. Configura su retorno a `/api/partners/payment/return` y un webhook dedicado en `/api/partners/payment/webhook`, con `PARTNER_STRIPE_WEBHOOK_SECRET` independiente de las membresías. No cambia precios, claves, suscripciones ni webhooks de membresía.
+
+Las invitaciones Founding con pago pendiente usan el enlace después de aceptar el contrato. Una referencia firmada vincula socio y versión de invitación; la confirmación exige correo, importe, moneda, enlace y aceptación comercial coincidentes. Las sesiones previas pendientes se cierran al continuar al nuevo enlace; los pagos confirmados y otras ofertas mantienen su flujo. El retorno y la consulta de estado también verifican el pago con la API. Los recibos automáticos se activan aparte desde Stripe.

@@ -14,6 +14,9 @@ router.use((_req, res, next) => {
   res.set("Referrer-Policy", "no-referrer");
   next();
 });
+router.get("/payment/return", wrap(async (req, res) => {
+  res.redirect(303, await S.paymentLinkReturn(req.query.session_id));
+}));
 router.get(
   "/clients",
   all,

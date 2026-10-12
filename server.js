@@ -34,6 +34,10 @@ if (process.env.STRIPE_WEBHOOK_SECRET) {
   app.use("/api/payment/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter)
 }
 
+if (process.env.PARTNER_STRIPE_WEBHOOK_SECRET) {
+  app.use("/api/partners/payment/webhook", express.raw({ type: "application/json" }), require("./routes/partner-payment.webhook"));
+}
+
 app.use(express.json({limit:"1mb"}))
 
 // Sirve las imágenes subidas en desarrollo (driver local).

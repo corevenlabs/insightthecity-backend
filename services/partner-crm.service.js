@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const R = require("./partner-rules");
 const mail = require("./partner-email.service");
+const paymentLink = require("./partner-payment-link.service");
 async function transaction(fn) {
   const c = await db.connect();
   try {
@@ -613,14 +614,14 @@ async function save(token, input, submit = false) {
   if (submit) await sendPending(id);
   return publicView(token);
 }
-async function acceptCommercial(c, row, input) {
+async function acceptCommercial(c, row, input, extra = {}) {
   const lang = R.language(input.language),
     name = R.clean(input.signerName, 150);
   if (input.accept !== true || !name || !row.terms_snapshot.en)
     R.fail("Acepta el acuerdo e indica tu nombre");
   await c.query(
     "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document) VALUES($1,'commercial',$2,$3,$4,$5)",
-    [row.id, "en", name, row.email, JSON.stringify(row.terms_snapshot.en)],
+    [row.id, "en", name, row.email, JSON.stringify({ ...row.terms_snapshot.en, ...extra })],
   );
   await c.query("UPDATE partner_clients SET language=$2 WHERE id=$1", [
     row.id,
@@ -636,6 +637,18 @@ async function checkout(token, input) {
       row.payment_status !== "pending"
     )
       R.fail("No hay un pago pendiente por Stripe", 409);
+    if (row.offer === "founding" && paymentLink.configured()) {
+      const url = paymentLink.checkoutUrl(row);
+      await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row) });
+      if (row.stripe_session_id) {
+        const stripe = require("./stripe.service");
+        const existing = await stripe.retrieveCheckoutSession(row.stripe_session_id);
+        if (existing.payment_status === "paid") R.fail("El pago está en verificación; actualiza su estado", 409);
+        if (existing.status === "open") await stripe.expireCheckoutSession(existing.id);
+        await c.query("UPDATE partner_clients SET stripe_session_id=NULL WHERE id=$1", [row.id]);
+      }
+      return { url };
+    }
     await acceptCommercial(c, row, input);
     const stripe = require("./stripe.service");
     if (row.stripe_session_id) {
@@ -657,6 +670,44 @@ async function checkout(token, input) {
     );
     return { url: session.url };
   });
+}
+async function confirmPaymentLink(session) {
+  if (!paymentLink.isSession(session)) return false;
+  const id = paymentLink.clientId(session.client_reference_id);
+  if (!id) return false;
+  const result = await transaction(async (c) => {
+    const row = await get(c, id, null, true);
+    if (row.payment_status === "paid") return row.stripe_session_id === session.id;
+    if (row.offer !== "founding" || row.payment_method !== "stripe" ||
+        row.form_status === "not_sent" || row.amount_cents !== 30000 ||
+        row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
+    if (session.mode !== "payment" || session.currency !== "usd" ||
+        session.amount_total !== 30000 || session.payment_status !== "paid" ||
+        !session.payment_intent ||
+        (session.customer_details?.email || session.customer_email || "").toLowerCase() !== row.email)
+      R.fail("El pago no coincide con el acuerdo Founding Partner", 409);
+    const consent = (await c.query(
+      "SELECT id FROM partner_acceptances WHERE client_id=$1 AND stage='commercial' AND document->>'paymentLinkReference'=$2 LIMIT 1",
+      [id, session.client_reference_id],
+    )).rows[0];
+    if (!consent) return false;
+    await c.query(
+      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status='paid',payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
+      [id, session.id, typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id],
+    );
+    await activity(c, row, null, "stripe-paid");
+    await enqueue(c, row, "invite", `paid:${id}`);
+    return true;
+  });
+  if (result) await sendPending(id);
+  return result;
+}
+async function paymentLinkReturn(sessionId) {
+  if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId || "")) R.fail("Pago inválido", 400);
+  const session = await require("./stripe.service").retrieveCheckoutSession(sessionId);
+  if (!await confirmPaymentLink(session)) R.fail("El pago aún no se ha confirmado. Vuelve a tu invitación para consultar su estado.", 409);
+  const row = await get(db, paymentLink.clientId(session.client_reference_id));
+  return link(row);
 }
 async function confirmPayment(session) {
   if (session.metadata?.purchase_type !== "partner") return false;
@@ -691,6 +742,16 @@ async function confirmPayment(session) {
 }
 async function sync(token) {
   const row = await fromToken(token);
+  if (row.payment_method === "stripe" && row.payment_status === "pending" &&
+      row.offer === "founding" && paymentLink.configured() && !row.stripe_session_id) {
+    const stripe = require("./stripe.service");
+    for await (const session of stripe.listPartnerPaymentLinkSessions()) {
+      if (session.client_reference_id === paymentLink.reference(row) && session.payment_status === "paid") {
+        await confirmPaymentLink(session);
+        break;
+      }
+    }
+  }
   if (
     row.payment_method === "stripe" &&
     row.payment_status === "pending" &&
@@ -782,6 +843,8 @@ module.exports = {
   checkout,
   sync,
   confirmPayment,
+  confirmPaymentLink,
+  paymentLinkReturn,
   filePut,
   fileDelete,
   fileGet,

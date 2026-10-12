@@ -127,7 +127,11 @@ async function createPartnerCheckout({row,returnUrl,key}) {
         metadata:{purchase_type:'partner',partner_id:row.id},success_url:returnUrl,cancel_url:returnUrl,
     },{idempotencyKey:key});
 }
+function listPartnerPaymentLinkSessions() {
+    return client().checkout.sessions.list({ payment_link: process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID, status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
+}
 module.exports = {
+    listPartnerPaymentLinkSessions,
     createPartnerCheckout,
     setClient,
     returnUrl,

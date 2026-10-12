@@ -12,6 +12,8 @@ if (
 process.env.OPENAI_API_KEY = "test-only-never-call";
 process.env.JWT_SECRET = "isolated-crm-test-secret-not-production";
 process.env.PANEL_PUBLIC_URL = "http://localhost:5173";
+process.env.PARTNER_STRIPE_WEBHOOK_SECRET = "whsec_isolated_partner";
+process.env.STRIPE_SECRET_KEY = "sk_test_isolated_not_real";
 const db = require("../config/db");
 const S = require("../services/partner-crm.service");
 const stripe = require("../services/stripe.service");
@@ -553,6 +555,64 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       );
     },
   );
+  await t.test("Founding payment link requires consent, matches exact payment and isolated webhook preserves memberships", async () => {
+    const L = require("../services/partner-payment-link.service");
+    const Stripe = require("stripe");
+    process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID = "plink_test_founding";
+    try {
+      const created = await S.create({ business_name: "Linked cafe", contact_name: "Owner",
+        email: "linked@example.com", category: "partner", offer: "founding", payment_method: "stripe" }, actors.admin);
+      let linked = await S.action(created.id, { action: "invite" }, actors.admin);
+      const access = token(linked);
+      const consent = { language: "en", signerName: "Owner", accept: true };
+      await assert.rejects(S.checkout(access, { ...consent, accept: false }));
+      const url = new URL((await S.checkout(access, consent)).url);
+      assert.equal(url.origin + url.pathname, L.URL);
+      assert.equal(url.searchParams.get("locked_prefilled_email"), linked.email);
+      const reference = url.searchParams.get("client_reference_id");
+      let session = { id: "cs_test_linked", payment_link: "plink_test_founding",
+        client_reference_id: reference, mode: "payment", payment_status: "paid",
+        currency: "usd", amount_total: 30000, payment_intent: "pi_test_linked",
+        customer_details: { email: linked.email }, metadata: {} };
+      assert.equal(await S.confirmPaymentLink({ ...session, payment_link: "plink_other" }), false);
+      assert.equal(await S.confirmPaymentLink({ ...session, client_reference_id: reference.slice(0, -1) + "z" }), false);
+      for (const invalid of [{ amount_total: 1 }, { currency: "eur" }, { mode: "subscription" },
+        { customer_details: { email: "another@example.com" } }, { payment_status: "unpaid" }])
+        await assert.rejects(S.confirmPaymentLink({ ...session, ...invalid }));
+      const webhook = async (object, validSignature = true) => {
+        const body = JSON.stringify({ id: "evt_isolated", type: "checkout.session.completed", data: { object } });
+        const signature = Stripe.webhooks.generateTestHeaderString({ payload: body, secret: "whsec_isolated_partner" });
+        return fetch(base + "/partners/payment/webhook", { method: "POST", headers: {
+          "Content-Type": "application/json", "stripe-signature": validSignature ? signature : "invalid" }, body });
+      };
+      assert.equal((await webhook(session, false)).status, 400);
+      assert.equal((await webhook({ ...session, payment_link: null, mode: "subscription", client_reference_id: "123" })).status, 200);
+      assert.equal((await S.detail(linked.id, actors.admin)).payment_status, "pending");
+      assert.equal((await webhook(session)).status, 200);
+      assert.equal((await webhook(session)).status, 200);
+      linked = await S.detail(linked.id, actors.admin);
+      assert.equal(linked.payment_status, "paid");
+      assert.equal(linked.activated_at, null);
+      assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${linked.id}`])).rows[0].count), 1);
+      stripe.setClient({ checkout: { sessions: { retrieve: async () => session } } });
+      const response = await fetch(base + "/partners/payment/return?session_id=cs_test_linked", { redirect: "manual" });
+      assert.equal(response.status, 303);
+      assert.ok(response.headers.get("location").startsWith("http://localhost:5173/partner#"));
+      // A second client discovers the completed link payment from Stripe when checking status.
+      const other = await S.create({ business_name: "Sync cafe", contact_name: "Owner",
+        email: "sync@example.com", category: "partner", offer: "founding", payment_method: "stripe" }, actors.admin);
+      const invited = await S.action(other.id, { action: "invite" }, actors.admin);
+      const access2 = token(invited);
+      const ref2 = new URL((await S.checkout(access2, consent)).url).searchParams.get("client_reference_id");
+      session = { ...session, id: "cs_test_sync_link", payment_intent: "pi_test_sync_link",
+        client_reference_id: ref2, customer_details: { email: invited.email } };
+      stripe.setClient({ checkout: { sessions: { list: (params) => {
+        assert.equal(params.payment_link, "plink_test_founding");
+        return (async function* () { yield session; })();
+      } } } });
+      assert.equal((await S.sync(access2)).payment_status, "paid");
+    } finally { delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; }
+  });
   await t.test(
     "external payment requires confirmation; corrections preserve prior acceptance; renewal is manual and sends no reminder",
     async () => {
