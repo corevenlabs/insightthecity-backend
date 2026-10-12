@@ -33,7 +33,7 @@ async function main() {
   console.log(`Configured Stripe account: ${account.id}; business: ${account.business_profile?.name || account.settings?.dashboard?.display_name || "not specified"}`);
   let link;
   for await (const item of stripe.paymentLinks.list({ limit: 100 })) {
-    if (item.url === URL) { link = item; break; }
+    if (item.url === new global.URL(URL).origin + new global.URL(URL).pathname) { link = item; break; }
   }
   if (!link) {
     if (keySecret !== "STRIPE_SECRET_KEY") throw new Error("The approved link is not in the dedicated partner Stripe account/mode");

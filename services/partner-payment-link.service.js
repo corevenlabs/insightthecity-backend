@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const R = require("./partner-rules");
 
-const URL = "https://buy.stripe.com/cNi7sL8rIelBdFjeMd8Vi00";
+const URL = "https://buy.stripe.com/8x2eVd37o5P530FdI98Vi01?prefilled_promo_code=ITCFOUNDING75";
 function manual() { return process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL === "true"; }
 function configured() { return manual() || Boolean(process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID); }
 function manualFor(row) { return manual() && row.offer === "founding" && row.payment_method === "stripe" && row.amount_cents === 30000; }

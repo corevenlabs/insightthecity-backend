@@ -567,7 +567,8 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       const consent = { language: "en", signerName: "Owner", accept: true };
       await assert.rejects(S.checkout(access, { ...consent, accept: false }));
       const url = new URL((await S.checkout(access, consent)).url);
-      assert.equal(url.origin + url.pathname, L.URL);
+      assert.equal(url.origin + url.pathname, new URL(L.URL).origin + new URL(L.URL).pathname);
+      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75");
       assert.equal(url.searchParams.get("locked_prefilled_email"), linked.email);
       const reference = url.searchParams.get("client_reference_id");
       let session = { id: "cs_test_linked", payment_link: "plink_test_founding",
@@ -630,7 +631,8 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       const consent = { language: "en", signerName: "Owner", accept: true };
       await assert.rejects(S.checkout(access, { ...consent, accept: false }));
       const url = new URL((await S.checkout(access, consent)).url);
-      assert.equal(url.origin + url.pathname, L.URL);
+      assert.equal(url.origin + url.pathname, new URL(L.URL).origin + new URL(L.URL).pathname);
+      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75");
       assert.equal(url.searchParams.get("locked_prefilled_email"), invited.email);
       assert.equal(L.clientId(url.searchParams.get("client_reference_id")), invited.id);
       assert.equal((await S.sync(access)).payment_status, "pending");
