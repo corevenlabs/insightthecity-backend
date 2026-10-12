@@ -613,6 +613,46 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal((await S.sync(access2)).payment_status, "paid");
     } finally { delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; }
   });
+  await t.test("direct Founding link needs no Stripe API and only admin can attest payment and send the form", async () => {
+    const L = require("../services/partner-payment-link.service");
+    process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL = "true";
+    stripe.setClient({ checkout: { sessions: {
+      retrieve: async () => assert.fail("Direct link must not query Stripe"),
+      create: async () => assert.fail("Direct link must not create Checkout"),
+      list: () => assert.fail("Manual payment status must not query Stripe"),
+    } } });
+    try {
+      const client = await S.create({ business_name: "Manual linked cafe", contact_name: "Owner",
+        email: "manual-link@example.com", category: "partner", offer: "founding", payment_method: "stripe" }, actors.executive);
+      const invited = await S.action(client.id, { action: "invite" }, actors.admin);
+      const access = token(invited);
+      assert.equal(invited.payment_confirmation, "manual");
+      const consent = { language: "en", signerName: "Owner", accept: true };
+      await assert.rejects(S.checkout(access, { ...consent, accept: false }));
+      const url = new URL((await S.checkout(access, consent)).url);
+      assert.equal(url.origin + url.pathname, L.URL);
+      assert.equal(url.searchParams.get("locked_prefilled_email"), invited.email);
+      assert.equal(L.clientId(url.searchParams.get("client_reference_id")), invited.id);
+      assert.equal((await S.sync(access)).payment_status, "pending");
+      const data = { action: "stripe-link-paid", reference: "pi_manual_verified_300", confirm: true };
+      await assert.rejects(S.action(client.id, data, actors.executive), /administrador/);
+      await assert.rejects(S.action(client.id, { ...data, confirm: false }, actors.admin));
+      await assert.rejects(S.action(client.id, { ...data, reference: "" }, actors.admin));
+      const confirmed = await S.action(client.id, data, actors.admin);
+      assert.equal(confirmed.payment_status, "paid");
+      assert.equal(confirmed.payment_reference, data.reference);
+      assert.equal(confirmed.payment_verified_by, actors.admin.id);
+      assert.equal(confirmed.activated_at, null);
+      assert.equal((await S.publicView(access)).payment_status, "paid");
+      assert.ok(confirmed.activity.some(a => a.kind === "stripe-link-paid"));
+      assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("private form")));
+      await assert.rejects(S.action(client.id, data, actors.admin));
+      assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${client.id}`])).rows[0].count), 1);
+      const regular = await S.create({ business_name: "Regular cafe", contact_name: "Owner",
+        email: "regular@example.com", category: "partner", offer: "regular", payment_method: "stripe" }, actors.admin);
+      await assert.rejects(S.action(regular.id, data, actors.admin));
+    } finally { delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL; }
+  });
   await t.test(
     "external payment requires confirmation; corrections preserve prior acceptance; renewal is manual and sends no reminder",
     async () => {

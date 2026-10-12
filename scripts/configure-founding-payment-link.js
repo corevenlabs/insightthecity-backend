@@ -13,6 +13,11 @@ function gcloud(args, input) {
 }
 async function main() {
   if (!project || !process.env.GITHUB_ENV) throw new Error("Run only from the production deployment workflow");
+  if (process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL === "true") {
+    fs.appendFileSync(process.env.GITHUB_ENV, "FOUNDING_PARTNER_PAYMENT_LINK_ID=\nFOUNDING_PARTNER_SECRET_BINDINGS=\n");
+    console.log(`Founding Partner direct link enabled: ${URL}; payment confirmation is MANUAL. No Stripe account settings changed.`);
+    return;
+  }
   let keySecret = "PARTNER_STRIPE_SECRET_KEY";
   let key;
   try { key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]); }

@@ -134,6 +134,7 @@ async function detail(id, actor) {
   );
   return {
     ...row,
+    payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     files,
     owner: who,
     activity: events.rows,
@@ -231,13 +232,15 @@ async function action(id, input, actor) {
         row.payment_status === "pending" ? "payment" : "invite",
         `resend:${id}:${row.link_version}`,
       );
-    } else if (op === "external-paid") {
+    } else if (op === "external-paid" || op === "stripe-link-paid") {
+      const manualStripe = op === "stripe-link-paid";
+      if (manualStripe && actor.role !== "admin") R.fail("Solo un administrador puede confirmar este pago", 403);
       if (
-        row.payment_method !== "external" ||
+        (manualStripe ? !paymentLink.manualFor(row) : row.payment_method !== "external") ||
         row.payment_status !== "pending" ||
         input.confirm !== true
       )
-        R.fail("Confirma el pago externo pendiente");
+        R.fail("Confirma el pago pendiente");
       const reference = R.clean(input.reference, 500);
       if (!reference) R.fail("Indica la referencia de pago");
       await termsSnapshot(c, row);
@@ -508,6 +511,7 @@ async function publicView(token) {
     amount_cents: row.amount_cents,
     payment_method: row.payment_method,
     payment_status: row.payment_status,
+    payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     form_status: row.form_status,
     terms: row.terms_snapshot,
     owner: await owner(db, row),
@@ -640,6 +644,7 @@ async function checkout(token, input) {
     if (row.offer === "founding" && paymentLink.configured()) {
       const url = paymentLink.checkoutUrl(row);
       await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row) });
+      if (paymentLink.manualFor(row)) return { url };
       if (row.stripe_session_id) {
         const stripe = require("./stripe.service");
         const existing = await stripe.retrieveCheckoutSession(row.stripe_session_id);
@@ -742,6 +747,7 @@ async function confirmPayment(session) {
 }
 async function sync(token) {
   const row = await fromToken(token);
+  if (paymentLink.manualFor(row)) return publicView(token);
   if (row.payment_method === "stripe" && row.payment_status === "pending" &&
       row.offer === "founding" && paymentLink.configured() && !row.stripe_session_id) {
     const stripe = require("./stripe.service");
