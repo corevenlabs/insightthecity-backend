@@ -544,8 +544,8 @@ async function save(token, input, submit = false) {
     const data = R.content(input.content, submit),
       lang = R.language(input.language);
     if (submit) {
-      if (input.accept !== true || input.authorize !== true)
-        R.fail("Acepta los términos y autoriza el uso del material");
+      if (input.authorize !== true)
+        R.fail("Autoriza el uso de la información, logo y fotografías");
       if (!row.terms_snapshot.en)
         R.fail("Faltan los términos aprobados", 409);
       const files = (
@@ -561,12 +561,13 @@ async function save(token, input, submit = false) {
         ).size < 4
       )
         R.fail("Adjunta el logo y al menos cuatro fotografías diferentes");
+      const priorSigner = (await c.query("SELECT signer_name FROM partner_acceptances WHERE client_id=$1 AND stage='commercial' ORDER BY accepted_at DESC LIMIT 1", [row.id])).rows[0]?.signer_name;
       await c.query(
         "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document,material_authorized,submission_version) VALUES($1,'submission',$2,$3,$4,$5,TRUE,$6)",
         [
           row.id,
           "en",
-          data.signerName,
+          priorSigner || data.contactName || row.contact_name || row.business_name,
           row.email,
           JSON.stringify({
             ...row.terms_snapshot.en,

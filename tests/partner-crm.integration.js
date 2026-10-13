@@ -301,7 +301,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
           await api("/partners/access/submit", {
             token: access,
             method: "POST",
-            data: { content, language: "pt", accept: false, authorize: true },
+            data: { content, language: "pt", authorize: false },
           })
         ).status,
         400,
@@ -311,7 +311,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
           await api("/partners/access/submit", {
             token: access,
             method: "POST",
-            data: { content, language: "pt", accept: true, authorize: true },
+            data: { content: { ...content, signerName: "" }, language: "pt", authorize: true },
           })
         ).status,
         200,

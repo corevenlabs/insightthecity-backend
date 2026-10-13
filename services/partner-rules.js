@@ -129,7 +129,6 @@ function content(input, submit = false) {
       "conditions",
       "method",
       "instructions",
-      "signerName",
     ])
       if (!data[key]) fail(`Falta: ${key}`);
     if (data.method === "external" && !data.url)
