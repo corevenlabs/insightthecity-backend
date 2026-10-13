@@ -15,7 +15,8 @@
     "legal:seed": "node scripts/seed-legal-drafts.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "db:migrate:tags": "node database/migrate-tags.js",
-    "test:crm": "node --test tests/partner-crm.integration.js"
+    "test:crm": "node --test tests/partner-crm.integration.js",
+    "test:legal": "node --test tests/legal-publishing.integration.js"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.14.0",

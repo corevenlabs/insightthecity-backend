@@ -53,7 +53,7 @@ async function createDraft({ slug, language, title, content }) {
   const { rows } = await db.query(
     `INSERT INTO legal_documents (slug, language, version, title, content)
      VALUES ($1, $2,
-       (SELECT COALESCE(MAX(version), 0) + 1 FROM legal_documents WHERE slug = $1 AND language = $2),
+       (SELECT COALESCE(MAX(version), 0) + 1 FROM legal_documents WHERE slug = $1::varchar AND language = $2::varchar),
        $3, $4)
      RETURNING *`,
     [slug, language, title, content]
