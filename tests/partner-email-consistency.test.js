@@ -19,3 +19,18 @@ test('Strategic follows the identical Founding email design at every client stag
   assert(!strategicInvite.includes('Review and pay'));
   assert(foundingInvite.includes('Total investment: $300'));
 });
+
+test('corrections email preserves private form and escapes personalized executive requests', () => {
+  const note = 'Please replace <script>alert(1)</script>\nUse your original photographs.';
+  const message = render('changes', { ...base, note, language: 'es' });
+  assert.equal(message.subject, 'Example business · Let’s put the finishing touches on your profile');
+  for (const text of ['Hi Rafa,', 'Let’s show what makes your business special.', 'A few details to finish together', 'Update my business profile', 'partner-corrections-banner-v1.png', 'itc-club-logo-v1.png', 'Everything you’ve already shared is saved', 'Need a hand?', base.url]) assert(message.html.includes(text), text);
+  assert(!message.html.includes('<script>'));
+  assert(message.html.includes('&lt;script&gt;'));
+  assert(message.text.includes(note));
+  assert(message.html.includes('white-space:pre-wrap'));
+  assert(message.html.includes('lang="en"'));
+  assert.equal(message.replyTo, base.owner.email);
+  assert(!message.html.includes('Please update your information'));
+  assert(!message.html.includes('new-york.jpg'));
+});
