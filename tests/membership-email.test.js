@@ -33,3 +33,18 @@ test('email landing page permits only fixed destinations and never exposes billi
   appLink({ params: { target: 'https://evil.example' }, query: {} }, res);
   assert.equal(code, 404);
 });
+
+
+test('membership welcome uses the approved logo and welcome banner while preserving billing details', () => {
+  const message = membershipEmail({ name: 'Oswaldo', language: 'es', subscription_amount_cents: 499, subscription_currency: 'usd', subscription_interval: 'month', subscription_current_period_end: '2026-11-13T16:00:00Z' });
+  assert.match(message.html, /email-assets\/itc-club-logo-v1.png/);
+  assert.match(message.html, /email-assets\/partner-welcome-banner-v1.png/);
+  assert.doesNotMatch(message.html, /email-assets\/new-york.jpg/);
+  assert.match(message.html, /Hola, Oswaldo/);
+  assert.match(message.html, /\$4.99 \/ mes/);
+  assert.match(message.text, /13 de noviembre de 2026/);
+  assert.match(message.html, /Perfil &gt; Mi membresía/);
+  assert.match(message.html, /app\/benefits\?lang=es/);
+  assert.match(message.html, /legal\/subscription/);
+  assert.match(message.html, /legal\/privacy/);
+});
