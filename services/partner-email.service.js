@@ -152,26 +152,28 @@ function render(
   kind,
   { client = {}, owner = {}, url, note = "", preview, language = "en" },
 ) {
-  const foundingInvitation = kind === "payment" && client.offer === "founding";
-  const foundingWelcome = kind === "invite" && client.offer === "founding";
+  const strategic = client.offer === "strategic";
+  const partnership = strategic ? "Strategic Founding Partner" : "Founding Partner";
+  const foundingInvitation = kind === "payment" && ["founding", "strategic"].includes(client.offer);
+  const foundingWelcome = kind === "invite" && ["founding", "strategic"].includes(client.offer);
   if (foundingInvitation || foundingWelcome) language = "en";
   const c = COPY[language] || COPY.en;
   let [title, body, button] = c[kind];
   const firstName = (client.contact_name || "").trim().split(/\s+/)[0] || "there";
   if (foundingInvitation) {
     title = "Let’s grow together.";
-    body = `Hi ${firstName},\n\nWe’re excited to invite ${client.business_name} to join ITC CLUB as a Founding Partner.\n\nTogether, we can give our community more reasons to discover your business, visit, and come back. We’ll work with you to shape an exclusive member benefit that fits your business and creates value for both sides.`;
+    body = `Hi ${firstName},\n\nWe’re excited to invite ${client.business_name} to join ITC CLUB as a ${partnership}.\n\nTogether, we can give our community more reasons to discover your business, visit, and come back. We’ll work with you to shape an exclusive member benefit that fits your business and creates value for both sides.`;
     button = "Confirm your participation";
   }
   if (foundingWelcome) {
     title = "Welcome to ITC CLUB. Let’s build this together.";
-    body = `Hi ${firstName},\n\nYour participation is confirmed! We’re excited to welcome ${client.business_name} as a Founding Partner. Thank you for helping us build ITC CLUB from the start.\n\nNow, let’s get your business ready for our community to discover.\n\nShare your business details, member benefit, logo, and photos through the form below. These will help us create a profile that reflects what makes your business special.`;
+    body = `Hi ${firstName},\n\nYour participation is confirmed! We’re excited to welcome ${client.business_name} as a ${partnership}. Thank you for helping us build ITC CLUB from the start.\n\nNow, let’s get your business ready for our community to discover.\n\nShare your business details, member benefit, logo, and photos through the form below. These will help us create a profile that reflects what makes your business special.`;
     button = "Create my business profile";
   }
   const bodyHtml = body.split("\n\n").map(p => `<p style="font-size:16px;line-height:1.6;color:#ddd">${escape(p)}</p>`).join("");
   const category =
     client.category === "strategic"
-      ? "Strategic Partner"
+      ? "Strategic Founding Partner"
       : client.offer === "founding"
         ? "Founding Partner"
         : "Partner";
@@ -180,7 +182,11 @@ function render(
     currency: "USD",
   }).format((client.amount_cents || 0) / 100);
   const investment = `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.`;
-  const details = foundingInvitation
+  const covered = "Your participation is fully covered for six months, starting when your profile is activated. No payment is required.";
+  const strategicInvestment = "Regular participation fee: $1,800\nYour invitation includes 100% OFF\nYour total: $0\n" + covered;
+  const details = foundingInvitation && strategic
+    ? `<div style="border:1px solid #333;border-radius:12px;padding:20px;background:#151515"><p>Business: <strong>${escape(client.business_name)}</strong><br>Partnership: <strong style="color:#FDDD56">Strategic Founding Partner</strong></p><p>Regular participation fee: <s style="color:#aaa">$1,800</s><br>Your invitation includes <strong style="color:#FDDD56">100% OFF</strong></p><p style="border-top:1px solid #333;padding-top:16px">Your total: <strong style="font-size:32px;color:#FDDD56">$0</strong></p><p style="color:#ccc;line-height:1.6">${covered}</p></div>`
+    : foundingInvitation
     ? `<p>Business: <strong>${escape(client.business_name)}</strong><br>Partnership: <strong style="color:#FDDD56">Founding Partner</strong><br>${escape(investment)}</p>`
     : kind === "staff" || foundingWelcome
       ? ""
@@ -199,13 +205,14 @@ function render(
     : foundingWelcome
       ? "You can save your progress and come back later—you don’t need to have everything ready at once.\n\nOnce you submit the form, our team will review your information and work with you to get your profile and benefit ready for activation.\n\nWe’re looking forward to growing this partnership with you."
       : kind === "payment" ? `${c.period} ${c.terms}` : c.help;
-  const extraHtml = extra.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.6;color:#ccc">${escape(p)}</p>`).join("");
+  const invitationExtra = strategic && foundingInvitation ? extra.replace("Once you confirm,", "Once your participation is confirmed,") : extra;
+  const extraHtml = invitationExtra.split("\n\n").map(p => `<p style="font-size:14px;line-height:1.6;color:#ccc">${escape(p)}</p>`).join("");
   const brandHeader = foundingInvitation || foundingWelcome
     ? `<img src="${BASE()}/email-assets/itc-club-logo-v1.png" width="180" alt="ITC CLUB" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0">`
     : 'ITC <span style="color:#FDDD56">CLUB</span>';
   const banner = foundingInvitation ? "partner-invitation-banner-v1.png" : foundingWelcome ? "partner-welcome-banner-v1.png" : "new-york.jpg";
   const bannerAlt = foundingInvitation ? "Your business. Our community. Let’s grow together. An invitation to join ITC CLUB" : foundingWelcome ? "Welcome to ITC CLUB. Let’s build this together." : "New York";
-  const footer = foundingWelcome ? privateNotice : "ITC CLUB · Insight The City<br>noreply@insightthecity.com";
+  const footer = foundingWelcome ? privateNotice : strategic && foundingInvitation ? "ITC CLUB · Insight The City<br>This invitation link is unique to your business. Please keep it private." : "ITC CLUB · Insight The City<br>noreply@insightthecity.com";
   const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="background:#080808;margin:0;padding:24px 10px;color:#fff;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%" style="table-layout:fixed"><tr><td align="center"><table role="presentation" width="600" style="width:100%;max-width:600px;table-layout:fixed;background:#0A0A0A;border:1px solid #333" cellpadding="0" cellspacing="0"><tr><td style="text-align:center;padding:28px;font-size:36px;font-weight:800;color:white">${brandHeader}</td></tr><tr><td><img src="${BASE()}/email-assets/${banner}" width="600" alt="${escape(bannerAlt)}" style="width:100%;height:auto;display:block"></td></tr><tr><td style="padding:24px;overflow-wrap:break-word"><h1 style="font-size:28px;color:white">${escape(title)}</h1>${bodyHtml}${details}${note ? `<p style="white-space:pre-wrap;color:#ddd">${escape(note)}</p>` : ""}${previewHtml}<table role="presentation" align="center" style="margin:24px auto"><tr><td bgcolor="#FDDD56" style="border-radius:10px"><a href="${escape(url)}" style="display:inline-block;padding:18px 28px;color:#0A0A0A;font-weight:800;text-decoration:none">${escape(button)}</a></td></tr></table>${extraHtml}<hr style="border:0;border-top:1px solid #333">${contact}<p style="font-size:13px;color:#aaa">${footer}</p></td></tr></table></td></tr></table></body></html>`;
   return {
     from: "ITC CLUB <noreply@insightthecity.com>",
@@ -216,10 +223,10 @@ function render(
       body,
       client.business_name,
       category,
-      foundingInvitation ? investment : kind === "payment" ? amount : "",
+      foundingInvitation ? strategic ? strategicInvestment : investment : kind === "payment" ? amount : "",
       note,
       url,
-      extra,
+      invitationExtra,
       owner.name,
       owner.email,
       owner.phone,
