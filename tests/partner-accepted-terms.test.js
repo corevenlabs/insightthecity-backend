@@ -1,0 +1,23 @@
+const {test} = require("node:test");
+const assert = require("node:assert/strict");
+const jwt = require("jsonwebtoken");
+const T = require("../services/partner-accepted-terms.service");
+const acceptance = {id:"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",client_id:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",signer_name:"Rafa <Owner>",signer_email:"rafa@example.com",accepted_at:"2026-10-13T18:19:42Z",document:{title:"Participation Terms and Conditions",version:1,content:"Version one accepted document.\n\nThese are the exact terms."}};
+test("acceptance email shows immutable version, Eastern timestamp and distinct zero-cost next steps",async()=>{
+ process.env.JWT_SECRET="isolated-terms-mail-key";
+ const client={business_name:"Cafe <NY>",contact_name:"Rafa Monroy",offer:"founding"};
+ const message=T.render({client,owner:{name:"Executive",email:"executive@example.com"},acceptance});
+ assert.match(message.html,/Cafe &lt;NY&gt;/);
+ assert.match(message.text,/V1 · English/);
+ assert.match(message.text,/2:19:42 PM EDT/);
+ assert.match(message.text,/America\/New_York/);
+ assert.match(message.html,/partner-accepted-terms-banner-v1.png/);
+ assert.match(message.text,/Accepting the terms does not confirm payment/);
+ const strategic=T.render({client:{...client,offer:"strategic"},acceptance});
+ assert.match(strategic.text,/onboarding is completed/);
+ assert.doesNotMatch(strategic.text,/confirm payment|checkout is completed/);
+ assert.match(T.date("2026-12-13T18:19:42Z"),/1:19:42 PM EST/);
+ const claims=jwt.verify(new URL(T.url(acceptance)).searchParams.get("token"),process.env.JWT_SECRET);
+ assert.equal(claims.id,acceptance.id); assert.equal(claims.type,"partner_accepted_terms");
+ const bytes=await T.pdf(acceptance,client); assert.equal(bytes.subarray(0,4).toString(),"%PDF");
+});

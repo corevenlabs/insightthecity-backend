@@ -626,18 +626,23 @@ async function acceptCommercial(c, row, input, extra = {}) {
     name = R.clean(input.signerName, 150);
   if (input.accept !== true || !name || !row.terms_snapshot.en)
     R.fail("Acepta el acuerdo e indica tu nombre");
-  await c.query(
-    "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document) VALUES($1,'commercial',$2,$3,$4,$5)",
-    [row.id, "en", name, row.email, JSON.stringify({ ...row.terms_snapshot.en, ...extra })],
-  );
+  const document = { ...row.terms_snapshot.en, ...extra, invitationVersion: row.link_version, acceptedBusinessName: row.business_name };
+  let acceptance = (await c.query("SELECT * FROM partner_acceptances WHERE client_id=$1 AND stage='commercial' AND signer_name=$2 AND signer_email=$3 AND document=$4::jsonb ORDER BY accepted_at LIMIT 1", [row.id, name, row.email, JSON.stringify(document)])).rows[0];
+  if (!acceptance) acceptance = (await c.query(
+    "INSERT INTO partner_acceptances(client_id,stage,language,signer_name,signer_email,document) VALUES($1,'commercial',$2,$3,$4,$5) RETURNING *",
+    [row.id, "en", name, row.email, JSON.stringify(document)],
+  )).rows[0];
+  await enqueue(c, row, "accepted_terms", `accepted-terms:${acceptance.id}`, "", { acceptance });
   await c.query("UPDATE partner_clients SET language=$2 WHERE id=$1", [
     row.id,
     lang,
   ]);
 }
 async function checkout(token, input) {
-  return transaction(async (c) => {
+  let clientId;
+  const result = await transaction(async (c) => {
     const row = await fromToken(token, c, true);
+    clientId = row.id;
     if (
       row.form_status === "not_sent" ||
       (!paymentLink.strategicTest(row) && (row.payment_method !== "stripe" || row.payment_status !== "pending"))
@@ -677,6 +682,8 @@ async function checkout(token, input) {
     );
     return { url: session.url };
   });
+  await sendPending(clientId);
+  return result;
 }
 async function confirmPaymentLink(session) {
   if (!paymentLink.isSession(session)) return false;

@@ -14,6 +14,10 @@ router.use((_req, res, next) => {
   res.set("Referrer-Policy", "no-referrer");
   next();
 });
+router.get("/accepted-terms", require("../middleware/partner-rate-limit")(60), wrap(async (req, res) => {
+  const file = await require("../services/partner-accepted-terms.service").download(req.query.token);
+  res.set("X-Content-Type-Options", "nosniff").type("application/pdf").attachment(file.filename).send(file.bytes);
+}));
 router.get("/payment/return", wrap(async (req, res) => {
   res.redirect(303, await S.paymentLinkReturn(req.query.session_id));
 }));
