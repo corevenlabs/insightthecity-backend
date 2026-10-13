@@ -427,6 +427,21 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       );
     },
   );
+  await t.test("publications derive partner type only from an activated unambiguous client link", async () => {
+    assert.equal((await api("/experiences/cafe")).body.partnerOffer, "strategic");
+    const partner = await S.create({business_name:"Disclosure cafe",contact_name:"Owner",email:"disclosure@example.com",category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);
+    await db.query("INSERT INTO experiences(id,title,category,access,is_published) VALUES('disclosure','Disclosure','FOOD','premium',TRUE)");
+    await db.query("UPDATE partner_clients SET experience_id='disclosure' WHERE id=$1", [partner.id]);
+    assert.equal((await api("/experiences/disclosure")).body.partnerOffer, null);
+    await db.query("UPDATE partner_clients SET activated_at=NOW() WHERE id=$1", [partner.id]);
+    assert.equal((await api("/experiences/disclosure")).body.partnerOffer, "founding");
+    const list = (await api("/experiences")).body;
+    assert.equal(list.find(item=>item.id==='disclosure').partnerOffer, "founding");
+    await db.query("UPDATE partner_clients SET experience_id='cafe' WHERE id=$1", [partner.id]);
+    assert.equal((await api("/experiences/cafe")).body.partnerOffer, null);
+    await db.query("UPDATE partner_clients SET experience_id=NULL WHERE id=$1", [partner.id]);
+    assert.equal((await api("/experiences/cafe")).body.partnerOffer, "strategic");
+  });
   await t.test(
     "Stripe validates actual session, amount and currency; replay does not duplicate mail or period",
     async () => {

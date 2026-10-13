@@ -27,6 +27,7 @@ function serialize(row) {
     location: row.location,
     region: row.region,
     access: row.access,
+    partnerOffer: ['founding', 'strategic'].includes(row.partner_offer) ? row.partner_offer : null,
     description: row.description,
     includes: row.includes || [],
     recommendation: row.recommendation,

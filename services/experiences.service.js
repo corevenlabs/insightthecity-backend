@@ -19,6 +19,8 @@ const SORTABLE = new Set([
 
 const BASE_SELECT = `
   SELECT e.*,
+    (SELECT CASE WHEN COUNT(DISTINCT p.offer) = 1 THEN MIN(p.offer) ELSE NULL END
+       FROM partner_clients p WHERE p.experience_id = e.id AND p.activated_at IS NOT NULL) AS partner_offer,
     (SELECT COUNT(*)::int FROM benefit_redemptions r WHERE r.experience_id = e.id AND r.redeemed_at IS NOT NULL) AS coupon_redeemed,
     (SELECT COUNT(*)::int FROM benefit_redemptions r WHERE r.experience_id = e.id AND r.redeemed_at IS NULL AND r.revoked_at IS NULL AND r.expires_at > NOW()) AS coupon_reserved,
     COALESCE(
