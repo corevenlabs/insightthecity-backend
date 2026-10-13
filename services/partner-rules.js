@@ -52,14 +52,17 @@ function addSixMonths(input) {
 }
 function https(v) {
   if (!v) return "";
+  const value = String(v).trim();
   let u;
   try {
-    u = new URL(v);
+    if (/\s|\\/.test(value)) throw new Error("Invalid address");
+    u = new URL(/^https:\/\//i.test(value) ? value : `https://${value}`);
   } catch {
-    fail("El enlace debe ser HTTPS");
+    fail("Escribe una dirección web válida");
   }
-  if (u.protocol !== "https:" || u.username || u.password)
-    fail("El enlace debe ser HTTPS");
+  if (u.protocol !== "https:" || u.username || u.password ||
+      !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(u.hostname))
+    fail("Escribe una dirección web válida");
   return u.href;
 }
 const FIELDS = {

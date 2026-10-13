@@ -4,6 +4,10 @@ const authorization = {
   pt: "Autorizo o ITC CLUB a usar as informações, logo e fotografias enviados para preparar e publicar o perfil deste negócio.",
 };
 const errors = {
+  "Escribe una dirección web válida": [
+    "Enter a valid web address, for example carrosnuevos.com.",
+    "Digite um endereço web válido, por exemplo carrosnuevos.com.",
+  ],
   "El enlace venció o no es válido": [
     "This link has expired or is invalid. Contact your executive.",
     "Este link expirou ou é inválido. Entre em contato com seu executivo.",

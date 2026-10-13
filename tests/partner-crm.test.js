@@ -62,3 +62,11 @@ test("all branded mail types use app yellow and assigned contact without HTML in
       assert.ok(message.text.includes("https://example.com/private"));
     }
 });
+
+
+test("business and benefit addresses accept domains and retain safe HTTPS links", () => {
+  assert.equal(R.content({ website: "carrosnuevos.com" }).website, "https://carrosnuevos.com/");
+  assert.equal(R.content({ url: "www.example.com/offer?code=20#redeem" }).url, "https://www.example.com/offer?code=20#redeem");
+  assert.equal(R.content({ website: "https://example.com/profile" }).website, "https://example.com/profile");
+  for (const value of ["javascript:alert(1)", "https://user:pass@example.com", "not a website", "example", "https://.com", "ftp://example.com", "http://example.com"]) assert.throws(() => R.content({ website: value }), value);
+});
