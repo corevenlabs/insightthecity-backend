@@ -19,7 +19,9 @@ async function main() {
     console.log(`Founding Partner direct link enabled: ${URL}; payment confirmation is MANUAL. No Stripe account settings changed.`);
     return;
   }
-  let keySecret = "PARTNER_STRIPE_SECRET_KEY";
+  const returnOnly = process.env.PARTNER_TEST_RETURN_CONFIRMATION === "true";
+  if (returnOnly && !testMode()) throw new Error("Return-only confirmation is restricted to sandbox trials");
+  let keySecret = returnOnly ? "STRIPE_SECRET_KEY" : "PARTNER_STRIPE_SECRET_KEY";
   let key;
   try { key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]); }
   catch (err) {
@@ -64,35 +66,37 @@ async function main() {
       throw new Error(`Invalid or restricted discount for ${spec.offer}`);
     console.log(`${spec.offer} verified: ${link.id}; ${mode}; USD ${spec.subtotal * (100-spec.percent)/10000}, one-time`);
   }
-  const url = `${base}/api/partners/payment/webhook`;
-  let endpoint;
-  for await (const item of stripe.webhookEndpoints.list({ limit: 100 })) {
-    if (item.url === url) { endpoint = item; break; }
-  }
-  if (endpoint) {
-    if (endpoint.status !== "enabled" || !["checkout.session.completed", "checkout.session.async_payment_succeeded"].every(e => endpoint.enabled_events.includes(e) || endpoint.enabled_events.includes("*"))) {
-      throw new Error("Existing dedicated partner webhook is disabled or missing required events");
+  if (!returnOnly) {
+    const url = `${base}/api/partners/payment/webhook`;
+    let endpoint;
+    for await (const item of stripe.webhookEndpoints.list({ limit: 100 })) {
+      if (item.url === url) { endpoint = item; break; }
     }
-    const secret = gcloud(["secrets", "versions", "access", "latest", "--secret", secretName]);
-    if (!secret.startsWith("whsec_")) throw new Error("Dedicated partner webhook signing secret is unavailable");
-  } else {
-    // Ensure the secret container is writable before creating an endpoint.
-    try { gcloud(["secrets", "describe", secretName]); }
-    catch { gcloud(["secrets", "create", secretName, "--replication-policy", "automatic"]); }
-    endpoint = await stripe.webhookEndpoints.create({
-      url, enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded"],
-      description: "ITC Club partner checkout (separate from app memberships)",
-    }, { idempotencyKey: `itc-partner-webhook-${specifications[0].link.id}` });
-    if (!endpoint.secret) throw new Error("Stripe did not return the dedicated signing secret");
-    gcloud(["secrets", "versions", "add", secretName, "--data-file", "-"], endpoint.secret);
+    if (endpoint) {
+      if (endpoint.status !== "enabled" || !["checkout.session.completed", "checkout.session.async_payment_succeeded"].every(e => endpoint.enabled_events.includes(e) || endpoint.enabled_events.includes("*"))) {
+        throw new Error("Existing dedicated partner webhook is disabled or missing required events");
+      }
+      const secret = gcloud(["secrets", "versions", "access", "latest", "--secret", secretName]);
+      if (!secret.startsWith("whsec_")) throw new Error("Dedicated partner webhook signing secret is unavailable");
+    } else {
+      // Ensure the secret container is writable before creating an endpoint.
+      try { gcloud(["secrets", "describe", secretName]); }
+      catch { gcloud(["secrets", "create", secretName, "--replication-policy", "automatic"]); }
+      endpoint = await stripe.webhookEndpoints.create({
+        url, enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded"],
+        description: "ITC Club partner checkout (separate from app memberships)",
+      }, { idempotencyKey: `itc-partner-webhook-${specifications[0].link.id}` });
+      if (!endpoint.secret) throw new Error("Stripe did not return the dedicated signing secret");
+      gcloud(["secrets", "versions", "add", secretName, "--data-file", "-"], endpoint.secret);
+    }
   }
   const returnUrl = `${base}/api/partners/payment/return?session_id={CHECKOUT_SESSION_ID}`;
   for (const { link } of specifications) {
     if (process.env.FOUNDING_FINALIZE === "true" && (link.after_completion?.type !== "redirect" || link.after_completion.redirect?.url !== returnUrl))
       await stripe.paymentLinks.update(link.id, { after_completion: { type: "redirect", redirect: { url: returnUrl } } });
   }
-  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${specifications[0].link.id}\nSTRATEGIC_PARTNER_PAYMENT_LINK_ID=${specifications.find(s => s.offer === "strategic")?.link.id || ""}\nFOUNDING_PARTNER_SECRET_BINDINGS=,PARTNER_STRIPE_WEBHOOK_SECRET=${secretName}:latest,PARTNER_STRIPE_SECRET_KEY=${keySecret}:latest\n`);
-  console.log("Dedicated partner configuration verified. Membership configuration unchanged.");
+  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${specifications[0].link.id}\nSTRATEGIC_PARTNER_PAYMENT_LINK_ID=${specifications.find(s => s.offer === "strategic")?.link.id || ""}\nFOUNDING_PARTNER_SECRET_BINDINGS=${returnOnly ? "" : `,PARTNER_STRIPE_WEBHOOK_SECRET=${secretName}:latest`},PARTNER_STRIPE_SECRET_KEY=${keySecret}:latest\n`);
+  console.log(returnOnly ? "Sandbox confirmation enabled on verified Stripe return and invitation status refresh; no new secrets or webhook required. Membership configuration unchanged." : "Dedicated partner configuration verified. Membership configuration unchanged.");
 }
 main().catch((err) => {
   // No object dumps: API and subprocess errors can contain sensitive request data.

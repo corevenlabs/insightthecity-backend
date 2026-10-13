@@ -14,6 +14,7 @@ env:
   GCS_BUCKET: itc-developer-502721-media
   FOUNDING_PARTNER_PAYMENT_LINK_MANUAL: "false"
   PARTNER_PAYMENT_LINK_TEST_MODE: "true"
+  PARTNER_TEST_RETURN_CONFIRMATION: "true"
 
 permissions:
   contents: read
@@ -75,6 +76,7 @@ jobs:
           node scripts/verify-smtp.js
 
       - name: Guardar clave dedicada de socios
+        if: env.PARTNER_TEST_RETURN_CONFIRMATION != 'true'
         run: node scripts/store-partner-stripe-key.js
         env:
           PARTNER_STRIPE_DEPLOY_KEY: ${{ secrets.PARTNER_STRIPE_SECRET_KEY }}

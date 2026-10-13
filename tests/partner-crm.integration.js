@@ -643,6 +643,10 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         const session = { id: `cs_test_auto_${offer}`, payment_link: `plink_auto_${offer}`, client_reference_id: url.searchParams.get("client_reference_id"), mode: "payment", status: "complete", livemode: false, currency: "usd", amount_total: offer === "founding" ? 30000 : 0, payment_status: offer === "founding" ? "paid" : "no_payment_required", payment_intent: offer === "founding" ? "pi_auto_founding" : null, customer_details: { email: invited.email } };
         assert.equal(await S.confirmPaymentLink({...session, payment_link: offer === "founding" ? "plink_auto_strategic" : "plink_auto_founding"}), false);
         for (const change of [{ amount_total: 1 }, {livemode: true}, {status: "open"}, {customer_details: {email: "wrong@example.com"}}]) await assert.rejects(S.confirmPaymentLink({...session, ...change}));
+        stripe.setClient({checkout: {sessions: {retrieve: async (id) => {assert.equal(id, session.id); return session;}}}});
+        const returned = await fetch(base+"/partners/payment/return?session_id="+session.id, {redirect: "manual"});
+        assert.equal(returned.status, 303);
+        assert.equal(new URL(returned.headers.get("location")).hash, "#"+access);
         const Stripe = require("stripe");
         const body = JSON.stringify({id: `evt_auto_${offer}`, type: "checkout.session.completed", data: {object: session}});
         const signature = Stripe.webhooks.generateTestHeaderString({payload: body, secret: "whsec_isolated_partner"});
