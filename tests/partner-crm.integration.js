@@ -647,13 +647,41 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal(confirmed.activated_at, null);
       assert.equal((await S.publicView(access)).payment_status, "paid");
       assert.ok(confirmed.activity.some(a => a.kind === "stripe-link-paid"));
-      assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("private form")));
+      assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("Create my business profile")));
       await assert.rejects(S.action(client.id, data, actors.admin));
       assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${client.id}`])).rows[0].count), 1);
       const regular = await S.create({ business_name: "Regular cafe", contact_name: "Owner",
         email: "regular@example.com", category: "partner", offer: "regular", payment_method: "stripe" }, actors.admin);
       await assert.rejects(S.action(regular.id, data, actors.admin));
     } finally { delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL; }
+  });
+  await t.test("temporary partner test links select the correct offer and gate the zero-dollar form", async () => {
+    const L = require("../services/partner-payment-link.service");
+    process.env.PARTNER_PAYMENT_LINK_TEST_MODE = "true";
+    process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL = "true";
+    try {
+      for (const offer of ["founding", "strategic"]) {
+        const client = await S.create({ business_name: `Test ${offer}`, contact_name: "Owner", email: `${offer}-sandbox@example.com`, category: offer === "strategic" ? "strategic" : "partner", offer, payment_method: "stripe" }, actors.admin);
+        const invited = await S.action(client.id, { action: "invite" }, actors.admin);
+        const access = token(invited);
+        const view = await S.publicView(access);
+        assert.equal(view.payment_status, "pending");
+        assert.equal(view.payment_method, "stripe");
+        assert.equal(view.payment_test, true);
+        assert.equal(view.amount_cents, offer === "strategic" ? 0 : 30000);
+        await assert.rejects(S.checkout(access, { signerName: "Owner", accept: false }));
+        await assert.rejects(S.save(access, { content: {} }), /no está disponible/);
+        const url = new URL((await S.checkout(access, { signerName: "Owner", accept: true, language: "en" })).url);
+        assert.equal(url.pathname, new URL(L.TEST_URLS[offer]).pathname);
+        assert.equal(url.searchParams.get("prefilled_promo_code"), offer === "strategic" ? "ITCSTRATEGIC100" : "ITCFOUNDING75");
+        assert.equal(url.searchParams.get("locked_prefilled_email"), invited.email);
+        assert.equal((await S.sync(access)).payment_status, "pending");
+        await S.action(client.id, { action: "stripe-link-paid", reference: `TEST cs_test_${offer}`, confirm: true }, actors.admin);
+        assert.equal((await S.publicView(access)).payment_status, offer === "strategic" ? "waived" : "paid");
+        await S.save(access, { content: {} });
+      }
+      assert.equal(L.strategicTest({offer:"strategic",amount_cents:0,payment_status:"waived",form_status:"submitted"}), false);
+    } finally { delete process.env.PARTNER_PAYMENT_LINK_TEST_MODE; delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL; }
   });
   await t.test(
     "external payment requires confirmation; corrections preserve prior acceptance; renewal is manual and sends no reminder",

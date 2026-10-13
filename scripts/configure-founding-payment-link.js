@@ -2,7 +2,7 @@
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const Stripe = require("stripe");
-const { URL } = require("../services/partner-payment-link.service");
+const { URL, TEST_URLS, testMode } = require("../services/partner-payment-link.service");
 const project = process.env.PROJECT_ID;
 const secretName = "PARTNER_STRIPE_WEBHOOK_SECRET";
 const base = "https://itc-backend-1031252664334.us-east1.run.app";
@@ -15,6 +15,7 @@ async function main() {
   if (!project || !process.env.GITHUB_ENV) throw new Error("Run only from the production deployment workflow");
   if (process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL === "true") {
     fs.appendFileSync(process.env.GITHUB_ENV, "FOUNDING_PARTNER_PAYMENT_LINK_ID=\nFOUNDING_PARTNER_SECRET_BINDINGS=\n");
+    if (testMode()) console.log(`Partner TEST links enabled: Founding=${TEST_URLS.founding}; Strategic=${TEST_URLS.strategic}; confirmation remains MANUAL.`);
     console.log(`Founding Partner direct link enabled: ${URL}; payment confirmation is MANUAL. No Stripe account settings changed.`);
     return;
   }

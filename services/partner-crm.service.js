@@ -134,6 +134,7 @@ async function detail(id, actor) {
   );
   return {
     ...row,
+    ...paymentLink.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     files,
     owner: who,
@@ -197,7 +198,7 @@ async function action(id, input, actor) {
       await enqueue(
         c,
         row,
-        row.payment_status === "pending" ? "payment" : "invite",
+        (row.payment_status === "pending" || paymentLink.strategicTest(row)) ? "payment" : "invite",
         `invite:${id}`,
       );
     } else if (op === "resend") {
@@ -229,7 +230,7 @@ async function action(id, input, actor) {
       await enqueue(
         c,
         row,
-        row.payment_status === "pending" ? "payment" : "invite",
+        (row.payment_status === "pending" || paymentLink.strategicTest(row)) ? "payment" : "invite",
         `resend:${id}:${row.link_version}`,
       );
     } else if (op === "external-paid" || op === "stripe-link-paid") {
@@ -237,7 +238,7 @@ async function action(id, input, actor) {
       if (manualStripe && actor.role !== "admin") R.fail("Solo un administrador puede confirmar este pago", 403);
       if (
         (manualStripe ? !paymentLink.manualFor(row) : row.payment_method !== "external") ||
-        row.payment_status !== "pending" ||
+        (row.payment_status !== "pending" && !paymentLink.strategicTest(row)) ||
         input.confirm !== true
       )
         R.fail("Confirma el pago pendiente");
@@ -248,8 +249,8 @@ async function action(id, input, actor) {
         row,
         (
           await c.query(
-            "UPDATE partner_clients SET payment_status='paid',payment_reference=$2,payment_verified_by=$3,payment_verified_at=NOW(),form_status='invited',updated_at=NOW() WHERE id=$1 RETURNING *",
-            [id, reference, actor.id],
+            "UPDATE partner_clients SET payment_status=$4,payment_reference=$2,payment_verified_by=$3,payment_verified_at=NOW(),form_status='invited',updated_at=NOW() WHERE id=$1 RETURNING *",
+            [id, paymentLink.testMode() && manualStripe ? `TEST: ${reference}` : reference, actor.id, paymentLink.strategicTest(row) ? "waived" : "paid"],
           )
         ).rows[0],
       );
@@ -511,12 +512,13 @@ async function publicView(token) {
     amount_cents: row.amount_cents,
     payment_method: row.payment_method,
     payment_status: row.payment_status,
+    ...paymentLink.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     form_status: row.form_status,
     terms: row.terms_snapshot,
     owner: await owner(db, row),
     content:
-      row.payment_status === "pending"
+      (row.payment_status === "pending" || paymentLink.strategicTest(row))
         ? {}
         : {
             contactName: row.contact_name,
@@ -524,12 +526,12 @@ async function publicView(token) {
             businessEmail: row.email,
             ...row.content,
           },
-    files: row.payment_status === "pending" ? [] : files,
+    files: row.payment_status === "pending" || paymentLink.strategicTest(row) ? [] : files,
   };
 }
 function editable(row) {
   if (
-    row.payment_status === "pending" ||
+    row.payment_status === "pending" || paymentLink.strategicTest(row) ||
     !["invited", "draft", "changes_requested"].includes(row.form_status) ||
     row.activated_at
   )
@@ -637,11 +639,10 @@ async function checkout(token, input) {
     const row = await fromToken(token, c, true);
     if (
       row.form_status === "not_sent" ||
-      row.payment_method !== "stripe" ||
-      row.payment_status !== "pending"
+      (!paymentLink.strategicTest(row) && (row.payment_method !== "stripe" || row.payment_status !== "pending"))
     )
       R.fail("No hay un pago pendiente por Stripe", 409);
-    if (row.offer === "founding" && paymentLink.configured()) {
+    if (paymentLink.strategicTest(row) || (row.offer === "founding" && paymentLink.configured())) {
       const url = paymentLink.checkoutUrl(row);
       await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row) });
       if (paymentLink.manualFor(row)) return { url };

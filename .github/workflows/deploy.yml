@@ -13,6 +13,7 @@ env:
   SQL_INSTANCE: itc-developer-502721:us-east1:itc-postgres
   GCS_BUCKET: itc-developer-502721-media
   FOUNDING_PARTNER_PAYMENT_LINK_MANUAL: "true"
+  PARTNER_PAYMENT_LINK_TEST_MODE: "true"
 
 permissions:
   contents: read
@@ -91,7 +92,7 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --add-cloudsql-instances "$SQL_INSTANCE" \
-            --set-env-vars "FOUNDING_PARTNER_PAYMENT_LINK_MANUAL=${FOUNDING_PARTNER_PAYMENT_LINK_MANUAL},FOUNDING_PARTNER_PAYMENT_LINK_ID=${FOUNDING_PARTNER_PAYMENT_LINK_ID},DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID},SMTP_HOST=gvam1027.siteground.biz,SMTP_PORT=465,SMTP_USER=noreply@insightthecity.com,PASSWORD_RESET_FROM=ITC Club <noreply@insightthecity.com>,PANEL_PUBLIC_URL=https://itc-panel-1031252664334.us-east1.run.app,PUBLIC_BASE_URL=https://itc-backend-1031252664334.us-east1.run.app" \
+            --set-env-vars "PARTNER_PAYMENT_LINK_TEST_MODE=${PARTNER_PAYMENT_LINK_TEST_MODE},FOUNDING_PARTNER_PAYMENT_LINK_MANUAL=${FOUNDING_PARTNER_PAYMENT_LINK_MANUAL},FOUNDING_PARTNER_PAYMENT_LINK_ID=${FOUNDING_PARTNER_PAYMENT_LINK_ID},DB_HOST=/cloudsql/${SQL_INSTANCE},DB_USER=itc_app,DB_DATABASE=itc,DB_SSL=false,UPLOAD_DRIVER=gcs,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID},SMTP_HOST=gvam1027.siteground.biz,SMTP_PORT=465,SMTP_USER=noreply@insightthecity.com,PASSWORD_RESET_FROM=ITC Club <noreply@insightthecity.com>,PANEL_PUBLIC_URL=https://itc-panel-1031252664334.us-east1.run.app,PUBLIC_BASE_URL=https://itc-backend-1031252664334.us-east1.run.app" \
             --set-secrets "DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_PRICE_ID=STRIPE_PRICE_ID:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest,SMTP_PASSWORD=NOREPLY_EMAIL_PASSWORD:latest${FOUNDING_PARTNER_SECRET_BINDINGS}${WEBHOOK_SECRET}" \
             --min-instances 0 \
             --max-instances 4 \
