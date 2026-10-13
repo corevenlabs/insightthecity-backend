@@ -11,7 +11,7 @@ router.post("/", async (req, res) => {
   }
   try {
     if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type) &&
-        event.data.object.payment_status === "paid") {
+        ["paid", "no_payment_required"].includes(event.data.object.payment_status)) {
       await require("../services/partner-crm.service").confirmPaymentLink(event.data.object);
     }
     res.json({ received: true });

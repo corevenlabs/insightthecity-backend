@@ -11,7 +11,7 @@ function strategicTest(row) { return testMode() && row.offer === "strategic" && 
 function presentation(row) { return { payment_test: testMode() && (row.offer === "founding" || row.offer === "strategic"), ...(strategicTest(row) ? { payment_method: "stripe", payment_status: "pending" } : {}) }; }
 function manual() { return process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL === "true"; }
 function configured() { return manual() || Boolean(process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID); }
-function manualFor(row) { return strategicTest(row) || (manual() && row.offer === "founding" && row.payment_method === "stripe" && row.amount_cents === 30000); }
+function manualFor(row) { return manual() && (strategicTest(row) || (row.offer === "founding" && row.payment_method === "stripe" && row.amount_cents === 30000)); }
 function reference(row) {
   const signature = crypto.createHmac("sha256", process.env.JWT_SECRET)
     .update(`founding-payment:${row.id}:${row.link_version}`).digest("hex").slice(0, 32);
@@ -28,8 +28,10 @@ function checkoutUrl(row) {
   url.searchParams.set("locked_prefilled_email", row.email);
   return url.toString();
 }
-function isSession(session) {
+function linkId(offer) { return process.env[offer === "strategic" ? "STRATEGIC_PARTNER_PAYMENT_LINK_ID" : "FOUNDING_PARTNER_PAYMENT_LINK_ID"]; }
+function isSession(session, offer) {
   const id = typeof session.payment_link === "string" ? session.payment_link : session.payment_link?.id;
-  return !testMode() && !manual() && Boolean(process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID) && id === process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID;
+  const offers = offer ? [offer] : ["founding", ...(testMode() ? ["strategic"] : [])];
+  return !manual() && offers.some(value => Boolean(linkId(value)) && id === linkId(value));
 }
-module.exports = { URL, TEST_URLS, testMode, strategicTest, presentation, manual, manualFor, configured, reference, clientId, checkoutUrl, isSession };
+module.exports = { URL, TEST_URLS, testMode, strategicTest, presentation, manual, manualFor, configured, reference, clientId, checkoutUrl, linkId, isSession };

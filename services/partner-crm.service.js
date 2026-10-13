@@ -684,23 +684,24 @@ async function confirmPaymentLink(session) {
   if (!id) return false;
   const result = await transaction(async (c) => {
     const row = await get(c, id, null, true);
-    if (row.payment_status === "paid") return row.stripe_session_id === session.id;
-    if (row.offer !== "founding" || row.payment_method !== "stripe" ||
-        row.form_status === "not_sent" || row.amount_cents !== 30000 ||
+    if (row.payment_verified_at && row.stripe_session_id) return row.stripe_session_id === session.id;
+    const free = paymentLink.strategicTest(row);
+    if ((!free && (row.offer !== "founding" || row.payment_method !== "stripe" || row.payment_status !== "pending" || row.amount_cents !== 30000)) ||
+        !paymentLink.isSession(session, row.offer) || row.form_status === "not_sent" ||
         row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
-    if (session.mode !== "payment" || session.currency !== "usd" ||
-        session.amount_total !== 30000 || session.payment_status !== "paid" ||
-        !session.payment_intent ||
+    if (session.mode !== "payment" || session.status !== "complete" || session.livemode !== !paymentLink.testMode() || session.currency !== "usd" ||
+        session.amount_total !== row.amount_cents ||
+        (free ? session.payment_status !== "no_payment_required" || Boolean(session.payment_intent) : session.payment_status !== "paid" || !session.payment_intent) ||
         (session.customer_details?.email || session.customer_email || "").toLowerCase() !== row.email)
-      R.fail("El pago no coincide con el acuerdo Founding Partner", 409);
+      R.fail("El checkout no coincide con el acuerdo del socio", 409);
     const consent = (await c.query(
       "SELECT id FROM partner_acceptances WHERE client_id=$1 AND stage='commercial' AND document->>'paymentLinkReference'=$2 LIMIT 1",
       [id, session.client_reference_id],
     )).rows[0];
     if (!consent) return false;
     await c.query(
-      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status='paid',payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
-      [id, session.id, typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id],
+      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status=$4,payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
+      [id, session.id, free ? null : (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id), free ? "waived" : "paid"],
     );
     await activity(c, row, null, "stripe-paid");
     await enqueue(c, row, "invite", `paid:${id}`);
@@ -750,11 +751,10 @@ async function confirmPayment(session) {
 async function sync(token) {
   const row = await fromToken(token);
   if (paymentLink.manualFor(row)) return publicView(token);
-  if (row.payment_method === "stripe" && row.payment_status === "pending" &&
-      row.offer === "founding" && paymentLink.configured() && !row.stripe_session_id) {
+  if ((paymentLink.strategicTest(row) || (row.payment_method === "stripe" && row.payment_status === "pending" && row.offer === "founding")) && paymentLink.configured() && !row.stripe_session_id) {
     const stripe = require("./stripe.service");
-    for await (const session of stripe.listPartnerPaymentLinkSessions()) {
-      if (session.client_reference_id === paymentLink.reference(row) && session.payment_status === "paid") {
+    for await (const session of stripe.listPartnerPaymentLinkSessions(row.offer)) {
+      if (session.client_reference_id === paymentLink.reference(row) && ["paid", "no_payment_required"].includes(session.payment_status)) {
         await confirmPaymentLink(session);
         break;
       }

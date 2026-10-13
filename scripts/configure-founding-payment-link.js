@@ -32,26 +32,38 @@ async function main() {
   console.log(`Configured Stripe mode: ${mode}`);
   const account = await stripe.accounts.retrieve();
   console.log(`Configured Stripe account: ${account.id}; business: ${account.business_profile?.name || account.settings?.dashboard?.display_name || "not specified"}`);
-  let link;
-  for await (const item of stripe.paymentLinks.list({ limit: 100 })) {
-    if (item.url === new global.URL(URL).origin + new global.URL(URL).pathname) { link = item; break; }
+  if ((mode === "TEST") !== testMode()) throw new Error("Dedicated Stripe key does not match configured partner mode");
+  const specifications = testMode() ? [
+    { offer: "founding", url: TEST_URLS.founding, subtotal: 120000, percent: 75 },
+    { offer: "strategic", url: TEST_URLS.strategic, subtotal: 180000, percent: 100 },
+  ] : [{ offer: "founding", url: URL, subtotal: 120000, percent: 75 }];
+  const links = [];
+  for await (const item of stripe.paymentLinks.list({ limit: 100 })) links.push(item);
+  for (const spec of specifications) {
+    const approved = new global.URL(spec.url);
+    spec.link = links.find(item => item.url === approved.origin + approved.pathname);
+    const link = spec.link;
+    if (!link) throw new Error(`Approved ${spec.offer} link not found in dedicated Stripe environment`);
+    const items = await stripe.paymentLinks.listLineItems(link.id, { limit: 100 });
+    if (!link.active || link.livemode !== !testMode() || items.has_more || items.data.length !== 1 ||
+        items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
+        items.data[0].price?.unit_amount !== spec.subtotal || items.data[0].price?.recurring ||
+        items.data[0].adjustable_quantity?.enabled || !link.allow_promotion_codes ||
+        link.automatic_tax?.enabled || link.shipping_options?.length || link.optional_items?.length)
+      throw new Error(`Unexpected pricing or extra charges for ${spec.offer}`);
+    const promotions = await stripe.promotionCodes.list({ code: approved.searchParams.get("prefilled_promo_code"), active: true, limit: 100 });
+    if (promotions.data.length !== 1) throw new Error(`Missing or ambiguous ${spec.offer} promotion`);
+    const promo = promotions.data[0];
+    const couponRef = promo.coupon || promo.promotion?.coupon;
+    const coupon = typeof couponRef === "string" ? await stripe.coupons.retrieve(couponRef) : couponRef;
+    if (!coupon?.valid || coupon.percent_off !== spec.percent || coupon.amount_off ||
+        promo.customer || promo.customer_account || promo.restrictions?.first_time_transaction ||
+        promo.restrictions?.minimum_amount || (promo.expires_at && promo.expires_at <= Date.now()/1000) ||
+        (promo.max_redemptions && promo.times_redeemed >= promo.max_redemptions) ||
+        (coupon.applies_to?.products && !coupon.applies_to.products.includes(typeof items.data[0].price.product === "string" ? items.data[0].price.product : items.data[0].price.product.id)))
+      throw new Error(`Invalid or restricted discount for ${spec.offer}`);
+    console.log(`${spec.offer} verified: ${link.id}; ${mode}; USD ${spec.subtotal * (100-spec.percent)/10000}, one-time`);
   }
-  if (!link) {
-    if (keySecret !== "STRIPE_SECRET_KEY") throw new Error("The approved link is not in the dedicated partner Stripe account/mode");
-    // Keep memberships and future deployments working while the required partner key is supplied.
-    fs.appendFileSync(process.env.GITHUB_ENV, "FOUNDING_PARTNER_PAYMENT_LINK_ID=\nFOUNDING_PARTNER_SECRET_BINDINGS=\n");
-    console.log("Founding link remains DISABLED: supplied link not found in the membership account/mode. Configure PARTNER_STRIPE_SECRET_KEY for the account/mode containing that link. No Stripe configuration changed.");
-    return;
-  }
-  const items = await stripe.paymentLinks.listLineItems(link.id, { limit: 100 });
-  if (!link.active || items.data.length !== 1 || items.has_more ||
-      items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
-      items.data[0].price?.unit_amount !== 30000 || items.data[0].price?.recurring ||
-      items.data[0].adjustable_quantity?.enabled || link.allow_promotion_codes ||
-      link.automatic_tax?.enabled || link.shipping_options?.length || link.optional_items?.length) {
-    throw new Error("Founding Partner link must be active, single payment, USD 300, without variable quantity, discounts, extra charges or optional items");
-  }
-  console.log(`Founding Partner link verified: ${link.id}; ${link.livemode ? "LIVE" : "TEST"}; USD 300, one-time`);
   const url = `${base}/api/partners/payment/webhook`;
   let endpoint;
   for await (const item of stripe.webhookEndpoints.list({ limit: 100 })) {
@@ -69,18 +81,17 @@ async function main() {
     catch { gcloud(["secrets", "create", secretName, "--replication-policy", "automatic"]); }
     endpoint = await stripe.webhookEndpoints.create({
       url, enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded"],
-      description: "ITC Club Founding Partner payment link only (separate from app memberships)",
-    }, { idempotencyKey: `itc-founding-webhook-${link.id}` });
+      description: "ITC Club partner checkout (separate from app memberships)",
+    }, { idempotencyKey: `itc-partner-webhook-${specifications[0].link.id}` });
     if (!endpoint.secret) throw new Error("Stripe did not return the dedicated signing secret");
     gcloud(["secrets", "versions", "add", secretName, "--data-file", "-"], endpoint.secret);
   }
   const returnUrl = `${base}/api/partners/payment/return?session_id={CHECKOUT_SESSION_ID}`;
-  if (process.env.FOUNDING_FINALIZE === "true" && (link.after_completion?.type !== "redirect" || link.after_completion.redirect?.url !== returnUrl)) {
-    await stripe.paymentLinks.update(link.id, {
-      after_completion: { type: "redirect", redirect: { url: returnUrl } },
-    });
+  for (const { link } of specifications) {
+    if (process.env.FOUNDING_FINALIZE === "true" && (link.after_completion?.type !== "redirect" || link.after_completion.redirect?.url !== returnUrl))
+      await stripe.paymentLinks.update(link.id, { after_completion: { type: "redirect", redirect: { url: returnUrl } } });
   }
-  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${link.id}\nFOUNDING_PARTNER_SECRET_BINDINGS=,PARTNER_STRIPE_WEBHOOK_SECRET=${secretName}:latest,PARTNER_STRIPE_SECRET_KEY=${keySecret}:latest\n`);
+  fs.appendFileSync(process.env.GITHUB_ENV, `FOUNDING_PARTNER_PAYMENT_LINK_ID=${specifications[0].link.id}\nSTRATEGIC_PARTNER_PAYMENT_LINK_ID=${specifications.find(s => s.offer === "strategic")?.link.id || ""}\nFOUNDING_PARTNER_SECRET_BINDINGS=,PARTNER_STRIPE_WEBHOOK_SECRET=${secretName}:latest,PARTNER_STRIPE_SECRET_KEY=${keySecret}:latest\n`);
   console.log("Dedicated partner configuration verified. Membership configuration unchanged.");
 }
 main().catch((err) => {

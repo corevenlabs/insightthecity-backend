@@ -587,7 +587,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal(url.searchParams.get("locked_prefilled_email"), linked.email);
       const reference = url.searchParams.get("client_reference_id");
       let session = { id: "cs_test_linked", payment_link: "plink_test_founding",
-        client_reference_id: reference, mode: "payment", payment_status: "paid",
+        client_reference_id: reference, mode: "payment", status: "complete", livemode: true, payment_status: "paid",
         currency: "usd", amount_total: 30000, payment_intent: "pi_test_linked",
         customer_details: { email: linked.email }, metadata: {} };
       assert.equal(await S.confirmPaymentLink({ ...session, payment_link: "plink_other" }), false);
@@ -628,6 +628,32 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       } } } });
       assert.equal((await S.sync(access2)).payment_status, "paid");
     } finally { delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; }
+  });
+  await t.test("sandbox partner checkout confirms USD300 and zero-cost orders automatically and once", async () => {
+    process.env.PARTNER_PAYMENT_LINK_TEST_MODE = "true";
+    process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID = "plink_auto_founding";
+    process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID = "plink_auto_strategic";
+    try {
+      for (const offer of ["founding", "strategic"]) {
+        const created = await S.create({ business_name: `Auto ${offer}`, contact_name: "Owner", email: `auto-${offer}@example.com`, category: offer === "strategic" ? "strategic" : "partner", offer, payment_method: offer === "strategic" ? "waived" : "stripe" }, actors.admin);
+        const invited = await S.action(created.id, { action: "invite" }, actors.admin);
+        assert.equal(invited.payment_confirmation, "automatic");
+        const access = token(invited);
+        const url = new URL((await S.checkout(access, { language: "en", signerName: "Owner", accept: true })).url);
+        const session = { id: `cs_test_auto_${offer}`, payment_link: `plink_auto_${offer}`, client_reference_id: url.searchParams.get("client_reference_id"), mode: "payment", status: "complete", livemode: false, currency: "usd", amount_total: offer === "founding" ? 30000 : 0, payment_status: offer === "founding" ? "paid" : "no_payment_required", payment_intent: offer === "founding" ? "pi_auto_founding" : null, customer_details: { email: invited.email } };
+        assert.equal(await S.confirmPaymentLink({...session, payment_link: offer === "founding" ? "plink_auto_strategic" : "plink_auto_founding"}), false);
+        for (const change of [{ amount_total: 1 }, {livemode: true}, {status: "open"}, {customer_details: {email: "wrong@example.com"}}]) await assert.rejects(S.confirmPaymentLink({...session, ...change}));
+        const Stripe = require("stripe");
+        const body = JSON.stringify({id: `evt_auto_${offer}`, type: "checkout.session.completed", data: {object: session}});
+        const signature = Stripe.webhooks.generateTestHeaderString({payload: body, secret: "whsec_isolated_partner"});
+        for (let repeat=0; repeat<2; repeat++) assert.equal((await fetch(base+"/partners/payment/webhook", {method:"POST",headers:{"Content-Type":"application/json","stripe-signature":signature},body})).status, 200);
+        const confirmed = await S.publicView(access);
+        assert.equal(confirmed.payment_status, offer === "founding" ? "paid" : "waived");
+        assert.equal((await S.detail(invited.id, actors.admin)).activated_at, null);
+        assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${invited.id}`])).rows[0].count), 1);
+        assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("Create my business profile")));
+      }
+    } finally { delete process.env.PARTNER_PAYMENT_LINK_TEST_MODE; delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; delete process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID; }
   });
   await t.test("direct Founding link needs no Stripe API and only admin can attest payment and send the form", async () => {
     const L = require("../services/partner-payment-link.service");

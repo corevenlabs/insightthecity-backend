@@ -136,8 +136,8 @@ function partnerLinkClient() {
 function retrievePartnerPaymentLinkSession(sessionId) {
     return partnerLinkClient().checkout.sessions.retrieve(sessionId);
 }
-function listPartnerPaymentLinkSessions() {
-    return partnerLinkClient().checkout.sessions.list({ payment_link: process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID, status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
+function listPartnerPaymentLinkSessions(offer = "founding") {
+    return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
     listPartnerPaymentLinkSessions,
