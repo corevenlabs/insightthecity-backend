@@ -13,7 +13,7 @@ const TEST_URLS = {
 function testMode() { return process.env.PARTNER_PAYMENT_LINK_TEST_MODE === "true"; }
 function strategicCheckout(row) { return (testMode() || Boolean(linkId("strategic"))) && row.offer === "strategic" && row.amount_cents === 0 && row.payment_status === "waived" && ["not_sent", "invited"].includes(row.form_status) && !row.activated_at && !row.payment_verified_at; }
 const strategicTest = strategicCheckout; // Compatibility for existing integrations.
-function presentation(row) { return { payment_test: testMode() && (row.offer === "founding" || row.offer === "strategic"), ...(strategicTest(row) ? { payment_method: "stripe", payment_status: "pending" } : {}) }; }
+function presentation(row) { return { payment_tax_exclusive: !testMode() && configured() && row.offer === "founding", payment_test: testMode() && (row.offer === "founding" || row.offer === "strategic"), ...(strategicTest(row) ? { payment_method: "stripe", payment_status: "pending" } : {}) }; }
 function manual() { return process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL === "true"; }
 function configured() { return manual() || Boolean(process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID); }
 function manualFor(row) { return manual() && (strategicTest(row) || (row.offer === "founding" && row.payment_method === "stripe" && row.amount_cents === 30000)); }

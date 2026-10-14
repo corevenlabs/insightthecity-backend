@@ -650,7 +650,7 @@ async function checkout(token, input) {
       R.fail("No hay un pago pendiente por Stripe", 409);
     if (paymentLink.strategicCheckout(row) || (row.offer === "founding" && paymentLink.configured())) {
       const url = paymentLink.checkoutUrl(row);
-      await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row) });
+      await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row), pricing: { amountBeforeTax: row.amount_cents, currency: "usd", taxExclusive: !paymentLink.testMode() && row.offer === "founding" } });
       if (paymentLink.manualFor(row)) return { url };
       if (row.stripe_session_id) {
         const stripe = require("./stripe.service");
@@ -697,7 +697,7 @@ async function confirmPaymentLink(session) {
         !paymentLink.isSession(session, row.offer) || row.form_status === "not_sent" ||
         row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
     if (session.mode !== "payment" || session.status !== "complete" || session.livemode !== !paymentLink.testMode() || session.currency !== "usd" ||
-        session.amount_total !== row.amount_cents ||
+        !require('./partner-payment-amounts').paymentAmounts(session, row) ||
         (free ? session.payment_status !== "no_payment_required" || Boolean(session.payment_intent) : session.payment_status !== "paid" || !session.payment_intent) ||
         (session.customer_details?.email || session.customer_email || "").toLowerCase() !== row.email)
       R.fail("El checkout no coincide con el acuerdo del socio", 409);
@@ -707,8 +707,8 @@ async function confirmPaymentLink(session) {
     )).rows[0];
     if (!consent) return false;
     await c.query(
-      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status=$4,payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
-      [id, session.id, free ? null : (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id), free ? "waived" : "paid"],
+      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status=$4,stripe_payment_summary=$5,payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
+      [id, session.id, free ? null : (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id), free ? "waived" : "paid", JSON.stringify(require('./partner-payment-amounts').paymentAmounts(session, row))],
     );
     await activity(c, row, null, "stripe-paid");
     await enqueue(c, row, "invite", `paid:${id}`);

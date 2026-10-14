@@ -187,7 +187,8 @@ function render(
     style: "currency",
     currency: "USD",
   }).format((client.amount_cents || 0) / 100);
-  const investment = `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.`;
+  const taxNotice = client.offer === "founding" && !require("./partner-payment-link.service").testMode() && require("./partner-payment-link.service").configured() ? " Applicable taxes are calculated by Stripe and added at checkout. You’ll see the final total before confirming payment." : "";
+  const investment = `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.${taxNotice}`;
   const covered = "Your participation is fully covered for six months, starting when your profile is activated. No payment is required.";
   const strategicInvestment = "Regular participation fee: $1,800\nYour invitation includes 100% OFF\nYour total: $0\n" + covered;
   const invitationPricing = strategic

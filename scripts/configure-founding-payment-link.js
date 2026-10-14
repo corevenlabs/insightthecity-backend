@@ -54,7 +54,8 @@ async function main() {
         items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
         items.data[0].price?.unit_amount !== spec.subtotal || items.data[0].price?.recurring ||
         items.data[0].adjustable_quantity?.enabled || !link.allow_promotion_codes ||
-        link.automatic_tax?.enabled || link.shipping_options?.length || link.optional_items?.length)
+        (testMode() ? link.automatic_tax?.enabled : !link.automatic_tax?.enabled || items.data[0].price?.tax_behavior !== 'exclusive') ||
+        link.shipping_options?.length || link.optional_items?.length)
       throw new Error(`Unexpected pricing or extra charges for ${spec.offer}`);
     const promotions = await stripe.promotionCodes.list({ code: approved.searchParams.get("prefilled_promo_code"), active: true, limit: 100 });
     if (promotions.data.length !== 1) throw new Error(`Missing or ambiguous ${spec.offer} promotion`);
