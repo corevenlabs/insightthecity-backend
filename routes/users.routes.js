@@ -22,8 +22,9 @@ router.post('/password-reset/confirm', passwordReset.resetPassword);
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.delete("/me", requireUserAuth, deleteMe);
 
-const { updateProfile, updateAvatar } = require('../controllers/profile.controller');
+const { updateProfile, updateAvatar, getAvatar } = require('../controllers/profile.controller');
 const avatarUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, fieldSize: 7 * 1024 * 1024, files: 1, fields: 1 } });
+router.get('/me/avatar', requireUserAuth, getAvatar);
 router.patch('/me', requireUserAuth, updateProfile);
 router.post('/me/avatar', requireUserAuth, (req, res, next) => {
   avatarUpload.single('file')(req, res, (error) => {

@@ -1,6 +1,5 @@
 const users = require('../services/users.service');
 const db = require('../config/db');
-const { uploadImage } = require('../services/uploads.service');
 
 function validateProfile(body) {
   const data = {};
@@ -55,10 +54,26 @@ async function updateAvatar(req, res, next) {
     if (!current || !current.is_active) return res.status(401).json({ success: false, message: 'Sesión no válida' });
     const file = avatarFileFromRequest(req);
     if (!isProfileImage(file)) return res.status(400).json({ success: false, message: 'Selecciona una foto JPG, PNG o WebP válida' });
-    const extensions = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
-    const url = await uploadImage({ ...file, originalname: `avatar${extensions[file.mimetype]}` }, `avatars/${req.user.id}`);
-    await db.query('UPDATE users SET avatar_url = $2 WHERE id = $1', [req.user.id, url]);
+    const c = await db.connect();
+    try {
+      await c.query('BEGIN');
+      const row = (await c.query('SELECT is_active,avatar_url FROM users WHERE id=$1 FOR UPDATE', [req.user.id])).rows[0];
+      if (!row?.is_active) throw Object.assign(new Error('Sesión no válida'), {status:401});
+      const avatar = (await c.query(`INSERT INTO user_avatars(user_id,bytes,mime,legacy_key) VALUES($1,$2,$3,$4)
+        ON CONFLICT(user_id) DO UPDATE SET bytes=EXCLUDED.bytes,mime=EXCLUDED.mime,legacy_key=COALESCE(user_avatars.legacy_key,EXCLUDED.legacy_key),version=gen_random_uuid(),updated_at=NOW() RETURNING version`, [req.user.id,file.buffer,file.mimetype,row.avatar_url && !row.avatar_url.startsWith('/api/users/me/avatar?') ? `avatars/${req.user.id}/` : null])).rows[0];
+      await c.query('UPDATE users SET avatar_url=$2 WHERE id=$1',[req.user.id,`/api/users/me/avatar?v=${avatar.version}`]);
+      await c.query('COMMIT');
+    } catch(e) {await c.query('ROLLBACK');throw e;} finally {c.release();}
     res.json({ success: true, user: await users.findById(req.user.id) });
   } catch (error) { next(error); }
 }
-module.exports = { updateProfile, updateAvatar, validateProfile, isProfileImage, avatarFileFromRequest };
+async function getAvatar(req,res,next) {
+  try {
+    const row=(await db.query("SELECT bytes,mime FROM user_avatars WHERE user_id=$1",[req.user.id])).rows[0];
+    res.set("Cache-Control","private, no-store").set("X-Content-Type-Options","nosniff");
+    if(!row) return res.sendStatus(404);
+    if(req.query.format === "json") return res.json({dataUrl:`data:${row.mime};base64,${row.bytes.toString("base64")}`});
+    res.type(row.mime).send(row.bytes);
+  }catch(e){next(e);}
+}
+module.exports = { getAvatar, updateProfile, updateAvatar, validateProfile, isProfileImage, avatarFileFromRequest };
