@@ -13,8 +13,8 @@ env:
   SQL_INSTANCE: itc-developer-502721:us-east1:itc-postgres
   GCS_BUCKET: itc-developer-502721-media
   FOUNDING_PARTNER_PAYMENT_LINK_MANUAL: "false"
-  PARTNER_PAYMENT_LINK_TEST_MODE: "true"
-  PARTNER_TEST_RETURN_CONFIRMATION: "true"
+  PARTNER_PAYMENT_LINK_TEST_MODE: "false"
+  PARTNER_TEST_RETURN_CONFIRMATION: "false"
 
 permissions:
   contents: read
@@ -80,6 +80,7 @@ jobs:
         run: node scripts/store-partner-stripe-key.js
         env:
           PARTNER_STRIPE_DEPLOY_KEY: ${{ secrets.PARTNER_STRIPE_SECRET_KEY }}
+          PARTNER_STRIPE_DEPLOY_WEBHOOK: ${{ secrets.PARTNER_STRIPE_WEBHOOK_SECRET }}
 
       - name: Configurar enlace de Founding Partner
         run: node scripts/configure-founding-payment-link.js

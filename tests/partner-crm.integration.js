@@ -583,7 +583,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       await assert.rejects(S.checkout(access, { ...consent, accept: false }));
       const url = new URL((await S.checkout(access, consent)).url);
       assert.equal(url.origin + url.pathname, new URL(L.URL).origin + new URL(L.URL).pathname);
-      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75");
+      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75LIVE");
       assert.equal(url.searchParams.get("locked_prefilled_email"), linked.email);
       const reference = url.searchParams.get("client_reference_id");
       let session = { id: "cs_test_linked", payment_link: "plink_test_founding",
@@ -678,6 +678,55 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       }
     } finally { delete process.env.PARTNER_PAYMENT_LINK_TEST_MODE; delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; delete process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID; }
   });
+  await t.test("live partner webhook confirms both offers without checkout return and avoids duplicate email", async () => {
+    process.env.PARTNER_PAYMENT_LINK_TEST_MODE = "false";
+    process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID = "plink_auto_founding";
+    process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID = "plink_auto_strategic";
+    try {
+      for (const offer of ["founding", "strategic"]) {
+        const created = await S.create({ business_name: `Auto ${offer}`, contact_name: "Owner", email: `live-auto-${offer}@example.com`, category: offer === "strategic" ? "strategic" : "partner", offer, payment_method: offer === "strategic" ? "waived" : "stripe" }, actors.admin);
+        const invited = await S.action(created.id, { action: "invite" }, actors.admin);
+        assert.equal(invited.payment_confirmation, "automatic");
+        const access = token(invited);
+        const url = new URL((await S.checkout(access, { language: "en", signerName: "Owner", accept: true })).url);
+        const termsEmails = () => emails.filter(m => m.to.includes(invited.email) && m.subject.includes("Your Participation Terms and Conditions"));
+        assert.equal(termsEmails().length, 1);
+        const termsMail = termsEmails()[0];
+        assert.equal(termsMail.attachments[0].encoding, "base64");
+        assert.equal(Buffer.from(termsMail.attachments[0].content, "base64").subarray(0,4).toString(), "%PDF");
+        await S.checkout(access, {language: "en", signerName: "Owner", accept: true});
+        assert.equal(termsEmails().length, 1);
+        const accepted = (await db.query("SELECT * FROM partner_acceptances WHERE client_id=$1 AND stage='commercial'",[invited.id])).rows;
+        assert.equal(accepted.length,1);
+        const documentUrl = new URL(require("../services/partner-accepted-terms.service").url(accepted[0]));
+        const original = invited.terms_snapshot;
+        await db.query("UPDATE partner_clients SET terms_snapshot=$2 WHERE id=$1",[invited.id,JSON.stringify({en:{...original.en,version:99,content:"NEW unrelated terms"}})]);
+        const document = await fetch(base+documentUrl.pathname.replace(/^\/api/, "")+documentUrl.search);
+        assert.equal(document.status,200);
+        assert.match(document.headers.get("content-type"),/application\/pdf/);
+        assert.ok(document.headers.get("content-disposition").includes(`-V${original.en.version}-`));
+        assert.equal(Buffer.from(await document.arrayBuffer()).subarray(0,4).toString(),"%PDF");
+        assert.equal((await fetch(base+"/partners/accepted-terms?token=invalid")).status,401);
+        await db.query("UPDATE partner_clients SET terms_snapshot=$2 WHERE id=$1",[invited.id,JSON.stringify(original)]);
+        const session = { id: `cs_live_auto_${offer}`, payment_link: `plink_auto_${offer}`, client_reference_id: url.searchParams.get("client_reference_id"), mode: "payment", status: "complete", livemode: true, currency: "usd", amount_total: offer === "founding" ? 30000 : 0, payment_status: offer === "founding" ? "paid" : "no_payment_required", payment_intent: offer === "founding" ? "pi_live_auto_founding" : null, customer_details: { email: invited.email } };
+        assert.equal(await S.confirmPaymentLink({...session, payment_link: offer === "founding" ? "plink_auto_strategic" : "plink_auto_founding"}), false);
+        for (const change of [{ amount_total: 1 }, {livemode: false}, {status: "open"}, {customer_details: {email: "wrong@example.com"}}]) await assert.rejects(S.confirmPaymentLink({...session, ...change}));
+        stripe.setClient({checkout: {sessions: {retrieve: async (id) => {assert.equal(id, session.id); return session;}}}});
+        const Stripe = require("stripe");
+        const body = JSON.stringify({id: `evt_auto_${offer}`, type: "checkout.session.completed", data: {object: session}});
+        const signature = Stripe.webhooks.generateTestHeaderString({payload: body, secret: "whsec_isolated_partner"});
+        for (let repeat=0; repeat<2; repeat++) assert.equal((await fetch(base+"/partners/payment/webhook", {method:"POST",headers:{"Content-Type":"application/json","stripe-signature":signature},body})).status, 200);
+        const returned = await fetch(base+"/partners/payment/return?session_id="+session.id, {redirect: "manual"});
+        assert.equal(returned.status, 303);
+        assert.equal(new URL(returned.headers.get("location")).hash, "#"+access);
+        const confirmed = await S.publicView(access);
+        assert.equal(confirmed.payment_status, offer === "founding" ? "paid" : "waived");
+        assert.equal((await S.detail(invited.id, actors.admin)).activated_at, null);
+        assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${invited.id}`])).rows[0].count), 1);
+        assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("Create my business profile")));
+      }
+    } finally { delete process.env.PARTNER_PAYMENT_LINK_TEST_MODE; delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID; delete process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID; }
+  });
   await t.test("direct Founding link needs no Stripe API and only admin can attest payment and send the form", async () => {
     const L = require("../services/partner-payment-link.service");
     process.env.FOUNDING_PARTNER_PAYMENT_LINK_MANUAL = "true";
@@ -696,7 +745,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       await assert.rejects(S.checkout(access, { ...consent, accept: false }));
       const url = new URL((await S.checkout(access, consent)).url);
       assert.equal(url.origin + url.pathname, new URL(L.URL).origin + new URL(L.URL).pathname);
-      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75");
+      assert.equal(url.searchParams.get("prefilled_promo_code"), "ITCFOUNDING75LIVE");
       assert.equal(url.searchParams.get("locked_prefilled_email"), invited.email);
       assert.equal(L.clientId(url.searchParams.get("client_reference_id")), invited.id);
       assert.equal((await S.sync(access)).payment_status, "pending");

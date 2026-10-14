@@ -2,7 +2,7 @@
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const Stripe = require("stripe");
-const { URL, TEST_URLS, testMode } = require("../services/partner-payment-link.service");
+const { URL, LIVE_URLS, TEST_URLS, testMode } = require("../services/partner-payment-link.service");
 const project = process.env.PROJECT_ID;
 const secretName = "PARTNER_STRIPE_WEBHOOK_SECRET";
 const base = "https://itc-backend-1031252664334.us-east1.run.app";
@@ -25,7 +25,7 @@ async function main() {
   let key;
   try { key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]); }
   catch (err) {
-    if (!String(err.stderr).includes("NOT_FOUND")) throw err;
+    if (!testMode() || !String(err.stderr).includes("NOT_FOUND")) throw err;
     keySecret = "STRIPE_SECRET_KEY";
     key = gcloud(["secrets", "versions", "access", "latest", "--secret", keySecret]);
   }
@@ -38,7 +38,10 @@ async function main() {
   const specifications = testMode() ? [
     { offer: "founding", url: TEST_URLS.founding, subtotal: 120000, percent: 75 },
     { offer: "strategic", url: TEST_URLS.strategic, subtotal: 180000, percent: 100 },
-  ] : [{ offer: "founding", url: URL, subtotal: 120000, percent: 75 }];
+  ] : [
+    { offer: "founding", url: LIVE_URLS.founding, subtotal: 120000, percent: 75 },
+    { offer: "strategic", url: LIVE_URLS.strategic, subtotal: 180000, percent: 100 },
+  ];
   const links = [];
   for await (const item of stripe.paymentLinks.list({ limit: 100 })) links.push(item);
   for (const spec of specifications) {
@@ -73,7 +76,7 @@ async function main() {
       if (item.url === url) { endpoint = item; break; }
     }
     if (endpoint) {
-      if (endpoint.status !== "enabled" || !["checkout.session.completed", "checkout.session.async_payment_succeeded"].every(e => endpoint.enabled_events.includes(e) || endpoint.enabled_events.includes("*"))) {
+      if (endpoint.livemode !== !testMode() || endpoint.status !== "enabled" || !["checkout.session.completed", "checkout.session.async_payment_succeeded"].every(e => endpoint.enabled_events.includes(e) || endpoint.enabled_events.includes("*"))) {
         throw new Error("Existing dedicated partner webhook is disabled or missing required events");
       }
       const secret = gcloud(["secrets", "versions", "access", "latest", "--secret", secretName]);

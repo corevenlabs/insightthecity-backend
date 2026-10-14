@@ -198,7 +198,7 @@ async function action(id, input, actor) {
       await enqueue(
         c,
         row,
-        (row.payment_status === "pending" || paymentLink.strategicTest(row)) ? "payment" : "invite",
+        (row.payment_status === "pending" || paymentLink.strategicCheckout(row)) ? "payment" : "invite",
         `invite:${id}`,
       );
     } else if (op === "resend") {
@@ -230,7 +230,7 @@ async function action(id, input, actor) {
       await enqueue(
         c,
         row,
-        (row.payment_status === "pending" || paymentLink.strategicTest(row)) ? "payment" : "invite",
+        (row.payment_status === "pending" || paymentLink.strategicCheckout(row)) ? "payment" : "invite",
         `resend:${id}:${row.link_version}`,
       );
     } else if (op === "external-paid" || op === "stripe-link-paid") {
@@ -238,7 +238,7 @@ async function action(id, input, actor) {
       if (manualStripe && actor.role !== "admin") R.fail("Solo un administrador puede confirmar este pago", 403);
       if (
         (manualStripe ? !paymentLink.manualFor(row) : row.payment_method !== "external") ||
-        (row.payment_status !== "pending" && !paymentLink.strategicTest(row)) ||
+        (row.payment_status !== "pending" && !paymentLink.strategicCheckout(row)) ||
         input.confirm !== true
       )
         R.fail("Confirma el pago pendiente");
@@ -250,7 +250,7 @@ async function action(id, input, actor) {
         (
           await c.query(
             "UPDATE partner_clients SET payment_status=$4,payment_reference=$2,payment_verified_by=$3,payment_verified_at=NOW(),form_status='invited',updated_at=NOW() WHERE id=$1 RETURNING *",
-            [id, paymentLink.testMode() && manualStripe ? `TEST: ${reference}` : reference, actor.id, paymentLink.strategicTest(row) ? "waived" : "paid"],
+            [id, paymentLink.testMode() && manualStripe ? `TEST: ${reference}` : reference, actor.id, paymentLink.strategicCheckout(row) ? "waived" : "paid"],
           )
         ).rows[0],
       );
@@ -518,7 +518,7 @@ async function publicView(token) {
     terms: row.terms_snapshot,
     owner: await owner(db, row),
     content:
-      (row.payment_status === "pending" || paymentLink.strategicTest(row))
+      (row.payment_status === "pending" || paymentLink.strategicCheckout(row))
         ? {}
         : {
             contactName: row.contact_name,
@@ -526,12 +526,12 @@ async function publicView(token) {
             businessEmail: row.email,
             ...row.content,
           },
-    files: row.payment_status === "pending" || paymentLink.strategicTest(row) ? [] : files,
+    files: row.payment_status === "pending" || paymentLink.strategicCheckout(row) ? [] : files,
   };
 }
 function editable(row) {
   if (
-    row.payment_status === "pending" || paymentLink.strategicTest(row) ||
+    row.payment_status === "pending" || paymentLink.strategicCheckout(row) ||
     !["invited", "draft", "changes_requested"].includes(row.form_status) ||
     row.activated_at
   )
@@ -645,10 +645,10 @@ async function checkout(token, input) {
     clientId = row.id;
     if (
       row.form_status === "not_sent" ||
-      (!paymentLink.strategicTest(row) && (row.payment_method !== "stripe" || row.payment_status !== "pending"))
+      (!paymentLink.strategicCheckout(row) && (row.payment_method !== "stripe" || row.payment_status !== "pending"))
     )
       R.fail("No hay un pago pendiente por Stripe", 409);
-    if (paymentLink.strategicTest(row) || (row.offer === "founding" && paymentLink.configured())) {
+    if (paymentLink.strategicCheckout(row) || (row.offer === "founding" && paymentLink.configured())) {
       const url = paymentLink.checkoutUrl(row);
       await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row) });
       if (paymentLink.manualFor(row)) return { url };
@@ -692,7 +692,7 @@ async function confirmPaymentLink(session) {
   const result = await transaction(async (c) => {
     const row = await get(c, id, null, true);
     if (row.payment_verified_at && row.stripe_session_id) return row.stripe_session_id === session.id;
-    const free = paymentLink.strategicTest(row);
+    const free = paymentLink.strategicCheckout(row);
     if ((!free && (row.offer !== "founding" || row.payment_method !== "stripe" || row.payment_status !== "pending" || row.amount_cents !== 30000)) ||
         !paymentLink.isSession(session, row.offer) || row.form_status === "not_sent" ||
         row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
@@ -758,7 +758,7 @@ async function confirmPayment(session) {
 async function sync(token) {
   const row = await fromToken(token);
   if (paymentLink.manualFor(row)) return publicView(token);
-  if ((paymentLink.strategicTest(row) || (row.payment_method === "stripe" && row.payment_status === "pending" && row.offer === "founding")) && paymentLink.configured() && !row.stripe_session_id) {
+  if ((paymentLink.strategicCheckout(row) || (row.payment_method === "stripe" && row.payment_status === "pending" && row.offer === "founding")) && paymentLink.configured() && !row.stripe_session_id) {
     const stripe = require("./stripe.service");
     for await (const session of stripe.listPartnerPaymentLinkSessions(row.offer)) {
       if (session.client_reference_id === paymentLink.reference(row) && ["paid", "no_payment_required"].includes(session.payment_status)) {

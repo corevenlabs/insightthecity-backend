@@ -1,14 +1,28 @@
-// CI only: transfer encrypted GitHub secret into Secret Manager without logging its value.
-const { execFileSync } = require("node:child_process");
+// Transfer encrypted CI credentials to dedicated partner secrets. Never print values.
+const { execFileSync } = require('node:child_process');
+const project = process.env.PROJECT_ID;
 const key = process.env.PARTNER_STRIPE_DEPLOY_KEY;
-if (key) {
-  if (!key.startsWith("sk_test_") || !process.env.PROJECT_ID) throw new Error("Expected dedicated sandbox key and project");
-  const name = "PARTNER_STRIPE_SECRET_KEY";
-  const run = (args, input) => execFileSync("gcloud", [...args, "--project", process.env.PROJECT_ID], { input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
-  try { run(["secrets", "describe", name]); }
-  catch (e) { if (!String(e.stderr).includes("NOT_FOUND")) throw new Error("Cannot inspect dedicated secret: " + String(e.stderr).slice(0,1200)); run(["secrets", "create", name, "--replication-policy", "automatic"]); }
+const webhook = process.env.PARTNER_STRIPE_DEPLOY_WEBHOOK;
+const testMode = process.env.PARTNER_PAYMENT_LINK_TEST_MODE === 'true';
+if (!project || !new RegExp(`^(sk|rk)_${testMode ? 'test' : 'live'}_[A-Za-z0-9]+$`).test(key || '')) throw new Error('Missing partner key or unexpected Stripe mode');
+if (!/^whsec_[A-Za-z0-9]+$/.test(webhook || '')) throw new Error('Missing partner webhook signing secret');
+function run(args, input) {
+  try { return execFileSync('gcloud', [...args, '--project', project], { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
+  catch (error) {
+    const code = String(error.stderr).includes('NOT_FOUND') ? 'NOT_FOUND' : String(error.stderr).includes('PERMISSION_DENIED') ? 'PERMISSION_DENIED' : 'CONFIGURATION_ERROR';
+    const safe = new Error(`Partner secret operation failed: ${code}`); safe.code = code; throw safe;
+  }
+}
+for (const [name, value] of [['PARTNER_STRIPE_SECRET_KEY', key], ['PARTNER_STRIPE_WEBHOOK_SECRET', webhook]]) {
+  try { run(['secrets', 'describe', name]); }
+  catch (error) { if (error.code !== 'NOT_FOUND') throw error; run(['secrets', 'create', name, '--replication-policy', 'automatic']); }
   let existing;
-  try { existing = run(["secrets", "versions", "access", "latest", "--secret", name]); } catch (e) { if (!String(e.stderr).includes("NOT_FOUND")) throw new Error("Cannot inspect dedicated secret version"); }
-  if (existing !== key) run(["secrets", "versions", "add", name, "--data-file", "-"], key);
-  console.log("Dedicated partner sandbox credential stored securely.");
+  try { existing = run(['secrets', 'versions', 'access', 'latest', '--secret', name]); }
+  catch (error) { if (error.code !== 'NOT_FOUND') throw error; }
+  if (existing !== value) run(['secrets', 'versions', 'add', name, '--data-file', '-'], value);
+  // Grant only the runtime identity access to these dedicated partner secrets.
+  const runtime = run(['run', 'services', 'describe', 'itc-backend', '--region', 'us-east1', '--format=value(spec.template.spec.serviceAccountName)']);
+  if (!runtime) throw new Error('Cannot determine backend runtime identity');
+  run(['secrets', 'add-iam-policy-binding', name, '--member', `serviceAccount:${runtime}`, '--role', 'roles/secretmanager.secretAccessor', '--condition=None']);
+  console.log(`Dedicated partner secret configured: ${name}`);
 }
