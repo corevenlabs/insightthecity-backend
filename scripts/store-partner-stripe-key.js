@@ -20,9 +20,5 @@ for (const [name, value] of [['PARTNER_STRIPE_SECRET_KEY', key], ['PARTNER_STRIP
   try { existing = run(['secrets', 'versions', 'access', 'latest', '--secret', name]); }
   catch (error) { if (error.code !== 'NOT_FOUND') throw error; }
   if (existing !== value) run(['secrets', 'versions', 'add', name, '--data-file', '-'], value);
-  // Grant only the runtime identity access to these dedicated partner secrets.
-  const runtime = run(['run', 'services', 'describe', 'itc-backend', '--region', 'us-east1', '--format=value(spec.template.spec.serviceAccountName)']);
-  if (!runtime) throw new Error('Cannot determine backend runtime identity');
-  run(['secrets', 'add-iam-policy-binding', name, '--member', `serviceAccount:${runtime}`, '--role', 'roles/secretmanager.secretAccessor', '--condition=None']);
   console.log(`Dedicated partner secret configured: ${name}`);
 }
