@@ -698,7 +698,7 @@ async function confirmPaymentLink(session) {
         row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
     if (session.mode !== "payment" || session.status !== "complete" || session.livemode !== !paymentLink.testMode() || session.currency !== "usd" ||
         !require('./partner-payment-amounts').paymentAmounts(session, row) ||
-        (free ? session.payment_status !== "no_payment_required" || Boolean(session.payment_intent) : session.payment_status !== "paid" || !session.payment_intent) ||
+        !require('./partner-payment-amounts').settledPayment(session, free) ||
         (session.customer_details?.email || session.customer_email || "").toLowerCase() !== row.email)
       R.fail("El checkout no coincide con el acuerdo del socio", 409);
     const consent = (await c.query(
@@ -706,12 +706,17 @@ async function confirmPaymentLink(session) {
       [id, session.client_reference_id],
     )).rows[0];
     if (!consent) return false;
+    const receiptData = await require('./stripe.service').retrievePartnerReceiptData(session);
+    if (receiptData.session.id !== session.id || receiptData.session.client_reference_id !== session.client_reference_id ||
+        receiptData.session.livemode !== session.livemode || receiptData.session.amount_total !== session.amount_total)
+      R.fail('Los datos del comprobante no coinciden con el pago confirmado', 409);
+    const receipt = require('./partner-receipt.service').snapshot(receiptData, row);
     await c.query(
-      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status=$4,stripe_payment_summary=$5,payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
-      [id, session.id, free ? null : (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id), free ? "waived" : "paid", JSON.stringify(require('./partner-payment-amounts').paymentAmounts(session, row))],
+      "UPDATE partner_clients SET stripe_session_id=$2,stripe_payment_intent=$3,payment_status=$4,stripe_payment_summary=$5,stripe_payment_receipt=$6,payment_verified_at=NOW(),updated_at=NOW() WHERE id=$1",
+      [id, session.id, free ? null : (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id), free ? "waived" : "paid", JSON.stringify(require('./partner-payment-amounts').paymentAmounts(session, row)), JSON.stringify(receipt)],
     );
     await activity(c, row, null, "stripe-paid");
-    await enqueue(c, row, "invite", `paid:${id}`);
+    await enqueue(c, row, "invite", `paid:${id}`, '', { receipt });
     return true;
   });
   if (result) await sendPending(id);

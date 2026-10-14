@@ -71,4 +71,5 @@ CREATE TABLE IF NOT EXISTS partner_mail (
 ALTER TABLE partner_mail DROP CONSTRAINT IF EXISTS partner_mail_status_check;
 ALTER TABLE partner_mail ADD CONSTRAINT partner_mail_status_check CHECK(status IN ('pending','sending','sent','failed','canceled'));
 ALTER TABLE partner_clients ADD COLUMN IF NOT EXISTS stripe_payment_summary JSONB;
+ALTER TABLE partner_clients ADD COLUMN IF NOT EXISTS stripe_payment_receipt JSONB;
 COMMIT;

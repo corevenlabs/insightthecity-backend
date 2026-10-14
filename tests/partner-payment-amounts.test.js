@@ -12,3 +12,9 @@ test('only agreed discount plus completed Stripe tax is accepted for live partne
   assert.equal(paymentAmounts(free, { offer: 'strategic', amount_cents: 0 }).total, 0);
   assert.equal(paymentAmounts({ ...free, amount_total: 1, total_details: { ...free.total_details, amount_tax: 1 } }, { offer: 'strategic', amount_cents: 0 }), null);
 });
+test('zero-cost Strategic accepts both Stripe completion statuses without accepting charges or unpaid sessions',()=>{
+ const {settledPayment}=require('../services/partner-payment-amounts');
+ for(const payment_status of ['paid','no_payment_required']) assert.equal(settledPayment({payment_status,amount_total:0,payment_intent:null},true),true);
+ for(const s of [{payment_status:'unpaid',amount_total:0},{payment_status:'paid',amount_total:1},{payment_status:'paid',amount_total:0,payment_intent:'pi_unexpected'}]) assert.equal(settledPayment(s,true),false);
+ assert.equal(settledPayment({payment_status:'no_payment_required',amount_total:30000,payment_intent:'pi_example'},false),false);
+});

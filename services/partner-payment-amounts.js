@@ -17,4 +17,9 @@ function paymentAmounts(session, row) {
       (session.livemode && (!session.automatic_tax?.enabled || session.automatic_tax.status !== 'complete'))) return null;
   return { subtotal, discount, tax, total, currency: session.currency };
 }
-module.exports = { paymentAmounts };
+function settledPayment(session, free) {
+  return free
+    ? session.amount_total === 0 && !session.payment_intent && ['paid', 'no_payment_required'].includes(session.payment_status)
+    : session.payment_status === 'paid' && Boolean(session.payment_intent);
+}
+module.exports = { paymentAmounts, settledPayment };

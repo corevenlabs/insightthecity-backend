@@ -257,6 +257,14 @@ async function queue(connection, { key, clientId, to, kind, data }) {
   const terms = kind === "accepted_terms" ? require("./partner-accepted-terms.service") : null;
   const message = terms ? terms.render(data) : render(kind, data);
   if (terms) message.attachments = [{ filename: terms.filename(data.acceptance), content: (await terms.pdf(data.acceptance, data.client)).toString("base64"), encoding: "base64", contentType: "application/pdf" }];
+  const receipt = kind === 'invite' ? data.receipt || data.client?.stripe_payment_receipt : null;
+  if (receipt) {
+    const service = require('./partner-receipt.service');
+    const notice = receipt.kind === 'payment' ? 'Your payment receipt is attached.' : 'Your no-cost participation confirmation is attached.';
+    message.html = message.html.replace('<hr ', `<p style="font-size:14px;color:#ccc">${notice}</p><hr `);
+    message.text += `\n\n${notice}`;
+    message.attachments = [{ filename: service.filename(receipt), content: (await service.pdf(receipt)).toString('base64'), encoding: 'base64', contentType: 'application/pdf' }];
+  }
   await connection.query(
     "INSERT INTO partner_mail(client_id,dedupe_key,recipient,message) VALUES($1,$2,$3,$4) ON CONFLICT(dedupe_key) DO NOTHING",
     [clientId || null, key, to, JSON.stringify(message)],

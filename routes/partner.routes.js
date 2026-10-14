@@ -18,9 +18,14 @@ router.get("/accepted-terms", require("../middleware/partner-rate-limit")(60), w
   const file = await require("../services/partner-accepted-terms.service").download(req.query.token);
   res.set("X-Content-Type-Options", "nosniff").type("application/pdf").attachment(file.filename).send(file.bytes);
 }));
-router.get("/payment/return", wrap(async (req, res) => {
-  res.redirect(303, await S.paymentLinkReturn(req.query.session_id));
-}));
+router.get("/payment/return", require("../middleware/partner-rate-limit")(60), async (req, res) => {
+  try { res.redirect(303, await S.paymentLinkReturn(req.query.session_id)); }
+  catch (error) {
+    if (!error.status || error.status >= 500) console.error('[partner checkout return]', error.code || 'VERIFICATION_FAILED');
+    const status = [400, 401, 403, 404, 409].includes(error.status) ? error.status : 503;
+    res.status(status).type('html').send(require('../services/partner-checkout-return-view').errorPage());
+  }
+});
 router.get(
   "/clients",
   all,

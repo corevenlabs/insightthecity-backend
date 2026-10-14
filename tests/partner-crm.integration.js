@@ -18,6 +18,7 @@ const db = require("../config/db");
 const S = require("../services/partner-crm.service");
 const stripe = require("../services/stripe.service");
 const smtp = require("../services/password-reset-mail.service");
+stripe.retrievePartnerReceiptData = async session => require("./fixtures/partner-receipt.cjs").receiptData(session);
 const emails = [];
 smtp.isConfigured = () => true;
 smtp.send = async (message) => {
@@ -665,7 +666,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         stripe.setClient({checkout: {sessions: {retrieve: async (id) => {assert.equal(id, session.id); return session;}}}});
         const returned = await fetch(base+"/partners/payment/return?session_id="+session.id, {redirect: "manual"});
         assert.equal(returned.status, 303);
-        assert.equal(new URL(returned.headers.get("location")).hash, "#"+access);
+        assert.equal(jwt.verify(new URL(returned.headers.get("location")).hash.slice(1),process.env.JWT_SECRET).id, jwt.verify(access,process.env.JWT_SECRET).id);
         const Stripe = require("stripe");
         const body = JSON.stringify({id: `evt_auto_${offer}`, type: "checkout.session.completed", data: {object: session}});
         const signature = Stripe.webhooks.generateTestHeaderString({payload: body, secret: "whsec_isolated_partner"});
@@ -708,7 +709,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         assert.equal(Buffer.from(await document.arrayBuffer()).subarray(0,4).toString(),"%PDF");
         assert.equal((await fetch(base+"/partners/accepted-terms?token=invalid")).status,401);
         await db.query("UPDATE partner_clients SET terms_snapshot=$2 WHERE id=$1",[invited.id,JSON.stringify(original)]);
-        const session = { id: `cs_live_auto_${offer}`, payment_link: `plink_auto_${offer}`, client_reference_id: url.searchParams.get("client_reference_id"), mode: "payment", status: "complete", livemode: true, currency: "usd", amount_subtotal: offer === "founding" ? 120000 : 180000, total_details: { amount_discount: offer === "founding" ? 90000 : 180000, amount_tax: offer === "founding" ? 2000 : 0, amount_shipping: 0 }, automatic_tax: { enabled: true, status: "complete" }, amount_total: offer === "founding" ? 32000 : 0, payment_status: offer === "founding" ? "paid" : "no_payment_required", payment_intent: offer === "founding" ? "pi_live_auto_founding" : null, customer_details: { email: invited.email } };
+        const session = { id: `cs_live_auto_${offer}`, payment_link: `plink_auto_${offer}`, client_reference_id: url.searchParams.get("client_reference_id"), mode: "payment", status: "complete", livemode: true, currency: "usd", amount_subtotal: offer === "founding" ? 120000 : 180000, total_details: { amount_discount: offer === "founding" ? 90000 : 180000, amount_tax: offer === "founding" ? 2000 : 0, amount_shipping: 0 }, automatic_tax: { enabled: true, status: "complete" }, amount_total: offer === "founding" ? 32000 : 0, payment_status: "paid", payment_intent: offer === "founding" ? "pi_live_auto_founding" : null, customer_details: { email: invited.email } };
         assert.equal(await S.confirmPaymentLink({...session, payment_link: offer === "founding" ? "plink_auto_strategic" : "plink_auto_founding"}), false);
         for (const change of [{ amount_total: 1 }, {livemode: false}, {status: "open"}, {customer_details: {email: "wrong@example.com"}}]) await assert.rejects(S.confirmPaymentLink({...session, ...change}));
         stripe.setClient({checkout: {sessions: {retrieve: async (id) => {assert.equal(id, session.id); return session;}}}});
@@ -718,13 +719,20 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         for (let repeat=0; repeat<2; repeat++) assert.equal((await fetch(base+"/partners/payment/webhook", {method:"POST",headers:{"Content-Type":"application/json","stripe-signature":signature},body})).status, 200);
         const returned = await fetch(base+"/partners/payment/return?session_id="+session.id, {redirect: "manual"});
         assert.equal(returned.status, 303);
-        assert.equal(new URL(returned.headers.get("location")).hash, "#"+access);
+        assert.equal(jwt.verify(new URL(returned.headers.get("location")).hash.slice(1),process.env.JWT_SECRET).id, jwt.verify(access,process.env.JWT_SECRET).id);
+        const invalidReturn=await fetch(base+"/partners/payment/return?session_id=invalid");
+        assert.equal(invalidReturn.status,400);assert.match(invalidReturn.headers.get("content-type"),/text\/html/);
+        const errorPage=await invalidReturn.text();assert.match(errorPage,/itc-club-logo-v1/);assert.match(errorPage,/original invitation email/);assert(!errorPage.includes("success"));
         const confirmed = await S.publicView(access);
         assert.equal(confirmed.payment_status, offer === "founding" ? "paid" : "waived");
         assert.equal((await S.detail(invited.id, actors.admin)).activated_at, null);
         const summary = (await db.query("SELECT stripe_payment_summary FROM partner_clients WHERE id=$1", [invited.id])).rows[0].stripe_payment_summary;
         assert.equal(summary.tax, offer === "founding" ? 2000 : 0);
         assert.equal(summary.total, offer === "founding" ? 32000 : 0);
+        const receipt=(await db.query("SELECT stripe_payment_receipt FROM partner_clients WHERE id=$1",[invited.id])).rows[0].stripe_payment_receipt;
+        assert.equal(receipt.kind, offer === "founding" ? "payment" : "participation");
+        const welcome=emails.filter(m=>m.to.includes(invited.email)&&m.text.includes("Create my business profile"));
+        assert.equal(welcome.length,1);assert.equal(welcome[0].attachments.length,1);assert.equal(Buffer.from(welcome[0].attachments[0].content,"base64").subarray(0,4).toString(),"%PDF");
         assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE dedupe_key=$1", [`paid:${invited.id}`])).rows[0].count), 1);
         assert.ok(emails.some(m => m.to.includes(invited.email) && m.text.includes("Create my business profile")));
       }

@@ -136,10 +136,19 @@ function partnerLinkClient() {
 function retrievePartnerPaymentLinkSession(sessionId) {
     return partnerLinkClient().checkout.sessions.retrieve(sessionId);
 }
+async function retrievePartnerReceiptData(confirmedSession) {
+    const stripe = partnerLinkClient();
+    const [session, account] = await Promise.all([
+        stripe.checkout.sessions.retrieve(confirmedSession.id, { expand: ['payment_intent.latest_charge', 'line_items'] }),
+        stripe.accounts.retrieve(),
+    ]);
+    return { session, account };
+}
 function listPartnerPaymentLinkSessions(offer = "founding") {
     return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
+    retrievePartnerReceiptData,
     listPartnerPaymentLinkSessions,
     retrievePartnerPaymentLinkSession,
     createPartnerCheckout,
