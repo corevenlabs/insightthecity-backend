@@ -109,37 +109,16 @@ test('una suscripción cancelada retira premium', async () => {
   }
 });
 
-test('eliminar la cuenta cancela la suscripción antes de borrar; si Stripe falla no borra nada', async () => {
-  const originalQuery = db.query;
-  const originalConnect = db.connect;
-  const statements = [];
-  const client = {
-    query: async (sql) => { statements.push(sql.trim().split(/\s+/).slice(0, 3).join(' ')); return { rows: [] }; },
-    release() {},
-  };
-  db.query = async (sql) => {
-    if (sql.includes('stripe_subscription_id, subscription_status')) {
-      return { rows: [{ stripe_subscription_id: 'sub_1', subscription_status: 'active' }] };
-    }
-    return { rows: [] };
-  };
-  db.connect = async () => client;
-  let canceled = 0;
+test('account deletion is persisted before cleanup is attempted', async () => {
+  const service = require('../services/account-deletion.service');
+  const originalRequest=service.request, originalProcess=service.processJob;
+  const calls=[];
   try {
-    stripeService.setClient({ subscriptions: { cancel: async () => { throw Object.assign(new Error('down'), { code: 'api_error' }); } } });
-    await assert.rejects(users.remove(5), /down/);
-    assert.equal(statements.length, 0);
-
-    stripeService.setClient({ subscriptions: { cancel: async () => { canceled += 1; } } });
-    assert.equal(await users.remove(5), true);
-    assert.equal(canceled, 1);
-    assert.ok(statements.includes('DELETE FROM chat_messages'));
-    assert.ok(statements.includes('DELETE FROM users'));
-  } finally {
-    db.query = originalQuery;
-    db.connect = originalConnect;
-    stripeService.setClient(null);
-  }
+    service.request=async id=>{calls.push(['request',id]);return {id:'job'};};
+    service.processJob=async id=>{calls.push(['process',id]);};
+    assert.equal(await users.remove(5),true);
+    assert.deepEqual(calls,[['request',5],['process','job']]);
+  } finally {service.request=originalRequest;service.processJob=originalProcess;}
 });
 
 test('el aviso de renovación muestra precio y período en el idioma del usuario', () => {

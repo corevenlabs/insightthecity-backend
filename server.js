@@ -57,6 +57,7 @@ app.use("/api/staff", require("./routes/staff.routes"));
 app.use("/api/partners", require("./routes/partner.routes"));
 app.get("/business/:id", require("./controllers/partner-preview.controller"));
 app.use("/api/users", usersRouter);
+app.use("/api/account-deletions", require("./routes/account-deletion.routes"));
 app.use("/api/uploads", uploadsRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/partnerships", partnershipsRouter);

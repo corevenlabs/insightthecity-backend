@@ -3,7 +3,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const legal = require("./legal.service");
 const stripeService = require("./stripe.service");
-const { deletePrefix } = require("./uploads.service");
 
 // Auth de usuarios de la app (distinto de los admins del panel).
 // La tabla `users` guarda name, email, password_hash, is_premium, is_active.
@@ -192,39 +191,13 @@ async function adminUpdate(id, { is_premium, is_active, name }) {
   return rows[0] || null;
 }
 
-// Borra la cuenta y sus datos personales. Primero cancela la suscripción en Stripe:
-// si eso falla no se borra nada, para no dejar a alguien pagando sin cuenta.
+// Persist the request before attempting any external cleanup.
 async function remove(id) {
-  const { rows } = await db.query(
-    `SELECT stripe_subscription_id, subscription_status FROM users WHERE id = $1`,
-    [id]
-  );
-  const user = rows[0];
-  if (!user) return false;
-
-  if (user.stripe_subscription_id && !["canceled", "incomplete_expired"].includes(user.subscription_status)) {
-    await stripeService.cancelSubscriptionNow(user.stripe_subscription_id);
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query("BEGIN");
-    // chat_messages usa ON DELETE SET NULL: se borran explícitamente (contienen texto del usuario).
-    await client.query(`DELETE FROM chat_messages WHERE user_id = $1`, [id]);
-    await client.query(`DELETE FROM users WHERE id = $1`, [id]);
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-
-  try {
-    await deletePrefix(`avatars/${id}`);
-  } catch (err) {
-    console.error(`[users] No se pudieron borrar las fotos de perfil de ${id}:`, err.message);
-  }
+  const deletion = require('./account-deletion.service');
+  const job = await deletion.request(id);
+  if (!job) return false;
+  try { await deletion.processJob(job.id); }
+  catch { console.error("[account deletion request queued]", job.id); }
   return true;
 }
 

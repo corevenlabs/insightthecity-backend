@@ -79,7 +79,7 @@ async function deletePrefix(prefix) {
   if (DRIVER === "gcs") {
     const storage = require("../config/storage");
     const bucketName = process.env.GCS_BUCKET;
-    if (!bucketName) return;
+    if (!bucketName) throw new Error("GCS_BUCKET no configurado");
     await storage.bucket(bucketName).deleteFiles({ prefix: `${prefix}/`, force: true });
     return;
   }

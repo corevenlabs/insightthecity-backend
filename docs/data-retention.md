@@ -1,0 +1,18 @@
+# Retention implementation (local; not yet deployed)
+
+- Chat messages: 90 days from creation. History queries exclude older messages; the scheduled worker deletes up to 1,000 per run. Account deletion removes all messages immediately after Stripe cancellation succeeds.
+- Sent/canceled partner operational emails: 90 days from sent_at (or creation if canceled). The worker clears recipient, message (including PDF attachments), and error_code. Minimal deduplication/status records remain to prevent duplicate invitations. Failed/pending messages remain for delivery/recovery; their retention policy is pending.
+- Accepted terms, contracts and payment snapshots: not purged by operational mail cleanup. Retention period requires business/legal approval; none is invented here.
+- Password reset codes: invalid after 15 minutes; deleted by the sweep one day after expiration, or with account deletion.
+- Completed deletion requests: contact/subscription/user identifiers cleared after confirmation delivery; minimal status record removed after 30 days. Pending jobs remain until cleanup succeeds, with retries and staff alerts.
+- Device: deleting an account removes its saved items and recent searches, plus authentication/profile/biometric data through signOut. Cache writes are serialized with deletion to prevent late restoration. General app language and guest data are not account-specific.
+
+The account-deletion-retries GitHub workflow schedules execution every 10 minutes, subject to GitHub scheduling delays. Migration, backend release, workflow publication and mobile release are required to activate this implementation. Existing old chats/emails will be removed/redacted in batches after deployment; legal snapshots are excluded.
+
+## External settings still to verify
+
+Cloud Logging retention (proposal: 30 days), Cloud SQL backups and point-in-time recovery (proposal: 30 days if supported), restoration procedure that reapplies deletion requests, SMTP/provider archives and logs, OpenAI account retention controls, Stripe/payment retention, and retention of business legal records. Code changes alone do not configure these. Do not claim that provider backups, recipient inboxes or payment records are erased when an account is deleted. Update the privacy policy only after actual provider settings and justified retention periods are approved and verified.
+
+## Legal acceptance evidence
+
+The legal-evidence migration replaces user deletion cascade with SET NULL and stamps account_deleted_at. It captures an immutable document snapshot for verifiable historical versions and future acceptances, while leaving missing-version evidence explicitly incomplete. Deleted accounts retain only a reference, document evidence, acceptance time and any recorded renewal/customer reference; names, emails, profiles and chats are not copied. Historical plan prices or affirmative-consent details are not invented. New subscription acceptances capture the plan/notice at checkout initiation, not a claim of successful payment. Administrators can view and export the record in the existing Legal Acceptances section. A justified retention deadline still requires legal/business approval; this implementation does not invent an expiry or assert indefinite retention is compliant. The privacy policy and deletion notices must be aligned before deployment.

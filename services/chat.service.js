@@ -111,7 +111,7 @@ async function getHistory(userId, limit = 30) {
   const { rows } = await db.query(
     `SELECT id, role, message, created_at FROM (
        SELECT id, role, message, created_at FROM chat_messages
-       WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2
+       WHERE user_id = $1 AND created_at >= NOW()-INTERVAL '90 days' ORDER BY created_at DESC, id DESC LIMIT $2
      ) history ORDER BY created_at ASC, id ASC`,
     [userId, safeLimit]
   );

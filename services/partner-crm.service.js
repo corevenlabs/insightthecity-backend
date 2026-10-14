@@ -839,6 +839,8 @@ async function fileDelete(token, id) {
   });
 }
 async function fileGet(clientId, id, actor, token) {
+  if (!token && (!actor || !['admin', 'editor', 'executive'].includes(actor.role)))
+    R.fail("Sin acceso", 403);
   const row = token ? await fromToken(token) : await get(db, clientId, actor);
   if (token && row.payment_status === "pending") R.fail("Sin acceso", 403);
   if (!/^[\da-f-]{36}$/i.test(id || "")) R.fail("Archivo no encontrado", 404);

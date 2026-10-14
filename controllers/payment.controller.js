@@ -61,6 +61,7 @@ async function createSubscription(req, res, next) {
         );
         await legal.recordAcceptance(null, {
             userId: user.id, language, context: 'subscription', slugs: legal.SUBSCRIPTION_SLUGS,
+            customerReference: customerId, renewal: { affirmativeConsent: true, amountCents: plan.amountCents, currency: plan.currency, interval: plan.interval, notice: subscriptions.renewalNotice(plan, language), stage: 'checkout_requested' },
         });
 
         const session = await stripeService.createCheckoutSession({

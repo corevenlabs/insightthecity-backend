@@ -56,6 +56,8 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     "schema.sql",
     "experience-gallery.sql",
     "partner-crm.sql",
+    "account-deletion.sql",
+    "legal-evidence.sql",
   ])
     await db.query(fs.readFileSync(`database/${name}`, "utf8"));
   await db.query("TRUNCATE admins, experiences CASCADE");
@@ -349,6 +351,18 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         role: "editor",
       });
       assert.equal(result.status, 200);
+      const fileId = result.body.files[0].id;
+      for (const path of [
+        `/partners/access/files/${fileId}`,
+        `/partners/clients/${strategic.id}/files/${fileId}`,
+      ]) {
+        const anonymous = await fetch(base + path);
+        assert.ok([401, 403].includes(anonymous.status));
+        assert.equal(anonymous.headers.get('cache-control'), 'no-store');
+      }
+      await assert.rejects(S.fileGet(strategic.id, fileId, null), error => error.status === 403);
+      const authorized = await api(`/partners/clients/${strategic.id}/files/${fileId}`, { role: 'executive' });
+      assert.equal(authorized.status, 200);
       for (const key of [
         "amount_cents",
         "payment_status",

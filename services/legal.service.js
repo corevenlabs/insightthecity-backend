@@ -92,33 +92,39 @@ async function removeDraft(id) {
 }
 
 // Registra que el usuario aceptó las versiones vigentes de los documentos indicados.
-async function recordAcceptance(client, { userId, language, context, slugs }) {
+async function recordAcceptance(client, { userId, language, context, slugs, renewal = null, customerReference = null }) {
   const runner = client || db;
   for (const slug of slugs) {
     const doc = await getCurrent(slug, language);
     if (!doc) console.warn(`[legal] ${slug} no tiene versión publicada; se registra la aceptación sin versión.`);
     await runner.query(
-      `INSERT INTO legal_acceptances (user_id, document_id, slug, version, context)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, doc?.id ?? null, slug, doc?.version ?? null, context]
+      `INSERT INTO legal_acceptances (user_id, document_id, slug, version, context, user_reference, document_snapshot, renewal_snapshot, customer_reference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [userId, doc?.id ?? null, slug, doc?.version ?? null, context, `ITC-U-${userId}`, doc ? JSON.stringify(doc) : null, renewal ? JSON.stringify(renewal) : null, customerReference]
     );
   }
 }
 
 async function listAcceptances({ search = '', slug = '', context = '', page = 1 }) {
   const values = [search, slug, context];
-  const where = `WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%' OR u.id::text = $1)
+  const where = `WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%' OR u.id::text = $1 OR a.user_reference ILIKE '%' || $1 || '%' OR a.customer_reference = $1)
     AND ($2 = '' OR a.slug = $2) AND ($3 = '' OR a.context = $3)`;
-  const count = await db.query(`SELECT COUNT(*)::int AS total FROM legal_acceptances a JOIN users u ON u.id = a.user_id ${where}`, values);
+  const count = await db.query(`SELECT COUNT(*)::int AS total FROM legal_acceptances a LEFT JOIN users u ON u.id = a.user_id ${where}`, values);
   const { rows } = await db.query(`SELECT a.id, a.user_id AS "userId", u.name AS "userName", u.email AS "userEmail",
     a.slug, a.version, a.context, a.accepted_at AS "acceptedAt", a.document_id AS "documentId",
-    d.title AS "documentTitle", d.language
-    FROM legal_acceptances a JOIN users u ON u.id = a.user_id LEFT JOIN legal_documents d ON d.id = a.document_id
+    COALESCE(a.document_snapshot->>'title',d.title) AS "documentTitle", COALESCE(a.document_snapshot->>'language',d.language) AS language,
+    a.user_reference AS "userReference", a.customer_reference AS "customerReference", a.account_deleted_at AS "accountDeletedAt", a.document_snapshot AS "documentSnapshot", a.renewal_snapshot AS "renewalSnapshot"
+    FROM legal_acceptances a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN legal_documents d ON d.id = a.document_id
     ${where} ORDER BY a.accepted_at DESC, a.id DESC LIMIT 25 OFFSET $4`, [...values, (page - 1) * 25]);
   return { items: rows, total: count.rows[0].total, page, pageSize: 25 };
 }
 
+async function acceptance(id) {
+  return (await db.query('SELECT * FROM legal_acceptances WHERE id=$1', [id])).rows[0] || null;
+}
+
 module.exports = {
+  acceptance,
   listAcceptances,
   SLUGS,
   LANGUAGES,

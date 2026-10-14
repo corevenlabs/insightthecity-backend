@@ -1,0 +1,28 @@
+name: Retry pending account deletions
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: account-deletion-retries
+  cancel-in-progress: false
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Process pending requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker_token=$(gcloud secrets versions access latest --secret JWT_SECRET --project itc-developer-502721 | python3 -c 'import sys,hmac,hashlib; print(hmac.new(sys.stdin.buffer.read().strip(),b"account-deletion-worker-v1",hashlib.sha256).hexdigest())')
+          echo "::add-mask::$worker_token"
+          curl --fail --silent --show-error --max-time 240 -X POST -H "Authorization: Bearer $worker_token" https://itc-backend-1031252664334.us-east1.run.app/api/account-deletions/process

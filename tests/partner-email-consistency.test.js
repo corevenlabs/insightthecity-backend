@@ -4,6 +4,17 @@ const { render } = require('../services/partner-email.service');
 const base = { client: { business_name: 'Example business', contact_name: 'Rafa Monroy', offer: 'founding', category: 'partner', amount_cents: 30000 }, owner: { name: 'Executive', email: 'executive@example.com' }, url: 'https://example.com/partner#example', language: 'en' };
 const strategic = { ...base, client: { ...base.client, offer: 'strategic', category: 'strategic', amount_cents: 0 } };
 const normalize = (html) => html.replaceAll('Strategic Founding Partner', 'Founding Partner');
+test('submission acknowledgment uses approved copy, yellow business name and assigned executive', () => {
+  const message = render('received', { ...base, client: { ...base.client, business_name: 'Cafe <NY>' }, language: 'es' });
+  assert.equal(message.subject, 'Welcome aboard, Cafe <NY>!');
+  assert(message.html.includes('Welcome aboard, <span style="color:#FDDD56">Cafe &lt;NY&gt;!</span>'));
+  for (const value of ['partner-welcome-banner-v1.png', 'itc-club-logo-v1.png', 'Your profile is in our hands.', 'Your account manager will review your business details and member benefit', 'View your submission', 'Let’s make this a great partnership.', 'Your ITC Club contact', base.owner.name, base.owner.email, base.url, 'The ITC Club Team']) assert(message.html.includes(value), value);
+  assert(message.text.includes('Business: Cafe <NY>\nPartner type: Founding Partner'));
+  assert(message.html.includes('lang="en"'));
+  assert.equal(message.replyTo, base.owner.email);
+  assert(!message.html.includes('new-york.jpg'));
+  assert(!message.html.includes('Questions? Contact your assigned executive.'));
+});
 test('Strategic follows the identical Founding email design at every client stage', () => {
   for (const kind of ['invite', 'received', 'changes', 'published']) {
     const expected = render(kind, base);

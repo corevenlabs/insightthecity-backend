@@ -91,7 +91,7 @@ const deleteMe = async (req, res, next) => {
   try {
     const deleted = await usersService.deleteOwnAccount(req.user.id, req.body?.password);
     if (!deleted) return res.status(400).json({ success: false, message: "La contraseña no es correcta" });
-    res.json({ success: true });
+    res.status(202).json({ success: true, deletionStatus: "requested" });
   } catch (err) {
     next(err);
   }
