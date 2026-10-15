@@ -18,8 +18,8 @@ async function resetPassword(req, res, next) {
   const email = String(req.body?.email || '').trim();
   const code = String(req.body?.code || '').trim();
   const password = req.body?.password;
-  if (!EMAIL_RE.test(email) || email.length > 255 || !/^\d{8}$/.test(code) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
-    return res.status(400).json({ success: false, message: 'Revisa el correo, el código de 8 dígitos y la contraseña (mínimo 8 caracteres).' });
+  if (!EMAIL_RE.test(email) || email.length > 255 || !/^\d{8}$/.test(code) || typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password) > 72) {
+    return res.status(400).json({ success: false, message: 'Revisa el correo, el código de 8 dígitos y la contraseña (mínimo 8 caracteres y máximo 72 bytes).' });
   }
   try {
     const changed = await passwordReset.resetPassword(email, code, password);

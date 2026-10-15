@@ -3,7 +3,7 @@ if(process.env.DB_DATABASE!=='itc_crm_test'||process.env.DB_HOST!=='127.0.0.1')t
 const db=require('../config/db'),legal=require('../services/legal.service');
 after(()=>db.end());
 test('acceptance snapshot survives deletion without retaining name/email and exports PDF',async()=>{
- for(const file of ['schema.sql','legal-evidence.sql'])await db.query(fs.readFileSync(`database/${file}`,'utf8'));
+ for(const file of ['schema.sql','security-hardening.sql','legal-evidence.sql'])await db.query(fs.readFileSync(`database/${file}`,'utf8'));
  const user=(await db.query("INSERT INTO users(name,email) VALUES('Private name',$1) RETURNING id",[`legal-${Date.now()}@example.test`])).rows[0];
  const doc=(await db.query("INSERT INTO legal_documents(slug,language,version,title,content,published_at) VALUES('subscription','en',99999,'Exact terms','Accepted text',NOW()) RETURNING id")).rows[0];
  let acceptance;

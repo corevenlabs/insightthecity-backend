@@ -26,6 +26,7 @@ function membershipEmail(user, kind = 'welcome', language = user.language) {
   const note = welcome ? c.notice : canceled ? `${c.noCharge} ${c.reactivate}` : c.notice;
   const target = welcome ? 'benefits' : 'membership'; const button = welcome ? c.benefits : c.membership;
   const url = actionUrl(target, lang);
+  if (welcome) return require('./membership-welcome-email.service').render({lang,c,greeting,date,price,note,base:baseUrl(),url,escape});
   const legal = slug => `${baseUrl()}/legal/${slug}?lang=${lang}`;
   const row = (label, value) => `<tr><td style="padding:14px 12px;border-bottom:1px solid #333;color:#ccc">${escape(label)}</td><td style="padding:14px 12px;border-bottom:1px solid #333;color:#fff">${escape(value)}</td></tr>`;
   const brandHeader = welcome

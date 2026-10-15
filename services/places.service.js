@@ -13,6 +13,8 @@ async function searchPlaces(query, options = {}) {
     body.locationBias = { circle: { center: { latitude: options.lat, longitude: options.lng }, radius: 8000 } };
   }
   const response = await axios.post("https://places.googleapis.com/v1/places:searchText", body, {
+    timeout: 10000,
+    maxContentLength: 2 * 1024 * 1024,
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY,

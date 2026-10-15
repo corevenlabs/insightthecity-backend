@@ -126,7 +126,7 @@ router.post(
       }
       return (
         await c.query(
-          "UPDATE admins SET role=$2,is_active=$3,name=$4,phone=$5,language=$6 WHERE id=$1 RETURNING id,email,name,role,language,phone,is_active",
+          "UPDATE admins SET session_version=session_version+CASE WHEN is_active IS DISTINCT FROM $3 THEN 1 ELSE 0 END,role=$2,is_active=$3,name=$4,phone=$5,language=$6 WHERE id=$1 RETURNING id,email,name,role,language,phone,is_active",
           [
             staff.id,
             req.body.role,
@@ -168,7 +168,7 @@ router.post(
         ])
       ).rows[0];
       if (!staff) R.fail("Cuenta inactiva", 403);
-      await c.query("UPDATE admins SET password_hash=$2 WHERE id=$1", [
+      await c.query("UPDATE admins SET password_hash=$2,session_version=session_version+1 WHERE id=$1", [
         staff.id,
         await bcrypt.hash(req.body.password, 12),
       ]);

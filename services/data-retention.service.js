@@ -1,6 +1,8 @@
 const db = require('../config/db');
 // Bounded batches preserve retry/deduplication records and legal/payment snapshots.
 async function sweep() {
+  await db.query("DELETE FROM security_rate_limits WHERE reset_at<NOW()-INTERVAL '1 day'");
+  await db.query("DELETE FROM account_deletion_challenges WHERE expires_at<NOW()-INTERVAL '1 day'");
   await db.query(`DELETE FROM chat_messages WHERE id IN (
     SELECT id FROM chat_messages WHERE created_at < NOW()-INTERVAL '90 days'
     ORDER BY created_at LIMIT 1000)`);

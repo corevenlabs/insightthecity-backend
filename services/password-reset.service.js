@@ -82,7 +82,7 @@ async function resetPassword(email, code, password) {
       return false;
     }
     const passwordHash = await bcrypt.hash(password, 12);
-    await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, reset.user_id]);
+    await client.query('UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2', [passwordHash, reset.user_id]);
     await client.query('DELETE FROM password_reset_codes WHERE user_id = $1', [reset.user_id]);
     await client.query('COMMIT');
     return true;

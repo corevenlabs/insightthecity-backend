@@ -23,6 +23,6 @@ test('al refrescar el perfil se reintenta el acuse pendiente usando el transport
     await subscriptions.syncIfStale(7);
     assert.equal(messages.length, 1);
     assert.deepEqual(messages[0].to, ['test@example.com']);
-    assert.match(messages[0].subject, /membresía/);
+    assert.equal(messages[0].subject, 'Ya eres parte de ITC Club. Tu próximo plan empieza aquí.');
   } finally { db.query = original.query; transport.isConfigured = original.configured; transport.send = original.send; }
 });

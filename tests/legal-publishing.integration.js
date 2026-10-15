@@ -9,6 +9,7 @@ const db=require('../config/db');const app=require('../server');let server,base,
 after(async()=>{if(created.length)await db.query('DELETE FROM legal_documents WHERE id=ANY($1::bigint[])',[created]);if(adminId)await db.query('DELETE FROM admins WHERE id=$1',[adminId]);if(server)await new Promise(r=>server.close(r));await db.end();});
 test('panel can create, save and publish legal documents using the actual PostgreSQL schema',async()=>{
  await db.query(fs.readFileSync('database/schema.sql','utf8'));
+ await db.query(fs.readFileSync('database/security-hardening.sql','utf8'));
  adminId=(await db.query("INSERT INTO admins(email,name,password_hash,role) VALUES($1,'Legal QA','unused','admin') RETURNING id",[`legal-qa-${Date.now()}@example.test`])).rows[0].id;
  const token=jwt.sign({id:adminId,type:'staff'},process.env.JWT_SECRET);
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api`;

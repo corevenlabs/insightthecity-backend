@@ -30,8 +30,8 @@ const register = async (req, res, next) => {
     if (!EMAIL_RE.test(String(email).trim())) {
       return res.status(400).json({ success: false, message: "Correo inválido" });
     }
-    if (String(password).length < 8) {
-      return res.status(400).json({ success: false, message: "La contraseña debe tener al menos 8 caracteres" });
+    if (String(password).length < 8 || Buffer.byteLength(password)>72) {
+      return res.status(400).json({ success: false, message: "Usa una contraseña de al menos 8 caracteres y hasta 72 bytes" });
     }
     // Consentimiento afirmativo a Términos y Privacidad (casilla en la app).
     if (acceptLegal !== true) {

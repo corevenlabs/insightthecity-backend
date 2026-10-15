@@ -41,7 +41,7 @@ const SORTABLE = new Set(["id", "name", "email", "is_premium", "is_active", "cre
 
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, type: "user" },
+    { id: user.id, email: user.email, type: "user", sv: Number(user.session_version || 0) },
     process.env.JWT_SECRET,
     { expiresIn: "30d" }
   );
@@ -174,6 +174,7 @@ async function adminUpdate(id, { is_premium, is_active, name }) {
   if (is_active !== undefined) {
     values.push(!!is_active);
     sets.push(`is_active = $${values.length}`);
+    sets.push(`session_version = session_version + CASE WHEN is_active IS DISTINCT FROM $${values.length} THEN 1 ELSE 0 END`);
   }
   if (name !== undefined) {
     values.push(name === null ? null : String(name).trim());

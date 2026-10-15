@@ -12,7 +12,7 @@ async function createAdmin({ email, password, name }) {
   const { rows } = await db.query(
     `INSERT INTO admins (email, password_hash, name)
      VALUES ($1, $2, $3)
-     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, name = EXCLUDED.name
+     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, name = EXCLUDED.name, session_version = admins.session_version + 1
      RETURNING id, email, name`,
     [email, password_hash, name || null]
   );
@@ -27,7 +27,7 @@ async function login(email, password) {
   if (!ok) return null;
 
   const token = jwt.sign(
-    { id: admin.id, email: admin.email, type: 'staff' },
+    { id: admin.id, email: admin.email, type: 'staff', sv: Number(admin.session_version || 0) },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );

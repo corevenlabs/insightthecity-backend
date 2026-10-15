@@ -5,7 +5,8 @@ const { issueCode, showCode, redeemCode, adminDashboard } = require('../controll
 
 const router = express.Router();
 router.get('/api/benefits/admin/dashboard', requireAuth, adminDashboard);
-router.post('/api/benefits/:experienceId/code', requireUserAuth, issueCode);
+const security=require('../middleware/security-rate-limit');
+router.post('/api/benefits/:experienceId/code',requireUserAuth,security.limit('benefit-code-minute',20,60,security.user),security.limit('benefit-code-day',300,86400,security.user),issueCode);
 router.post('/api/benefits/:token/redeem', redeemCode);
 router.get('/benefit/:token', showCode);
 

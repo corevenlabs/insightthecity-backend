@@ -25,7 +25,8 @@ const manejadorErrors = require("./middleware/manejadorErrores")
 const app = express()
 
 // Content-Range es necesario para la paginación de react-admin.
-app.use(cors({ exposedHeaders: ["Content-Range"] }))
+app.use(require('./middleware/security-http').headers);
+app.use(require('./middleware/security-http').cors);
 
 // Stripe necesita el body original para verificar la firma del webhook.
 // Solo se monta si el secreto está configurado (sin él, la membresía se
@@ -38,14 +39,24 @@ if (process.env.PARTNER_STRIPE_WEBHOOK_SECRET) {
   app.use("/api/partners/payment/webhook", express.raw({ type: "application/json" }), require("./routes/partner-payment.webhook"));
 }
 
-app.use(express.json({limit:"1mb"}))
+app.use(express.json({limit:"1mb"}));
+app.use('/api', (_req,res,next)=>{res.set('Cache-Control','no-store');next();});
 
 // Sirve las imágenes subidas en desarrollo (driver local).
-app.use("/uploads", express.static(path.join(__dirname, "uploads")))
+app.use('/uploads', (req,res,next)=>{
+  if (/^\/(avatars|guides)(\/|$)/i.test(req.path)) return res.sendStatus(404);
+  next();
+}, express.static(path.join(__dirname,'uploads')));
 
 app.use("/email-assets", express.static(path.join(__dirname, "public/email"), { maxAge: "7d" }));
 app.get("/app/:target", require("./controllers/app-link.controller").appLink);
 
+app.use('/account-deletion-assets', express.static(path.join(__dirname,'public/account-deletion')));
+app.get('/delete-account', (req,res)=>{
+ res.set('Cache-Control','no-store').set('Referrer-Policy','no-referrer').set('X-Content-Type-Options','nosniff');
+ res.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+ res.type('html').send(require('./services/account-deletion-page').page(req.query.lang));
+});
 app.get("/health", (req, res) => res.json({ ok: true }))
 
 app.use("/api/chat", chatRouter)

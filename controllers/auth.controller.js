@@ -2,7 +2,7 @@ const authService = require("../services/auth.service");
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "email y password requeridos" });
     }

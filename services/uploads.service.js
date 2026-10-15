@@ -44,7 +44,7 @@ async function uploadImage(file, prefix = 'experiences') {
 }
 
 async function uploadPrivatePdf(file) {
-  if (!file?.buffer || file.mimetype !== 'application/pdf') throw new Error('Archivo PDF inválido');
+  if (!file?.buffer || file.mimetype !== 'application/pdf' || file.buffer.toString('ascii',0,5)!=='%PDF-') throw new Error('Archivo PDF inválido');
   const key = buildKey(file.originalname || 'guia.pdf', 'guides');
   if (DRIVER === 'gcs') {
     const storage = require('../config/storage');

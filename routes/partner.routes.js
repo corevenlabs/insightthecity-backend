@@ -216,6 +216,7 @@ router.post(
       next(e);
     }
   },
+  require('../middleware/security-rate-limit').limit('partner-files',60,60,req=>require('crypto').createHash('sha256').update(token(req)).digest('hex')),
   upload.single("file"),
   wrap(async (req, res) =>
     res.status(201).json(await S.filePut(token(req), req.file, req.body.kind)),

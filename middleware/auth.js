@@ -14,12 +14,13 @@ async function requireUserAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, {algorithms:["HS256"]});
     if (payload.type !== "user") {
       return res.status(403).json({ success: false, message: "Acceso de usuario requerido" });
     }
-    const user = (await require("../config/db").query("SELECT is_active FROM users WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM account_deletions WHERE user_id=$1 AND status='pending')", [payload.id])).rows[0];
+    const user = (await require("../config/db").query("SELECT is_active,session_version FROM users WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM account_deletions WHERE user_id=$1 AND status='pending')", [payload.id])).rows[0];
     if (!user || !user.is_active) return res.status(403).json({ success: false, message: "Cuenta no disponible" });
+    if ((payload.sv ?? 0) !== Number(user.session_version || 0)) return res.status(401).json({success:false,message:"Sesión expirada. Inicia sesión nuevamente."});
     req.user = payload;
     next();
   } catch (err) {

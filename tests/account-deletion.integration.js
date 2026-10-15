@@ -10,13 +10,15 @@ const mail=require('../services/password-reset-mail.service');
 after(()=>db.end());
 test('durable retries survive Stripe and photo failures without premature confirmation',async()=>{
   await db.query(fs.readFileSync('database/schema.sql','utf8'));
+ await db.query(fs.readFileSync('database/security-hardening.sql','utf8'));
   await db.query(fs.readFileSync('database/account-deletion.sql','utf8'));
+  await db.query(fs.readFileSync('database/web-account-deletion.sql','utf8'));
   const u=(await db.query("INSERT INTO users(email,stripe_subscription_id,subscription_status) VALUES($1,'sub_fake','active') RETURNING id",[`deletion-${Date.now()}@example.test`])).rows[0];
   const originals={cancel:stripe.cancelSubscriptionNow,photos:uploads.deletePrefix,send:mail.send,configured:mail.isConfigured};
   let canceled=0, sent=0;
   try{
     stripe.cancelSubscriptionNow=async()=>{throw Error('Stripe down');};
-    mail.isConfigured=()=>true;mail.send=async()=>{sent++;};
+    mail.isConfigured=()=>true;mail.send=async message=>{if(/completada|completed|concluída/.test(message.subject))sent++;};
     const job=await service.request(u.id);
     assert.equal((await service.request(u.id)).id,job.id);
     await service.processJob(job.id);
@@ -34,7 +36,7 @@ test('durable retries survive Stripe and photo failures without premature confir
     mail.send=async()=>{throw Error('SMTP down');};
     await db.query('UPDATE account_deletions SET next_attempt_at=NOW() WHERE id=$1',[job.id]);await service.processJob(job.id);
     row=(await db.query('SELECT * FROM account_deletions WHERE id=$1',[job.id])).rows[0];assert.equal(row.photos_done,true);assert.equal(row.last_error,'confirmation');
-    mail.send=async()=>{sent++;};
+    mail.send=async message=>{if(/completada|completed|concluída/.test(message.subject))sent++;};
     await db.query('UPDATE account_deletions SET next_attempt_at=NOW() WHERE id=$1',[job.id]);
     await Promise.all([service.processJob(job.id),service.processJob(job.id)]);
     row=(await db.query('SELECT * FROM account_deletions WHERE id=$1',[job.id])).rows[0];

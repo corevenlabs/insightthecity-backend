@@ -7,3 +7,7 @@ npm-debug.log*
 !.env.example
 uploads
 .DS_Store
+
+output
+coverage
+*.log

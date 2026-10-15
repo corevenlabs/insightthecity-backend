@@ -4,19 +4,19 @@ const uploads = require('./uploads.service');
 const mail = require('./password-reset-mail.service');
 const crypto = require('crypto');
 const workerToken = () => crypto.createHmac('sha256', process.env.JWT_SECRET).update('account-deletion-worker-v1').digest('hex');
-async function request(userId) {
-  const c = await db.connect();
+async function request(userId, connection = null) {
+  const c = connection || await db.connect();
   try {
-    await c.query('BEGIN');
+    if (!connection) await c.query('BEGIN');
     const user = (await c.query('SELECT id,email,language,stripe_subscription_id,subscription_status FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
-    if (!user) { await c.query('ROLLBACK'); return null; }
+    if (!user) { if (!connection) await c.query('ROLLBACK'); return null; }
     const job = (await c.query(`INSERT INTO account_deletions(user_id,email,subscription_id,stripe_done,language)
       VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id) DO UPDATE SET user_id=EXCLUDED.user_id RETURNING *`,
     [user.id,user.email,user.stripe_subscription_id,!user.stripe_subscription_id || ['canceled','incomplete_expired'].includes(user.subscription_status),user.language || 'es'])).rows[0];
     await c.query('UPDATE users SET is_active=FALSE WHERE id=$1',[userId]);
-    await c.query('COMMIT');
+    if (!connection) await c.query('COMMIT');
     return job;
-  } catch(e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
+  } catch(e) { if (!connection) await c.query('ROLLBACK'); throw e; } finally { if (!connection) c.release(); }
 }
 async function processJob(id) {
   const c = await db.connect();
@@ -27,6 +27,12 @@ async function processJob(id) {
     const job = (await c.query("SELECT * FROM account_deletions WHERE id=$1 AND status='pending' AND next_attempt_at<=NOW()",[id])).rows[0];
     if (!job) return;
     await c.query('UPDATE account_deletions SET attempts=attempts+1 WHERE id=$1',[id]);
+    if (!job.request_notice_sent_at && mail.isConfigured()) {
+      try {
+        await mail.send({to:[job.email],...require('./account-deletion-email').render(job.language, 'requested')});
+        await c.query('UPDATE account_deletions SET request_notice_sent_at=NOW() WHERE id=$1',[id]);
+      } catch { console.error('[account deletion receipt pending]',id); }
+    }
     let stage='stripe';
     try {
       if (!job.stripe_done) {

@@ -54,9 +54,11 @@ let strategic, paid;
 test("complete CRM flow, authorization, consent, payment idempotency and private downloads", async (t) => {
   for (const name of [
     "schema.sql",
+    "security-hardening.sql",
     "experience-gallery.sql",
     "partner-crm.sql",
     "account-deletion.sql",
+    "web-account-deletion.sql",
     "legal-evidence.sql",
   ])
     await db.query(fs.readFileSync(`database/${name}`, "utf8"));

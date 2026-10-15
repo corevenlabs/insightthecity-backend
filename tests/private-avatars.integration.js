@@ -3,7 +3,8 @@ if(process.env.DB_DATABASE!=='itc_crm_test'||process.env.DB_HOST!=='127.0.0.1')t
 process.env.UPLOAD_DRIVER='local';
 const db=require('../config/db');after(()=>db.end());
 test('existing avatar is copied privately before public removal; download uses owner and account deletion removes bytes',async()=>{
- await db.query(fs.readFileSync('database/schema.sql','utf8'));await db.query(fs.readFileSync('database/private-avatars.sql','utf8'));
+ await db.query(fs.readFileSync('database/schema.sql','utf8'));
+ await db.query(fs.readFileSync('database/security-hardening.sql','utf8'));await db.query(fs.readFileSync('database/private-avatars.sql','utf8'));
  const user=(await db.query('INSERT INTO users(email) VALUES($1) RETURNING id',[`avatar-${Date.now()}@example.test`])).rows[0];
  const dir=`uploads/avatars/${user.id}`,bytes=Buffer.from([255,216,255,0]);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(`${dir}/test.jpg`,bytes);
  await db.query('UPDATE users SET avatar_url=$2 WHERE id=$1',[user.id,`http://localhost:3000/uploads/avatars/${user.id}/test.jpg`]);

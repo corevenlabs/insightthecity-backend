@@ -35,12 +35,17 @@ test('email landing page permits only fixed destinations and never exposes billi
 });
 
 
-test('membership welcome uses the approved logo and welcome banner while preserving billing details', () => {
+test('membership welcome uses the approved subscription copy, typography and localized banner while preserving billing details', () => {
   const message = membershipEmail({ name: 'Oswaldo', language: 'es', subscription_amount_cents: 499, subscription_currency: 'usd', subscription_interval: 'month', subscription_current_period_end: '2026-11-13T16:00:00Z' });
   assert.match(message.html, /email-assets\/itc-club-logo-v1.png/);
-  assert.match(message.html, /email-assets\/partner-welcome-banner-v1.png/);
+  assert.match(message.html, /email-assets\/membership-welcome-es-phone-v1.png/);
   assert.doesNotMatch(message.html, /email-assets\/new-york.jpg/);
   assert.match(message.html, /Hola, Oswaldo/);
+  assert.match(message.html, /font-family:Arial,Helvetica,sans-serif/);
+  assert.match(message.html, /YA ERES PARTE DEL CLUB/);
+  assert.match(message.html, /Nueva York tiene más para ti/);
+  assert.match(message.html, /Explorar mis beneficios/);
+  assert.match(message.text, /Tu membresía de ITC Club ya está activa/);
   assert.match(message.html, /\$4.99 \/ mes/);
   assert.match(message.text, /13 de noviembre de 2026/);
   assert.match(message.html, /Perfil &gt; Mi membresía/);
