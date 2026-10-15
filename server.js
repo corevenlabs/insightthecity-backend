@@ -18,7 +18,6 @@ const guidesRouter = require("./routes/guides.routes");
 const legalRouter = require("./routes/legal.routes");
 const stripeWebhookRouter = require("./routes/stripe.webhook");
 const { page: legalPage } = require("./controllers/legal.controller");
-const accountDeletion = require("./controllers/account-deletion.controller");
 
 const manejadorErrors = require("./middleware/manejadorErrores")
 
@@ -55,7 +54,7 @@ app.use("/email-assets", express.static(path.join(__dirname, "public/email"), { 
 app.get("/app/:target", require("./controllers/app-link.controller").appLink);
 
 app.use('/account-deletion-assets', express.static(path.join(__dirname,'public/account-deletion')));
-app.get('/delete-account', (req,res)=>{
+app.get(['/delete-account', '/eliminar-cuenta'], (req,res)=>{
  res.set('Cache-Control','no-store').set('Referrer-Policy','no-referrer').set('X-Content-Type-Options','nosniff');
  res.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
  res.type('html').send(require('./services/account-deletion-page').page(req.query.lang));
@@ -81,8 +80,8 @@ app.use("/api/legal", legalRouter);
 // Páginas públicas de Términos, Privacidad, etc. (URLs para las tiendas de apps).
 app.get("/legal/:slug", legalPage);
 // Eliminación de cuenta sin instalar la app (URL que se declara en Google Play).
-app.get(["/eliminar-cuenta", "/delete-account"], accountDeletion.page);
-app.post(["/eliminar-cuenta", "/delete-account"], express.urlencoded({ extended: false, limit: "10kb" }), accountDeletion.submit);
+// Las solicitudes usan el flujo con código y confirmación de /api/account-deletions.
+app.post(["/eliminar-cuenta", "/delete-account"], (req,res)=>res.redirect(303, "/delete-account"));
 
 app.use(manejadorErrors)
 
