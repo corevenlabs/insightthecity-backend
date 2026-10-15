@@ -152,16 +152,23 @@ async function respond({ user, history, location }) {
     role: item.role === "assistant" ? "assistant" : "user",
     content: item.message,
   }));
+  const model = process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini";
+  // store: false: OpenAI no guarda las conversaciones (por defecto las conserva 30 días),
+  // así que el contexto de las herramientas se reenvía completo en cada llamada.
   const request = {
-    model: process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini",
+    model,
+    store: false,
+    // Los modelos de razonamiento necesitan su razonamiento cifrado para continuar sin estado.
+    ...(/^(od|gpt-5)/.test(model) ? { include: ["reasoning.encrypted_content"] } : {}),
     instructions: instructionsFor(user),
     tools: [APP_CONTENT_TOOL],
     parallel_tool_calls: false,
     max_output_tokens: 900,
   };
+  const conversation = [...input];
   let response = await openai.responses.create({
     ...request,
-    input,
+    input: conversation,
     tool_choice: "auto",
   });
   const places = [];
@@ -171,6 +178,7 @@ async function respond({ user, history, location }) {
   for (let round = 0; round < 3; round += 1) {
     const calls = response.output.filter((item) => item.type === "function_call");
     if (!calls.length) break;
+    conversation.push(...response.output);
     const outputs = [];
     for (const call of calls) {
       try {
@@ -198,11 +206,11 @@ async function respond({ user, history, location }) {
         outputs.push({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify({ error: "No se pudo verificar esta información ahora. No inventes resultados." }) });
       }
     }
+    conversation.push(...outputs);
     response = await openai.responses.create({
       ...request,
       tools: appSearched ? [APP_CONTENT_TOOL, PLACE_TOOL] : [APP_CONTENT_TOOL],
-      previous_response_id: response.id,
-      input: outputs,
+      input: [...conversation],
       tool_choice: round === 2 ? "none" : "auto",
     });
   }
