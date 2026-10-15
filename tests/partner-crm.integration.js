@@ -1084,6 +1084,26 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       );
     },
   );
+  await t.test("admin moderation blocks access, preserves evidence and hides deleted clients", async () => {
+    const row = await S.create({business_name:"Moderation example",contact_name:"Example",email:"moderation@example.com",phone:"123",language:"en",owner_id:actors.admin.id,category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);
+    const before = await S.detail(row.id, actors.admin);
+    const data = {action:"block",business_name:row.business_name};
+    assert.equal((await api(`/partners/clients/${row.id}/moderation`, {role:"executive",method:"POST",data})).status,403);
+    assert.equal((await api(`/partners/clients/${row.id}/moderation`, {method:"POST",data:{...data,business_name:"wrong"}})).status,400);
+    await S.moderate(row.id,data,actors.admin);
+    assert.ok((await S.detail(row.id,actors.admin)).blocked_at);
+    await assert.rejects(()=>S.fromToken(token(before)));
+    await assert.rejects(()=>S.action(row.id,{action:"invite"},actors.admin));
+    await S.moderate(row.id,{...data,action:"unblock"},actors.admin);
+    assert.equal((await S.detail(row.id,actors.admin)).blocked_at,null);
+    await assert.rejects(()=>S.fromToken(token(before)));
+    await S.moderate(row.id,{...data,action:"delete"},actors.admin);
+    assert.ok(!(await S.list(actors.admin)).some(x=>x.id===row.id));
+    await assert.rejects(()=>S.detail(row.id,actors.admin));
+    assert.equal((await db.query("SELECT count(*)::int n FROM partner_clients WHERE id=$1 AND deleted_at IS NOT NULL",[row.id])).rows[0].n,1);
+    assert.ok((await db.query("SELECT 1 FROM partner_activity WHERE client_id=$1 AND kind='delete'",[row.id])).rowCount);
+  });
+
 });
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));

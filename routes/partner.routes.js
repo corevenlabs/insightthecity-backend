@@ -38,6 +38,7 @@ router.post(
     res.status(201).json(await S.create(req.body, req.admin)),
   ),
 );
+router.post("/clients/:id/moderation", admin, wrap(async (req,res)=>res.json(await S.moderate(req.params.id, req.body, req.admin))));
 router.get(
   "/clients/:id",
   all,

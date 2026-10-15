@@ -26,7 +26,7 @@ async function get(c, id, actor, lock = false) {
       [id],
     )
   ).rows[0];
-  if (!row || (actor && !R.canSee(actor, row)))
+  if (!row || row.deleted_at || (actor && !R.canSee(actor, row)))
     R.fail("Cliente no encontrado", 404);
   return row;
 }
@@ -55,6 +55,7 @@ async function fromToken(token, c = db, lock = false) {
   }
   if (p.type !== "partner") R.fail("Enlace inválido", 401);
   const row = await get(c, p.id, null, lock);
+  if (row.blocked_at) R.fail("El acceso de este cliente está bloqueado", 403);
   if (row.link_version !== p.v || new Date(row.link_expires_at) <= new Date())
     R.fail("El enlace venció", 401);
   return row;
@@ -95,10 +96,30 @@ async function sendPending(id) {
     .flush(id)
     .catch((e) => console.error("[partner mail]", e.code || "delivery failed"));
 }
+async function moderate(id, input, actor) {
+  if (actor?.role !== "admin") R.fail("Solo un administrador puede gestionar el acceso", 403);
+  if (!["block", "unblock", "delete"].includes(input.action)) R.fail("Acción inválida", 400);
+  return transaction(async c => {
+    const row = await get(c, id, actor, true);
+    if (input.business_name !== row.business_name) R.fail("Confirma el nombre del negocio", 400);
+    if (input.action === "delete" && row.experience_id)
+      R.fail("Este cliente tiene una publicación vinculada. Gestiona esa publicación antes de eliminarlo.", 409);
+    if (input.action !== "unblock" && (await c.query("SELECT 1 FROM partner_mail WHERE client_id=$1 AND status='sending' LIMIT 1", [id])).rowCount)
+      R.fail("Hay un correo en proceso. Espera un momento y vuelve a intentar.", 409);
+    if (input.action === "unblock") {
+      await c.query("UPDATE partner_clients SET blocked_at=NULL,updated_at=NOW() WHERE id=$1", [id]);
+    } else {
+      await c.query("UPDATE partner_clients SET blocked_at=COALESCE(blocked_at,NOW()),deleted_at=CASE WHEN $2 THEN NOW() ELSE deleted_at END,link_version=gen_random_uuid(),updated_at=NOW() WHERE id=$1", [id, input.action === "delete"]);
+      await c.query("UPDATE partner_mail SET status='canceled' WHERE client_id=$1 AND status IN ('pending','failed')", [id]);
+    }
+    await activity(c, row, actor, input.action, input.action === "delete" ? "Retirado del CRM; historial conservado, sin reembolso automático." : "Acceso del formulario " + input.action);
+    return { success: true, action: input.action };
+  });
+}
 async function list(actor) {
   return (
     await db.query(
-      `SELECT p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id WHERE ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
+      `SELECT p.blocked_at,p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id WHERE p.deleted_at IS NULL AND ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
       [actor.role !== "executive", actor.id],
     )
   ).rows;
@@ -186,6 +207,7 @@ async function action(id, input, actor) {
   const result = await transaction(async (c) => {
     const row = await get(c, id, actor, true);
     const op = input.action;
+    if (row.blocked_at) R.fail("Desbloquea el cliente antes de realizar esta acción", 409);
     if (!["ready", "activate"].includes(op)) manage(actor);
     if (op === "invite") {
       await termsSnapshot(c, row);
@@ -854,6 +876,7 @@ async function fileGet(clientId, id, actor, token) {
   return file;
 }
 module.exports = {
+  moderate,
   transaction,
   get,
   list,
