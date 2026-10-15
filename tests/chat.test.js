@@ -13,6 +13,24 @@ const chat = require('../services/chat.service');
 const controller = require('../controllers/chat.controller');
 
 function reset() { requests = []; responses = []; queries = []; }
+test('OpenAI no guarda las conversaciones: store false y contexto completo sin previous_response_id', async () => {
+  reset();
+  responses.push({ id: 'search', output: [{ type: 'function_call', name: 'search_app_content', call_id: 'call1', arguments: '{"query":"museos"}' }] }, { id: 'answer', output: [], output_text: 'Listo.' });
+  const originalList = experiences.list;
+  const originalNews = news.listNews;
+  experiences.list = async () => ({ rows: [] });
+  news.listNews = async () => ({ items: [] });
+  try {
+    await chat.respond({ user: {}, history: [{ role: 'user', message: 'Museos para hoy' }] });
+    assert.equal(requests.length, 2);
+    for (const request of requests) {
+      assert.equal(request.store, false);
+      assert.equal(request.previous_response_id, undefined);
+    }
+    assert.deepEqual(requests[1].input.map((item) => item.type || item.role), ['user', 'function_call', 'function_call_output']);
+    assert.equal(requests[1].input[0].content, 'Museos para hoy');
+  } finally { experiences.list = originalList; news.listNews = originalNews; }
+});
 test('saludo conversa sin búsquedas obligatorias y recibe perfil y contexto previo', async () => {
   reset();
   responses.push({ id: 'hello', output: [], output_text: 'Hola, José, ¿cómo estás?' });
@@ -64,7 +82,7 @@ test('buscar RiseNY encuentra registros fuera de los primeros 15 e incluye benef
     assert.equal(result.appItems.length, 1);
     assert.equal(result.appItems[0].id, 'rise');
     assert.equal(result.appItems[0].memberBenefitDetails, 'Lunes a jueves');
-    const output = JSON.parse(requests[1].input[0].output);
+    const output = JSON.parse(requests[1].input.at(-1).output);
     assert.equal(output.items[0].memberBenefit, '20% OFF');
   } finally { experiences.list = originalList; news.listNews = originalNews; }
 });
@@ -76,7 +94,7 @@ test('fallo del catálogo permite responder sin inventar datos ni romper la conv
   responses.push({ id: 'search', output: [{ type: 'function_call', name: 'search_app_content', call_id: 'call1', arguments: '{}' }] }, { id: 'answer', output: [], output_text: 'Ahora no puedo verificar el beneficio.' });
   try {
     const result = await chat.respond({ user: {}, history: [] });
-    assert.match(JSON.parse(requests[1].input[0].output).error, /No inventes/);
+    assert.match(JSON.parse(requests[1].input.at(-1).output).error, /No inventes/);
     assert.deepEqual(result.appItems, []);
   } finally { experiences.list = originalList; news.listNews = originalNews; }
 });

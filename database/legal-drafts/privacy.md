@@ -42,7 +42,7 @@ Conservamos tus datos mientras tengas una cuenta. Si eliminas la cuenta, borramo
 Puedes, en cualquier momento:
 
 - Ver y corregir tus datos en **Perfil > Editar perfil**.
-- **Eliminar tu cuenta** en **Perfil > Eliminar cuenta**. Esto también cancela tu membresía.
+- **Eliminar tu cuenta** en **Perfil > Eliminar cuenta**, o sin la app en [COMPLETAR: URL pública del backend]/eliminar-cuenta. Esto también cancela tu membresía.
 - Pedirnos una copia de tus datos, su corrección o eliminación escribiendo a [COMPLETAR: correo de privacidad].
 
 Si vives en **New Jersey** u otro estado con ley de privacidad integral, también puedes pedir acceso, corrección, eliminación y portabilidad de tus datos, y oponerte a la venta, a la publicidad dirigida y a la elaboración de perfiles (no realizamos ninguna de las tres). Respondemos en un máximo de 45 días. Si rechazamos tu solicitud, puedes apelar escribiendo al mismo correo.
