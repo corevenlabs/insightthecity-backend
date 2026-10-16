@@ -16,12 +16,9 @@ async function main(){
  const endpoints=await next.webhookEndpoints.list({limit:100});
  if(!endpoints.data.some(x=>x.url==='https://itc-backend-1031252664334.us-east1.run.app/api/payment/webhook'&&x.status==='enabled'))throw Error('Membership webhook missing');
  for(const [name,value] of [['STRIPE_SECRET_KEY',key],['STRIPE_PRICE_ID',p.id],['MEMBERSHIP_SANDBOX_WEBHOOK_SECRET',whsec]]){
-  try{execFileSync('gcloud',['secrets','describe',name,'--project',project],{stdio:'ignore'});}catch{execFileSync('gcloud',['secrets','create',name,'--replication-policy','automatic','--project',project],{stdio:'ignore'});}
-  execFileSync('gcloud',['secrets','versions','add',name,'--data-file=-','--project',project],{input:value,stdio:['pipe','ignore','pipe']});
- }
- const policy=JSON.parse(execFileSync('gcloud',['secrets','get-iam-policy','STRIPE_SECRET_KEY','--project',project,'--format=json'],{encoding:'utf8'}));
- for(const binding of policy.bindings||[])if(binding.role==='roles/secretmanager.secretAccessor')for(const member of binding.members||[]){
-  execFileSync('gcloud',['secrets','add-iam-policy-binding','MEMBERSHIP_SANDBOX_WEBHOOK_SECRET','--project',project,'--member',member,'--role','roles/secretmanager.secretAccessor','--quiet'],{stdio:'ignore'});
+  let existing;
+  try{existing=read(name);}catch(e){if(!String(e.stderr).includes("NOT_FOUND"))throw Error(`Missing access to ${name}: prepare its scoped Secret Manager permissions in Cloud Shell.`);}
+  if(existing!==value)execFileSync('gcloud',['secrets','versions','add',name,'--data-file=-','--project',project],{input:value,stdio:['pipe','ignore','pipe']});
  }
  console.log('Verified same test account and USD 4.99/month; sandbox configuration stored.');
 }
