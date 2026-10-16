@@ -15,7 +15,7 @@ const COPY = {
   pt: { welcome: 'Bem-vindo ao ITC CLUB', canceled: 'Assinatura cancelada', resumed: 'Renovação reativada', hello: 'Olá', active: 'Sua assinatura está ativa. Descubra benefícios e experiências para aproveitar Nova York.', price: 'Preço', next: 'Próxima renovação', until: 'Seus benefícios continuam até', cancel: 'A renovação automática da sua assinatura foi cancelada.', noCharge: 'Não haverá novas cobranças de renovação. Sua conta continua disponível.', reactivate: 'Você pode reativar a renovação em Perfil > Minha assinatura antes do fim do período.', benefits: 'Ver meus benefícios', membership: 'Ver minha assinatura', notice: 'Sua assinatura é renovada automaticamente pelo preço indicado até você cancelar. Gerencie ou cancele em Perfil > Minha assinatura. Você mantém o acesso até o fim do período pago.', restored: 'A renovação automática está ativa novamente pelo preço do plano atual. Você pode cancelar em Perfil > Minha assinatura.', terms: 'Termos', privacy: 'Privacidade', support: 'Suporte', unknown: 'Veja os detalhes em Minha assinatura', periods: { month: 'mês', year: 'ano', week: 'semana', day: 'dia' } },
 };
 function membershipEmail(user, kind = 'welcome', language = user.language) {
-  const lang = languageOf(language); const c = COPY[lang];
+  const lang = languageOf(language); const c = {...COPY[lang]};
   const welcome = kind === 'welcome'; const canceled = kind === 'cancel';
   const title = welcome ? c.welcome : canceled ? c.canceled : c.resumed;
   const greeting = `${c.hello}${user.name ? `, ${user.name}` : ''}`;
@@ -23,7 +23,11 @@ function membershipEmail(user, kind = 'welcome', language = user.language) {
   const price = user.subscription_amount_cents == null ? c.unknown : `${new Intl.NumberFormat({ es: 'es-US', en: 'en-US', pt: 'pt-BR' }[lang], { style: 'currency', currency: (user.subscription_currency || 'usd').toUpperCase() }).format(user.subscription_amount_cents / 100)} / ${c.periods[user.subscription_interval] || user.subscription_interval || c.periods.month}`;
   const body = welcome ? c.active : canceled ? c.cancel : c.restored;
   const detailLabel = canceled ? c.until : c.next;
-  const note = welcome ? c.notice : canceled ? `${c.noCharge} ${c.reactivate}` : c.notice;
+  if(welcome && user.subscription_status==='trialing') {
+    c.next = ({es:'Primer cargo previsto',en:'First scheduled charge',pt:'Primeira cobrança prevista'})[lang];
+  }
+  const trialNote = ({es:'Tu período gratis está activo. No se cobró la membresía al activar. El primer cargo será en la fecha indicada y luego se renovará al precio mostrado hasta que canceles. Puedes cancelar antes del primer cargo en Perfil > Mi membresía.',en:'Your free trial is active. No membership payment was collected at activation. The first charge is scheduled for the stated date, followed by automatic renewals at the displayed price until you cancel. Cancel before the first charge in Profile > My membership.',pt:'Seu período grátis está ativo. A primeira cobrança ocorrerá na data indicada, seguida de renovações automáticas pelo preço exibido até você cancelar. Cancele antes da primeira cobrança em Perfil > Minha assinatura.'})[lang];
+  const note = welcome ? (user.subscription_status==='trialing' ? trialNote : c.notice) : canceled ? `${c.noCharge} ${c.reactivate}` : c.notice;
   const target = welcome ? 'benefits' : 'membership'; const button = welcome ? c.benefits : c.membership;
   const url = actionUrl(target, lang);
   if (welcome) return require('./membership-welcome-email.service').render({lang,c,greeting,date,price,note,base:baseUrl(),url,escape});

@@ -43,6 +43,7 @@ function confirmationEmail(user, language) {
 
 // Copia el estado de una suscripción de Stripe al usuario. Devuelve la fila actualizada.
 async function applySubscription(userId, subscription, connection = db) {
+  if(subscription.metadata?.launch_invitation_id) await require('./membership-launch.service').confirm(userId,subscription);
   const item = subscription.items?.data?.[0];
   const price = item?.price;
   // En versiones recientes de la API el fin de período vive en el item.

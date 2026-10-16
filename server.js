@@ -59,11 +59,18 @@ app.get(['/delete-account', '/eliminar-cuenta'], (req,res)=>{
  res.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
  res.type('html').send(require('./services/account-deletion-page').page(req.query.lang));
 });
+app.use('/membership-launch-assets', express.static(path.join(__dirname,'public/membership-launch')));
+app.get('/membership-invitation', (req,res)=>{
+ res.set('Cache-Control','no-store').set('Referrer-Policy','no-referrer');
+ res.set('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+ res.type('html').send(require('./services/membership-launch-page').page());
+});
 app.get("/health", (req, res) => res.json({ ok: true }))
 
 app.use("/api/chat", chatRouter)
 app.use("/api/places", placesRouter)
 app.use("/api/payment", paymentRoutes);
+app.use("/api/payment/launch", require("./routes/membership-launch.routes"));
 app.use("/api/experiences", experiencesRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/staff", require("./routes/staff.routes"));

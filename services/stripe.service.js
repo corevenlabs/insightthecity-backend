@@ -42,19 +42,20 @@ async function ensureCustomer(user) {
     return customer.id;
 }
 
-async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, renewalNotice }) {
+async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, renewalNotice, trialDays, invitationId, idempotencyKey }) {
     const session = await client().checkout.sessions.create({
         mode: 'subscription',
         customer: customerId,
         client_reference_id: String(user.id),
         line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
         metadata: { purchase_type: 'subscription', user_id: String(user.id) },
-        subscription_data: { metadata: { user_id: String(user.id) } },
+        subscription_data: { metadata: { user_id: String(user.id), ...(invitationId ? {launch_invitation_id:invitationId} : {}) }, ...(trialDays ? {trial_period_days:trialDays,trial_settings:{end_behavior:{missing_payment_method:'cancel'}}} : {}) },
+        ...(trialDays ? {payment_method_collection:'always',payment_method_types:['card']} : {}),
         // Recordatorio de renovación automática junto al botón de pago.
         custom_text: { submit: { message: renewalNotice } },
         success_url: returnUrl(baseUrl, appReturnUrl, 'result=success&session_id={CHECKOUT_SESSION_ID}'),
         cancel_url: returnUrl(baseUrl, appReturnUrl, 'result=cancel'),
-    });
+    }, idempotencyKey ? {idempotencyKey} : undefined);
     return { id: session.id, url: session.url };
 }
 
