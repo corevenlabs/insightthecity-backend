@@ -21,6 +21,6 @@ test('queued welcome keeps its original design and attaches the same receipt on 
  const c={query:async(sql,args)=>{saved=JSON.parse(args[3]);}};
  const data={client:{...client,stripe_payment_receipt:receipt},owner:{name:'Executive',email:'exec@example.test'},url:'https://example.test/private',language:'en'};
  await mail.queue(c,{key:'paid:example',clientId:'example',to:client.email,kind:'invite',data});
- assert.match(saved.html,/partner-welcome-banner-v1.png/);assert.match(saved.html,/Create my business profile/);assert.match(saved.text,/Your payment receipt is attached/);assert.equal(saved.attachments.length,1);assert.equal(saved.attachments[0].filename,R.filename(receipt));assert.equal(Buffer.from(saved.attachments[0].content,'base64').subarray(0,4).toString(),'%PDF');
+ assert.match(saved.html,/partner-welcome-banner-v2.png/);assert.match(saved.html,/Create my business profile/);assert.match(saved.text,/Your payment receipt is attached/);assert.equal(saved.attachments.length,1);assert.equal(saved.attachments[0].filename,R.filename(receipt));assert.equal(Buffer.from(saved.attachments[0].content,'base64').subarray(0,4).toString(),'%PDF');
  const original=saved.attachments[0].filename;await mail.queue(c,{key:'resend:example',clientId:'example',to:client.email,kind:'invite',data});assert.equal(saved.attachments[0].filename,original);
 });

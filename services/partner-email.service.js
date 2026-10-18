@@ -236,7 +236,7 @@ function render(
   const brandHeader = foundingInvitation || foundingWelcome || corrections || received
     ? `<img src="${BASE()}/email-assets/itc-club-logo-v1.png" width="180" alt="ITC CLUB" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0">`
     : 'ITC <span style="color:#FDDD56">CLUB</span>';
-  const banner = foundingInvitation ? "partner-invitation-banner-v1.png" : foundingWelcome || received ? "partner-welcome-banner-v1.png" : corrections ? "partner-corrections-banner-v1.png" : "new-york.jpg";
+  const banner = foundingInvitation ? "partner-invitation-banner-v2.png" : foundingWelcome || received ? "partner-welcome-banner-v2.png" : corrections ? "partner-corrections-banner-v2.png" : "new-york.jpg";
   const bannerAlt = foundingInvitation ? "Your business. Our community. Let’s grow together. An invitation to join ITC CLUB" : foundingWelcome || received ? "Welcome to ITC CLUB. Let’s build this together." : corrections ? title : "New York";
   const footer = received ? "Thank you for being part of what we’re building.<br><br>The ITC Club Team" : foundingWelcome || corrections ? privateNotice : "ITC CLUB · Insight The City<br>noreply@insightthecity.com";
   const requestHelp = "You can make these changes through your existing form. Everything you’ve already shared is saved, so you can pick up where you left off.";

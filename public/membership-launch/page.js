@@ -19,7 +19,7 @@ form.addEventListener('submit',async event=>{
    const auth=await request('register',{invitation,email:form.email.value.trim(),name:form.elements.namedItem('name').value,password:form.password.value,acceptLegal:form.acceptLegal.checked});
    authToken=auth.token;form.password.value='';
    document.querySelector('#registration').hidden=true;document.querySelectorAll('#registration input').forEach(input=>input.disabled=true);
-   document.querySelector('#activation').hidden=false;form.consent.disabled=false;
+   document.querySelector('#activation').hidden=false;document.querySelector('#next-step').hidden=true;form.consent.disabled=false;
    document.querySelector('#step-title').textContent='2. Activa tus 30 días gratis';document.querySelector('#step-description').textContent='Tu cuenta está creada. La prueba comenzará cuando completes Stripe con una tarjeta de prueba. Podrás entrar a la app con el correo y la contraseña que elegiste.';
    button.textContent='Activar mis 30 días gratis';status.textContent='Revisa y acepta la renovación antes de continuar a Stripe.';button.disabled=false;return;
   }

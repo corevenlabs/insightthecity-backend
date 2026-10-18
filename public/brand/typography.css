@@ -1,0 +1,13 @@
+/* ITC: Roboto for reading and UI; Roboto Condensed Black for banners. */
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_400Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_500Medium.ttf') format('truetype');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_600SemiBold.ttf') format('truetype');font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_700Bold.ttf') format('truetype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_800ExtraBold.ttf') format('truetype');font-weight:800;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_900Black.ttf') format('truetype');font-weight:900;font-style:normal;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_400Regular_Italic.ttf') format('truetype');font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:ITCBody;src:url('./fonts/Roboto_700Bold_Italic.ttf') format('truetype');font-weight:700;font-style:italic;font-display:swap}
+@font-face{font-family:ITCBanner;src:url('./fonts/RobotoCondensed_900Black.ttf') format('truetype');font-weight:900;font-style:normal;font-display:swap}
+:root{--font-body:ITCBody,Roboto,Arial,Helvetica,sans-serif;--font-display:var(--font-body);--font-banner:ITCBanner,"Roboto Condensed",sans-serif}body,button,input,select,textarea{font-family:var(--font-body)}h1,h2,h3,h4,h5,h6{font-family:var(--font-body);font-weight:800}.banner-title,.itc-banner-title{font-family:var(--font-banner);font-weight:900}
+
+body,body table,body td,body p,body div,body span,body a,body input,body button,body select,body textarea,body label,body h1,body h2,body h3,body h4,body pre,body code{font-family:var(--font-body)!important}.itc-banner-title{font-family:var(--font-banner)!important}

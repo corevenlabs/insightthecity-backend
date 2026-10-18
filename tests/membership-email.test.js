@@ -38,7 +38,7 @@ test('email landing page permits only fixed destinations and never exposes billi
 test('membership welcome uses the approved subscription copy, typography and localized banner while preserving billing details', () => {
   const message = membershipEmail({ name: 'Oswaldo', language: 'es', subscription_amount_cents: 499, subscription_currency: 'usd', subscription_interval: 'month', subscription_current_period_end: '2026-11-13T16:00:00Z' });
   assert.match(message.html, /email-assets\/itc-club-logo-v1.png/);
-  assert.match(message.html, /email-assets\/membership-welcome-es-phone-v1.png/);
+  assert.match(message.html, /email-assets\/membership-welcome-es-phone-v2.png/);
   assert.doesNotMatch(message.html, /email-assets\/new-york.jpg/);
   assert.match(message.html, /Hola, Oswaldo/);
   assert.match(message.html, /font-family:Arial,Helvetica,sans-serif/);

@@ -11,7 +11,7 @@ test("acceptance email shows immutable version, Eastern timestamp and distinct z
  assert.match(message.text,/V1 · English/);
  assert.match(message.text,/2:19:42 PM EDT/);
  assert.match(message.text,/America\/New_York/);
- assert.match(message.html,/partner-accepted-terms-banner-v1.png/);
+ assert.match(message.html,/partner-accepted-terms-banner-v2.png/);
  assert.match(message.text,/Accepting the terms does not confirm payment/);
  const strategic=T.render({client:{...client,offer:"strategic"},acceptance});
  assert.match(strategic.text,/onboarding is completed/);

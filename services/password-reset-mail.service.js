@@ -22,7 +22,7 @@ function isConfigured() {
 }
 
 async function send(message) {
-  const mail = { from: process.env.PASSWORD_RESET_FROM, ...message };
+  const mail = { from: process.env.PASSWORD_RESET_FROM, ...require('./brand-typography').email(message) };
   if (process.env.SMTP_HOST) {
     const result = await nodemailer.createTransport(smtpOptions()).sendMail(mail);
     if (!result.accepted?.length || result.rejected?.length) throw new Error('SMTP rechazó el destinatario');

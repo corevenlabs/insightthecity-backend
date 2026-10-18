@@ -23,6 +23,8 @@ const manejadorErrors = require("./middleware/manejadorErrores")
 
 
 const app = express()
+app.use(require('./middleware/brand-typography'));
+app.use('/brand-assets', express.static(path.join(__dirname,'public/brand'),{maxAge:'7d',setHeaders(res){res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Cross-Origin-Resource-Policy','cross-origin');}}));
 // Cloud Run pone un proxy delante: así req.ip y req.protocol son los del cliente.
 app.set("trust proxy", 1)
 

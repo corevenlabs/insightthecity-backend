@@ -8,7 +8,7 @@ test('submission acknowledgment uses approved copy, yellow business name and ass
   const message = render('received', { ...base, client: { ...base.client, business_name: 'Cafe <NY>' }, language: 'es' });
   assert.equal(message.subject, 'Welcome aboard, Cafe <NY>!');
   assert(message.html.includes('Welcome aboard, <span style="color:#FDDD56">Cafe &lt;NY&gt;!</span>'));
-  for (const value of ['partner-welcome-banner-v1.png', 'itc-club-logo-v1.png', 'Your profile is in our hands.', 'Your account manager will review your business details and member benefit', 'View your submission', 'Let’s make this a great partnership.', 'Your ITC Club contact', base.owner.name, base.owner.email, base.url, 'The ITC Club Team']) assert(message.html.includes(value), value);
+  for (const value of ['partner-welcome-banner-v2.png', 'itc-club-logo-v1.png', 'Your profile is in our hands.', 'Your account manager will review your business details and member benefit', 'View your submission', 'Let’s make this a great partnership.', 'Your ITC Club contact', base.owner.name, base.owner.email, base.url, 'The ITC Club Team']) assert(message.html.includes(value), value);
   assert(message.text.includes('Business: Cafe <NY>\nPartner type: Founding Partner'));
   assert(message.html.includes('lang="en"'));
   assert.equal(message.replyTo, base.owner.email);
@@ -35,7 +35,7 @@ test('corrections email preserves private form and escapes personalized executiv
   const note = 'Please replace <script>alert(1)</script>\nUse your original photographs.';
   const message = render('changes', { ...base, note, language: 'es' });
   assert.equal(message.subject, 'Example business · Let’s put the finishing touches on your profile');
-  for (const text of ['Hi Rafa,', 'Let’s show what makes your business special.', 'A few details to finish together', 'Update my business profile', 'partner-corrections-banner-v1.png', 'itc-club-logo-v1.png', 'Everything you’ve already shared is saved', 'Need a hand?', base.url]) assert(message.html.includes(text), text);
+  for (const text of ['Hi Rafa,', 'Let’s show what makes your business special.', 'A few details to finish together', 'Update my business profile', 'partner-corrections-banner-v2.png', 'itc-club-logo-v1.png', 'Everything you’ve already shared is saved', 'Need a hand?', base.url]) assert(message.html.includes(text), text);
   assert(!message.html.includes('<script>'));
   assert(message.html.includes('&lt;script&gt;'));
   assert(message.text.includes(note));

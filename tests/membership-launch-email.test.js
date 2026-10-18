@@ -4,10 +4,10 @@ const common=require('../services/membership-email.service');
 const {storeUrl,download}=require('../controllers/membership-download.controller');
 const args={user:{name:'<Rafa>'},token:'a'.repeat(64),date:'17 de noviembre de 2026',price:'US$4.99',base:'https://example.test',escape:common.escape};
 test('approved account email escapes names, retains private resumption link, and never says trial is already active',()=>{
- const m=render({...args,kind:'account'});assert.match(m.html,/&lt;Rafa&gt;/);assert.match(m.html,/membership-invitation#aaaa/);assert.match(m.html,/membership-account-created-es-v1.png/);assert.doesNotMatch(m.html,/<h1|Tu mes gratis de ITC Club ya está activo/);assert.match(m.text,/Sin cargo hoy/);assert.match(m.html,/font-family:Arial,Helvetica,sans-serif/);
+ const m=render({...args,kind:'account'});assert.match(m.html,/&lt;Rafa&gt;/);assert.match(m.html,/membership-invitation#aaaa/);assert.match(m.html,/membership-account-created-es-v2.png/);assert.doesNotMatch(m.html,/<h1|Tu mes gratis de ITC Club ya está activo/);assert.match(m.text,/Sin cargo hoy/);assert.match(m.html,/font-family:Arial,Helvetica,sans-serif/);
 });
 test('approved active email uses actual Stripe date/price, official badge assets, and no duplicated heading',()=>{
- const m=render({...args,kind:'trial',price:'US$7.25'});assert.match(m.html,/membership-trial-active-es-v1.png/);assert.match(m.text,/US\$7.25 el 17 de noviembre/);assert.match(m.html,/app-store-es-v1.png/);assert.match(m.html,/google-play-es-v1.png/);assert.doesNotMatch(m.html,/<h1|membership-invitation#/);assert.match(m.html,/app\/download\?platform=ios/);
+ const m=render({...args,kind:'trial',price:'US$7.25'});assert.match(m.html,/membership-trial-active-es-v2.png/);assert.match(m.text,/US\$7.25 el 17 de noviembre/);assert.match(m.html,/app-store-es-v1.png/);assert.match(m.html,/google-play-es-v1.png/);assert.doesNotMatch(m.html,/<h1|membership-invitation#/);assert.match(m.html,/app\/download\?platform=ios/);
  const canceled=render({...args,kind:'trial',user:{...args.user,subscription_cancel_at_period_end:true}});assert.match(canceled.text,/no se realizará el primer cobro/);assert.doesNotMatch(canceled.text,/El primer cobro será/);
 });
 test('missing or unsafe download destinations show availability instead of fake store links',()=>{
