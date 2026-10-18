@@ -72,7 +72,7 @@ async function checkout({userId,token,consent,baseUrl}){
   await c.query('UPDATE users SET stripe_customer_id=$2,autorenew_consent_at=NOW() WHERE id=$1',[user.id,customerId]);
   const notice='30 días gratis. Después se cobrarán US$4.99 al mes automáticamente hasta que canceles. Puedes cancelar antes del primer cargo en Perfil > Mi membresía.';
   await require('./legal.service').recordAcceptance(c,{userId:user.id,language:'es',context:'subscription',slugs:require('./legal.service').SUBSCRIPTION_SLUGS,customerReference:customerId,renewal:{affirmativeConsent:true,amountCents:499,currency:'usd',interval:'month',trialDays:30,invitationId:invite.id,notice,stage:'checkout_requested'}});
-  const session=await stripe.createCheckoutSession({user,customerId,baseUrl,appReturnUrl:'itcclub://checkout-return',renewalNotice:notice,trialDays:30,invitationId:invite.id,idempotencyKey:`launch:${invite.id}:${invite.checkout_id||'first'}`});
+  const session=await stripe.createCheckoutSession({user,customerId,baseUrl,appReturnUrl:'itcclub://login',renewalNotice:notice,trialDays:30,invitationId:invite.id,idempotencyKey:`launch:${invite.id}:${invite.checkout_id||'first'}`});
   await c.query('UPDATE membership_launch_invitations SET user_id=$2,checkout_id=$3 WHERE id=$1',[invite.id,user.id,session.id]);
   return {checkoutUrl:session.url};
  });
