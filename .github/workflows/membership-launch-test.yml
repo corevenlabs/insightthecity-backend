@@ -1,6 +1,11 @@
 name: Send individual membership launch test invitation
 on:
   workflow_dispatch:
+    inputs:
+      email:
+        description: Explicitly authorized test recipient
+        required: true
+        type: string
 permissions:
   contents: read
   id-token: write
@@ -29,6 +34,7 @@ jobs:
           DB_USER: itc_app
           DB_DATABASE: itc
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MEMBERSHIP_TEST_EMAIL: ${{ inputs.email }}
           MEMBERSHIP_LAUNCH_TEST_ENABLED: 'true'
           STRIPE_SECRET_KEY: ${{ secrets.MEMBERSHIP_SANDBOX_KEY }}
           SMTP_HOST: gvam1027.siteground.biz

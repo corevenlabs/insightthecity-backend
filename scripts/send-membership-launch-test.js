@@ -2,7 +2,8 @@ require('dotenv').config({quiet:true});
 const db=require('../config/db'),launch=require('../services/membership-launch.service'),mailer=require('../services/password-reset-mail.service');
 (async()=>{
  if(!launch.enabled())throw Error('Launch sandbox disabled');
- const email='rmj.rafael@gmail.com';
+ const email=String(process.env.MEMBERSHIP_TEST_EMAIL||'').trim().toLowerCase();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw Error('A valid explicitly selected test recipient is required');
  if(!mailer.isConfigured())throw Error('Email transport not configured');
  const existing=(await db.query('SELECT stripe_subscription_id,is_premium FROM users WHERE LOWER(email)=$1',[email])).rows[0];
  if(existing?.stripe_subscription_id || existing?.is_premium)throw Error('Test account already has membership. Use an account without a prior subscription.');
