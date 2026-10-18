@@ -81,25 +81,40 @@ async function applySubscription(userId, subscription, connection = db) {
 
 // Envía el acuse una sola vez por suscripción (la confirmación y el webhook pueden llegar a la vez).
 async function sendConfirmationOnce(user) {
-  if (!user?.stripe_subscription_id || !PREMIUM_STATUSES.has(user.subscription_status)) return;
-  if (!mailer.isConfigured()) {
-    console.warn('[subscription] Correo no configurado: no se envió el acuse de suscripción.');
-    return;
-  }
+  if (!user?.stripe_subscription_id || !PREMIUM_STATUSES.has(user.subscription_status)) return false;
+  if (!mailer.isConfigured()) return false;
   const claimed = await db.query(
-    `UPDATE users SET subscription_confirmation_sent_for = $2
-     WHERE id = $1 AND subscription_confirmation_sent_for IS DISTINCT FROM $2
-     RETURNING id`,
-    [user.id, user.stripe_subscription_id]
-  );
-  if (!claimed.rowCount) return;
+    `UPDATE users SET subscription_confirmation_sent_for=$2, subscription_confirmation_claimed_at=NOW(),
+      subscription_confirmation_attempts=subscription_confirmation_attempts+1
+     WHERE id=$1 AND is_active=true
+      AND (subscription_confirmation_retry_at IS NULL OR subscription_confirmation_retry_at<=NOW())
+      AND (subscription_confirmation_sent_for IS DISTINCT FROM $2
+       OR subscription_confirmation_claimed_at<NOW()-INTERVAL '10 minutes')
+     RETURNING id`, [user.id,user.stripe_subscription_id]);
+  if (!claimed.rowCount) return false;
   try {
-    await mailer.sendEmail({ to: user.email, ...confirmationEmail(user, user.language || 'es') });
+    await mailer.sendEmail({to:user.email,...confirmationEmail(user,user.language||'es')});
+    await db.query(`UPDATE users SET subscription_confirmation_claimed_at=NULL,
+      subscription_confirmation_retry_at=NULL,subscription_confirmation_attempts=0
+      WHERE id=$1 AND subscription_confirmation_sent_for=$2`,[user.id,user.stripe_subscription_id]);
+    return true;
   } catch (error) {
-    // Libera la marca para reintentar en la próxima sincronización.
-    await db.query('UPDATE users SET subscription_confirmation_sent_for = NULL WHERE id = $1', [user.id]);
-    console.error('[subscription] No se pudo enviar el acuse:', error.code || 'MAIL_SEND_FAILED');
+    await db.query(`UPDATE users SET subscription_confirmation_sent_for=NULL,subscription_confirmation_claimed_at=NULL,
+      subscription_confirmation_retry_at=NOW()+make_interval(secs=>LEAST(3600,60*power(2,LEAST(subscription_confirmation_attempts,6)))::int)
+      WHERE id=$1 AND subscription_confirmation_sent_for=$2`,[user.id,user.stripe_subscription_id]);
+    console.error('[subscription] Welcome email pending retry:',error.code||'MAIL_SEND_FAILED');
+    return false;
   }
+}
+async function retryPendingConfirmations() {
+  const {rows}=await db.query(`SELECT * FROM users WHERE is_active=true AND is_premium=true
+    AND subscription_status IN ('active','trialing','past_due') AND stripe_subscription_id IS NOT NULL
+    AND (subscription_confirmation_sent_for IS DISTINCT FROM stripe_subscription_id
+      OR subscription_confirmation_claimed_at<NOW()-INTERVAL '10 minutes')
+    AND (subscription_confirmation_retry_at IS NULL OR subscription_confirmation_retry_at<=NOW())
+    ORDER BY subscription_confirmation_retry_at NULLS FIRST,id LIMIT 25`);
+  let sent=0;for(const user of rows)if(await sendConfirmationOnce(user))sent++;
+  return {checked:rows.length,sent};
 }
 
 // Verifica una sesión de Checkout recién completada y activa la membresía.
@@ -159,4 +174,5 @@ module.exports = {
   syncIfStale,
   applyFromWebhook,
   sendConfirmationOnce,
+  retryPendingConfirmations,
 };

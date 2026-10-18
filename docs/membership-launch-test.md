@@ -24,3 +24,64 @@ Validación: tests unitarios existentes, integración PostgreSQL local, prueba c
 - El retorno de este checkout abre `/membership-activation`, que consulta la sesión a Stripe antes de confirmar el período gratuito. Cancelar el checkout vuelve a la invitación privada.
 - `/app/download?platform=ios|android` admite destinos oficiales configurados en `APP_STORE_DOWNLOAD_URL` / `GOOGLE_PLAY_DOWNLOAD_URL`. Sin ellos, muestra descarga todavía no disponible. **Enlaces reales pendientes del dueño.** No se inventan URLs de tienda.
 - No se automatiza la invitación inicial: la envía el dueño. No se envían correos retroactivos al desplegar.
+
+## Registro y tarjeta en una sola página
+
+El enlace privado abre `/membership-invitation#TOKEN`. Stripe.js monta Payment
+Element con `mode: setup` y tarjeta exclusivamente. Antes de llamar al backend,
+la página exige datos válidos, tarjeta completa y ambas casillas desmarcadas por
+defecto (términos/privacidad y renovación). `register` y `prepare` vuelven a exigir
+ambos booleanos. Se conservan las versiones y copias de documentos aceptados,
+usuario, fecha y aviso de renovación mediante `legal_acceptances`.
+
+`prepare` guarda un SetupIntent de uso `off_session` asociado al cliente y la
+invitación. `complete` consulta ese SetupIntent en Stripe, comprueba titularidad,
+modo de prueba y estado `succeeded`, y crea una sola suscripción con tarjeta
+predeterminada, 30 días de prueba y el precio mensual existente de US$4.99.
+Bloqueos SQL e idempotencia de Stripe protegen los reintentos. Un checkout alojado
+antiguo se vence antes de preparar la tarjeta; no puede crearse otro checkout
+alojado después de comenzar el formulario integrado. Los datos completos de la
+tarjeta nunca pasan por el backend de ITC.
+
+La cuenta puede quedar creada sin activar si la tarjeta es rechazada. La misma
+invitación permite volver a entrar con la contraseña elegida. Una verificación
+bancaria puede requerir pasos adicionales; un parámetro de retorno nunca activa
+la membresía sin consultar Stripe. La sesión temporal de recuperación vive en
+sessionStorage durante 30 minutos; no almacena la contraseña ni la tarjeta.
+
+Tras confirmar Stripe, la página muestra el aviso aprobado, correo del usuario,
+badges oficiales de descarga y reenvío de bienvenida. Se elimina el envío de
+"Cuenta creada". El correo de bienvenida conserva fechas y precio de Stripe.
+Las tiendas siguen pasando por `/app/download` hasta configurar destinos reales.
+
+Los fallos de correo no revocan la membresía. Los envíos pendientes tienen lease
+recuperable de 10 minutos y espera exponencial de hasta una hora. El workflow
+`membership-email-retries.yml` los procesa periódicamente (la programación de
+GitHub puede demorarse); también se reintentan al sincronizar la cuenta. Reenvío
+manual: autenticación, invitación propia activada, mínimo 60 segundos y máximo
+5 solicitudes por día. La aceptación SMTP no garantiza recepción en bandeja.
+
+Configuración adicional: variable pública de GitHub
+`MEMBERSHIP_SANDBOX_PUBLISHABLE_KEY`, expuesta en Cloud Run como
+`STRIPE_PUBLISHABLE_KEY`. Debe corresponder al mismo Sandbox de la clave secreta;
+no habilita cobros reales ni sustituye las claves de socios.
+
+Pruebas locales aisladas (Stripe y correo simulados):
+
+```sh
+DB_HOST=127.0.0.1 DB_PORT=55440 DB_USER=itc_test DB_DATABASE=itc_crm_test DB_SSL=false \
+  node --test --test-concurrency=1 tests/membership-launch.integration.js tests/membership-launch-unified.integration.js
+```
+
+La prueba de navegador adicional utiliza Payment Element y tarjetas reales de
+Sandbox (rechazo y 4242). Su respuesta final de activación está aislada para no
+crear suscripciones cuyos webhooks puedan afectar usuarios de producción.
+
+Pendiente editorial detectado antes del despliegue: los tres endpoints públicos
+`/api/legal/terms`, `/api/legal/privacy` y `/api/legal/subscription` devolvían 404
+("Este documento aún no está publicado"). No se redactan ni publican textos en
+esta entrega. El flujo continúa exclusivamente en Sandbox, identificado en la
+pantalla, y debe recibir documentos aprobados y publicados antes de utilizarse
+con usuarios/cobros reales. Mientras no exista un documento publicado, el sistema
+anterior de evidencia conserva la aceptación sin versión; esto no sustituye el
+texto legal aprobado ni debe describirse como evidencia de una versión vigente.

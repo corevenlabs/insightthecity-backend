@@ -8,4 +8,9 @@ CREATE TABLE IF NOT EXISTS membership_launch_invitations (
 );
 ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;
 ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS account_email_sent_at TIMESTAMPTZ;
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS setup_intent_id TEXT UNIQUE;
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS welcome_resend_after TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_claimed_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_retry_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_attempts INTEGER NOT NULL DEFAULT 0;
 COMMIT;

@@ -15,12 +15,12 @@ test('invitation-only sandbox membership: identity, consent, concurrency, trial,
  await t.test('token is hashed, regenerating revokes old invitation and 30-day expiry enforced',async()=>{const first=await launch.issue(user.email);invitation=await launch.issue(user.email);assert.notEqual(first.token,invitation.token);const stored=(await db.query('SELECT * FROM membership_launch_invitations')).rows[0];assert.notEqual(stored.token_hash,invitation.token);await assert.rejects(()=>launch.checkout({userId:user.id,token:first.token,consent:true,baseUrl:'https://example.test'}));});
  await t.test('only new invited users register; retries resume same account without activating membership',async()=>{
   await assert.rejects(()=>launch.issue(other.email),{status:409});
-  const args={token:invitation.token,email:user.email,name:'Launch',password:'launch-test-123',acceptLegal:true};
+  const args={token:invitation.token,email:user.email,name:'Launch',password:'launch-test-123',acceptLegal:true,consent:true};
   await assert.rejects(()=>launch.register({...args,email:other.email}),{status:403});
   await assert.rejects(()=>launch.register({...args,acceptLegal:false}),{status:400});
   const mailer=require('../services/password-reset-mail.service'),oldSend=mailer.send,oldConfigured=mailer.isConfigured;let mails=0;
   mailer.isConfigured=()=>true;mailer.send=async message=>{mails++;assert.equal(message.to,args.email);assert.match(message.html,/Activar mi mes gratis/);};
-  let results;try{results=await Promise.all([launch.register(args),launch.register(args)]);assert.equal(mails,1);}finally{mailer.send=oldSend;mailer.isConfigured=oldConfigured;}
+  let results;try{results=await Promise.all([launch.register(args),launch.register(args)]);assert.equal(mails,0);}finally{mailer.send=oldSend;mailer.isConfigured=oldConfigured;}
   user=results[0].user;assert.equal(results[1].user.id,user.id);assert.equal(user.is_premium,false);
   assert.equal((await launch.preview(invitation.token)).resume,true);
   await assert.rejects(()=>launch.register({...args,password:'incorrect-password'}),{status:403});

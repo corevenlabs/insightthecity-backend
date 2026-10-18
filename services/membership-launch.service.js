@@ -26,23 +26,22 @@ async function lookup(c,token,lock=false){
  if(!row || row.expires_at<=new Date())fail('La invitación venció o no es válida.',404);
  return row;
 }
-async function preview(token){available();const invite=await lookup(db,token);if(invite.activated_at)fail('Esta invitación ya fue activada.',409);return {resume:Boolean(invite.registered_at)};}
-async function register({token,email,name,password,acceptLegal}){
+async function preview(token){available();const invite=await lookup(db,token);return {resume:Boolean(invite.registered_at),activated:Boolean(invite.activated_at)};}
+async function register({token,email,name,password,acceptLegal,consent}){
  available();email=String(email||'').trim().toLowerCase();name=String(name||'').trim();
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)fail('Introduce el correo que recibió la invitación.');
  if(typeof password!=='string'||password.length<8||Buffer.byteLength(password)>72)fail('Usa una contraseña de al menos 8 caracteres y como máximo 72 bytes.');
  if(!name||name.length>120)fail('Introduce tu nombre (máximo 120 caracteres).');
- if(acceptLegal!==true)fail('Debes aceptar los Términos y la Política de privacidad.');
+ if(acceptLegal!==true||consent!==true)fail('Debes aceptar los Términos, la Política de privacidad y la renovación automática.');
  const bcrypt=require('bcryptjs'),users=require('./users.service'),legal=require('./legal.service');
  const passwordHash=await bcrypt.hash(password,10);
  const result=await transaction(async c=>{
   const invite=await lookup(c,token,true);
   if(invite.email_hash!==emailHash(email))fail('Usa el mismo correo que recibió la invitación.',403);
-  if(invite.activated_at)fail('Esta invitación ya fue activada.',409);
   let user=(await c.query('SELECT * FROM users WHERE LOWER(email)=$1',[email])).rows[0];
   if(invite.registered_at){
    if(!user||invite.user_id!==user.id||!user.is_active||!await bcrypt.compare(password,user.password_hash||''))fail('Revisa la contraseña que creaste para esta invitación.',403);
-   if(user.stripe_subscription_id)fail('Tu membresía ya fue activada.',409);
+   // The same invited user can authenticate again to recover a completed activation.
   }else{
    if(user)fail('Esta promoción es exclusivamente para usuarios nuevos. Este correo ya tiene una cuenta.',409);
    try{user=(await c.query("INSERT INTO users(name,email,password_hash,language) VALUES($1,$2,$3,'es') RETURNING *",[name,email,passwordHash])).rows[0];}catch(e){if(e.code==='23505')fail('Este correo ya tiene una cuenta.',409);throw e;}
@@ -51,7 +50,6 @@ async function register({token,email,name,password,acceptLegal}){
   }
   return {token:users.signToken(user),user:users.publicUser(user)};
  });
- try{await require('./membership-launch-email.service').sendAccountCreated(result.user,token);}catch{console.error('[launch registration] Account email pending retry.');}
  return result;
 }
 async function checkout({userId,token,consent,baseUrl}){
@@ -62,6 +60,7 @@ async function checkout({userId,token,consent,baseUrl}){
   const user=(await c.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[userId])).rows[0];
   if(!user?.is_active)fail('Cuenta no disponible',403);
   if(invite.email_hash!==emailHash(user.email) || (invite.user_id && invite.user_id!==user.id))fail('Inicia sesión con la cuenta que recibió esta invitación.',403);
+  if(invite.setup_intent_id)fail('Continúa la activación desde el formulario de tu invitación.',409);
   if(invite.activated_at || user.stripe_subscription_id)fail('La promoción es solo para cuentas sin una suscripción previa.',409);
   if(invite.checkout_id){
    const session=await stripe.retrieveCheckoutSession(invite.checkout_id);
@@ -85,4 +84,4 @@ async function confirm(userId,subscription){
  const result=await db.query(`UPDATE membership_launch_invitations SET subscription_id=$3,activated_at=COALESCE(activated_at,NOW()) WHERE id=$1 AND user_id=$2 AND (subscription_id IS NULL OR subscription_id=$3) RETURNING id`,[id,userId,subscription.id]);
  if(!result.rowCount)fail('La suscripción no coincide con la invitación.',409);
 }
-module.exports={issue,preview,register,checkout,confirm,enabled,emailHash};
+module.exports={issue,preview,register,checkout,confirm,enabled,emailHash,lookup,available};

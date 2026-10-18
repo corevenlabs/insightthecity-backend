@@ -66,7 +66,7 @@ app.get(['/delete-account', '/eliminar-cuenta'], (req,res)=>{
 app.use('/membership-launch-assets', express.static(path.join(__dirname,'public/membership-launch')));
 app.get('/membership-invitation', (req,res)=>{
  res.set('Cache-Control','no-store').set('Referrer-Policy','no-referrer');
- res.set('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+ res.set('Content-Security-Policy',"default-src 'none'; script-src 'self' https://js.stripe.com; style-src 'self'; img-src 'self' https://*.stripe.com; connect-src 'self' https://api.stripe.com https://*.stripe.com https://*.stripe.network; frame-src https://js.stripe.com https://hooks.stripe.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
  res.type('html').send(require('./services/membership-launch-page').page());
 });
 app.get("/health", (req, res) => res.json({ ok: true }))

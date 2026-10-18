@@ -32,13 +32,13 @@ async function getPlan() {
     return plan;
 }
 
-async function ensureCustomer(user) {
+async function ensureCustomer(user, idempotencyKey) {
     if (user.stripe_customer_id) return user.stripe_customer_id;
     const customer = await client().customers.create({
         email: user.email,
         name: user.name || undefined,
         metadata: { user_id: String(user.id) },
-    });
+    }, idempotencyKey ? {idempotencyKey} : undefined);
     return customer.id;
 }
 
@@ -57,6 +57,14 @@ async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, 
         cancel_url: cancelUrl || returnUrl(baseUrl, appReturnUrl, 'result=cancel'),
     }, idempotencyKey ? {idempotencyKey} : undefined);
     return { id: session.id, url: session.url };
+}
+
+async function createLaunchSetup({customerId,userId,invitationId,key}) {
+    return client().setupIntents.create({customer:customerId,payment_method_types:['card'],usage:'off_session',metadata:{user_id:String(userId),launch_invitation_id:invitationId}},{idempotencyKey:key});
+}
+async function retrieveLaunchSetup(id) { return client().setupIntents.retrieve(id); }
+async function createLaunchSubscription({customerId,userId,paymentMethod,invitationId,key}) {
+    return client().subscriptions.create({customer:customerId,items:[{price:process.env.STRIPE_PRICE_ID}],default_payment_method:paymentMethod,trial_period_days:30,trial_settings:{end_behavior:{missing_payment_method:'cancel'}},metadata:{user_id:String(userId),launch_invitation_id:invitationId}},{idempotencyKey:key});
 }
 
 async function createGuideCheckoutSession({ guide, user, baseUrl, appReturnUrl }) {
@@ -149,6 +157,7 @@ function listPartnerPaymentLinkSessions(offer = "founding") {
     return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
+    createLaunchSetup, retrieveLaunchSetup, createLaunchSubscription,
     retrievePartnerReceiptData,
     listPartnerPaymentLinkSessions,
     retrievePartnerPaymentLinkSession,

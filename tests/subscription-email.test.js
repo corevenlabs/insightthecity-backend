@@ -14,9 +14,10 @@ test('al refrescar el perfil se reintenta el acuse pendiente usando el transport
     transport.send = async message => messages.push(message);
     db.query = async sql => {
       if (sql.startsWith('SELECT')) return { rows: [user] };
-      if (sql.includes('subscription_confirmation_sent_for = $2')) {
+      if (sql.includes('subscription_confirmation_sent_for=$2, subscription_confirmation_claimed_at=NOW()')) {
         const rowCount = claimed ? 0 : 1; claimed = true; return { rowCount };
       }
+      if(sql.includes('subscription_confirmation_claimed_at=NULL'))return {rowCount:1};
       throw new Error('Unexpected query');
     };
     await subscriptions.syncIfStale(7);
