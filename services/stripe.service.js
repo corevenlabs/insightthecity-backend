@@ -42,7 +42,7 @@ async function ensureCustomer(user) {
     return customer.id;
 }
 
-async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, renewalNotice, trialDays, invitationId, idempotencyKey }) {
+async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, renewalNotice, trialDays, invitationId, idempotencyKey, successUrl, cancelUrl }) {
     const session = await client().checkout.sessions.create({
         mode: 'subscription',
         customer: customerId,
@@ -53,8 +53,8 @@ async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, 
         ...(trialDays ? {payment_method_collection:'always',payment_method_types:['card']} : {}),
         // Recordatorio de renovación automática junto al botón de pago.
         custom_text: { submit: { message: renewalNotice } },
-        success_url: returnUrl(baseUrl, appReturnUrl, 'result=success&session_id={CHECKOUT_SESSION_ID}'),
-        cancel_url: returnUrl(baseUrl, appReturnUrl, 'result=cancel'),
+        success_url: successUrl || returnUrl(baseUrl, appReturnUrl, 'result=success&session_id={CHECKOUT_SESSION_ID}'),
+        cancel_url: cancelUrl || returnUrl(baseUrl, appReturnUrl, 'result=cancel'),
     }, idempotencyKey ? {idempotencyKey} : undefined);
     return { id: session.id, url: session.url };
 }

@@ -58,8 +58,8 @@ test('trial welcome states no initial charge and first charge date without chang
   const {membershipEmail}=require('../services/membership-email.service');
   const user={name:'Launch',language:'es',subscription_status:'trialing',subscription_current_period_end:'2026-11-15T16:00:00Z',subscription_amount_cents:499,subscription_currency:'usd',subscription_interval:'month'};
   const trial=membershipEmail(user);
-  assert.match(trial.text,/No se cobró la membresía al activar/);
-  assert.match(trial.text,/Primer cargo previsto/);
+  assert.match(trial.text,/Tu mes gratis de ITC Club ya está activo/);
+  assert.match(trial.text,/El primer cobro será/);
   assert.match(trial.text,/4.99/);
   assert.match(membershipEmail({...user,subscription_status:'active'}).text,/Próxima renovación/);
 });

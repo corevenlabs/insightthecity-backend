@@ -15,3 +15,12 @@ Implementación separada del checkout normal y de los socios comerciales. Solo f
 Despliegue: claves en Secret Manager, configuración preparada únicamente si la cuenta existente ya es test y coincide con la cuenta nueva. Nunca reemplaza una clave live. Claves de socios independientes.
 
 Validación: tests unitarios existentes, integración PostgreSQL local, prueba con reloj de Stripe y cliente sintético, página y consentimiento en navegador. La prueba completa con la cuenta del destinatario la realiza el usuario; nunca se pide su contraseña ni tarjeta real.
+
+## Correos aprobados y descarga
+
+- Correo 2: después de confirmar el registro en base de datos. Marca de envío atómica por invitación; los reintentos del registro no duplican el correo. Si SMTP falla, el registro se conserva y se libera la marca para reintentar al retomar la invitación.
+- Correo 3: plantilla española aprobada únicamente cuando Stripe confirma un período `trialing`; reutiliza la protección existente de un acuse por suscripción. Fecha y precio provienen de Stripe.
+- Banners con tipografía condensada rasterizada para evitar sustitución de fuentes en correo; cuerpo Arial y distintivos oficiales de las tiendas. Fuentes de distintivos: tools.applemediaservices.com y play.google.com.
+- El retorno de este checkout abre `/membership-activation`, que consulta la sesión a Stripe antes de confirmar el período gratuito. Cancelar el checkout vuelve a la invitación privada.
+- `/app/download?platform=ios|android` admite destinos oficiales configurados en `APP_STORE_DOWNLOAD_URL` / `GOOGLE_PLAY_DOWNLOAD_URL`. Sin ellos, muestra descarga todavía no disponible. **Enlaces reales pendientes del dueño.** No se inventan URLs de tienda.
+- No se automatiza la invitación inicial: la envía el dueño. No se envían correos retroactivos al desplegar.

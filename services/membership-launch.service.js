@@ -35,7 +35,7 @@ async function register({token,email,name,password,acceptLegal}){
  if(acceptLegal!==true)fail('Debes aceptar los Términos y la Política de privacidad.');
  const bcrypt=require('bcryptjs'),users=require('./users.service'),legal=require('./legal.service');
  const passwordHash=await bcrypt.hash(password,10);
- return transaction(async c=>{
+ const result=await transaction(async c=>{
   const invite=await lookup(c,token,true);
   if(invite.email_hash!==emailHash(email))fail('Usa el mismo correo que recibió la invitación.',403);
   if(invite.activated_at)fail('Esta invitación ya fue activada.',409);
@@ -51,6 +51,8 @@ async function register({token,email,name,password,acceptLegal}){
   }
   return {token:users.signToken(user),user:users.publicUser(user)};
  });
+ try{await require('./membership-launch-email.service').sendAccountCreated(result.user,token);}catch{console.error('[launch registration] Account email pending retry.');}
+ return result;
 }
 async function checkout({userId,token,consent,baseUrl}){
  available();if(consent!==true)fail('Debes aceptar el primer cargo y la renovación automática.');
@@ -72,7 +74,7 @@ async function checkout({userId,token,consent,baseUrl}){
   await c.query('UPDATE users SET stripe_customer_id=$2,autorenew_consent_at=NOW() WHERE id=$1',[user.id,customerId]);
   const notice='30 días gratis. Después se cobrarán US$4.99 al mes automáticamente hasta que canceles. Puedes cancelar antes del primer cargo en Perfil > Mi membresía.';
   await require('./legal.service').recordAcceptance(c,{userId:user.id,language:'es',context:'subscription',slugs:require('./legal.service').SUBSCRIPTION_SLUGS,customerReference:customerId,renewal:{affirmativeConsent:true,amountCents:499,currency:'usd',interval:'month',trialDays:30,invitationId:invite.id,notice,stage:'checkout_requested'}});
-  const session=await stripe.createCheckoutSession({user,customerId,baseUrl,appReturnUrl:'itcclub://login',renewalNotice:notice,trialDays:30,invitationId:invite.id,idempotencyKey:`launch:${invite.id}:${invite.checkout_id||'first'}`});
+  const session=await stripe.createCheckoutSession({user,customerId,baseUrl,appReturnUrl:'itcclub://login',renewalNotice:notice,trialDays:30,invitationId:invite.id,successUrl:`${baseUrl}/membership-activation?session_id={CHECKOUT_SESSION_ID}`,cancelUrl:`${baseUrl}/membership-invitation#${token}`,idempotencyKey:`launch:${invite.id}:${invite.checkout_id||'first'}`});
   await c.query('UPDATE membership_launch_invitations SET user_id=$2,checkout_id=$3 WHERE id=$1',[invite.id,user.id,session.id]);
   return {checkoutUrl:session.url};
  });

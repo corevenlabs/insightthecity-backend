@@ -51,6 +51,8 @@ app.use('/uploads', (req,res,next)=>{
 }, express.static(path.join(__dirname,'uploads')));
 
 app.use("/email-assets", express.static(path.join(__dirname, "public/email"), { maxAge: "7d" }));
+app.get('/app/download', require('./controllers/membership-download.controller').download);
+app.get('/membership-activation', require('./middleware/security-rate-limit').limit('launch-return',20,60), require('./controllers/membership-download.controller').activation);
 app.get("/app/:target", require("./controllers/app-link.controller").appLink);
 
 app.use('/account-deletion-assets', express.static(path.join(__dirname,'public/account-deletion')));

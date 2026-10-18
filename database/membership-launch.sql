@@ -7,4 +7,5 @@ CREATE TABLE IF NOT EXISTS membership_launch_invitations (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS account_email_sent_at TIMESTAMPTZ;
 COMMIT;
