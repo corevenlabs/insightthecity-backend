@@ -6,4 +6,5 @@ CREATE TABLE IF NOT EXISTS membership_launch_invitations (
  checkout_id TEXT UNIQUE, subscription_id TEXT UNIQUE, activated_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;
 COMMIT;

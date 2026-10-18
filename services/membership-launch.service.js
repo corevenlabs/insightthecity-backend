@@ -12,6 +12,7 @@ async function issue(email){
  return transaction(async c=>{
   await c.query("SELECT pg_advisory_xact_lock(71300300)");
   const existing=(await c.query('SELECT * FROM membership_launch_invitations WHERE email_hash=$1 FOR UPDATE',[emailHash(email)])).rows[0];
+  if((await c.query('SELECT id FROM users WHERE LOWER(email)=$1',[String(email).trim().toLowerCase()])).rowCount)fail('La invitación es exclusivamente para usuarios nuevos.',409);
   if(existing?.activated_at || existing?.checkout_id)fail('Esta invitación ya tiene una activación o checkout. No se puede reemplazar.',409);
   if(!existing && (await c.query('SELECT count(*)::int n FROM membership_launch_invitations')).rows[0].n>=300)fail('Los 300 cupos ya están asignados.',409);
   const token=crypto.randomBytes(32).toString('hex');
@@ -25,12 +26,39 @@ async function lookup(c,token,lock=false){
  if(!row || row.expires_at<=new Date())fail('La invitación venció o no es válida.',404);
  return row;
 }
+async function preview(token){available();const invite=await lookup(db,token);if(invite.activated_at)fail('Esta invitación ya fue activada.',409);return {resume:Boolean(invite.registered_at)};}
+async function register({token,email,name,password,acceptLegal}){
+ available();email=String(email||'').trim().toLowerCase();name=String(name||'').trim();
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)fail('Introduce el correo que recibió la invitación.');
+ if(typeof password!=='string'||password.length<8||Buffer.byteLength(password)>72)fail('Usa una contraseña de al menos 8 caracteres y como máximo 72 bytes.');
+ if(!name||name.length>120)fail('Introduce tu nombre (máximo 120 caracteres).');
+ if(acceptLegal!==true)fail('Debes aceptar los Términos y la Política de privacidad.');
+ const bcrypt=require('bcryptjs'),users=require('./users.service'),legal=require('./legal.service');
+ const passwordHash=await bcrypt.hash(password,10);
+ return transaction(async c=>{
+  const invite=await lookup(c,token,true);
+  if(invite.email_hash!==emailHash(email))fail('Usa el mismo correo que recibió la invitación.',403);
+  if(invite.activated_at)fail('Esta invitación ya fue activada.',409);
+  let user=(await c.query('SELECT * FROM users WHERE LOWER(email)=$1',[email])).rows[0];
+  if(invite.registered_at){
+   if(!user||invite.user_id!==user.id||!user.is_active||!await bcrypt.compare(password,user.password_hash||''))fail('Revisa la contraseña que creaste para esta invitación.',403);
+   if(user.stripe_subscription_id)fail('Tu membresía ya fue activada.',409);
+  }else{
+   if(user)fail('Esta promoción es exclusivamente para usuarios nuevos. Este correo ya tiene una cuenta.',409);
+   try{user=(await c.query("INSERT INTO users(name,email,password_hash,language) VALUES($1,$2,$3,'es') RETURNING *",[name,email,passwordHash])).rows[0];}catch(e){if(e.code==='23505')fail('Este correo ya tiene una cuenta.',409);throw e;}
+   await legal.recordAcceptance(c,{userId:user.id,language:'es',context:'register',slugs:legal.REGISTER_SLUGS});
+   await c.query('UPDATE membership_launch_invitations SET user_id=$2,registered_at=NOW() WHERE id=$1',[invite.id,user.id]);
+  }
+  return {token:users.signToken(user),user:users.publicUser(user)};
+ });
+}
 async function checkout({userId,token,consent,baseUrl}){
  available();if(consent!==true)fail('Debes aceptar el primer cargo y la renovación automática.');
  return transaction(async c=>{
+  const invite=await lookup(c,token,true);
+  if(!invite.registered_at||invite.user_id!==userId)fail('Crea tu cuenta desde esta invitación para continuar.',403);
   const user=(await c.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[userId])).rows[0];
   if(!user?.is_active)fail('Cuenta no disponible',403);
-  const invite=await lookup(c,token,true);
   if(invite.email_hash!==emailHash(user.email) || (invite.user_id && invite.user_id!==user.id))fail('Inicia sesión con la cuenta que recibió esta invitación.',403);
   if(invite.activated_at || user.stripe_subscription_id)fail('La promoción es solo para cuentas sin una suscripción previa.',409);
   if(invite.checkout_id){
@@ -55,4 +83,4 @@ async function confirm(userId,subscription){
  const result=await db.query(`UPDATE membership_launch_invitations SET subscription_id=$3,activated_at=COALESCE(activated_at,NOW()) WHERE id=$1 AND user_id=$2 AND (subscription_id IS NULL OR subscription_id=$3) RETURNING id`,[id,userId,subscription.id]);
  if(!result.rowCount)fail('La suscripción no coincide con la invitación.',409);
 }
-module.exports={issue,checkout,confirm,enabled,emailHash};
+module.exports={issue,preview,register,checkout,confirm,enabled,emailHash};

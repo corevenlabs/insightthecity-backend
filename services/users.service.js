@@ -211,6 +211,7 @@ async function deleteOwnAccount(id, password) {
 }
 
 module.exports = {
+  signToken,
   register,
   login,
   findById,
