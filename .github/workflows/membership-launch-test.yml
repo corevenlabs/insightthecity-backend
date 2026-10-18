@@ -6,6 +6,12 @@ on:
         description: Explicitly authorized test recipient
         required: true
         type: string
+      mode:
+        description: Audit or reset the explicitly authorized Sandbox account
+        required: true
+        default: audit
+        type: choice
+        options: [audit, reset]
 permissions:
   contents: read
   id-token: write
@@ -27,7 +33,7 @@ jobs:
           service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
       - uses: google-github-actions/setup-gcloud@v2
       - run: npm ci --omit=dev
-      - name: Send single sandbox invitation
+      - name: Audit or reset authorized Sandbox account
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: '5432'
@@ -35,6 +41,7 @@ jobs:
           DB_DATABASE: itc
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           MEMBERSHIP_TEST_EMAIL: ${{ inputs.email }}
+          MEMBERSHIP_RESET_MODE: ${{ inputs.mode }}
           MEMBERSHIP_LAUNCH_TEST_ENABLED: 'true'
           STRIPE_SECRET_KEY: ${{ secrets.MEMBERSHIP_SANDBOX_KEY }}
           SMTP_HOST: gvam1027.siteground.biz
@@ -52,4 +59,4 @@ jobs:
           chmod +x /tmp/cloud-sql-proxy
           /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres &
           for i in $(seq 1 30); do nc -z 127.0.0.1 5432 && break; sleep 1; done
-          node scripts/send-membership-launch-test.js
+          node scripts/reset-membership-sandbox-account.js
