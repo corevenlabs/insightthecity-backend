@@ -44,17 +44,11 @@ jobs:
           MEMBERSHIP_RESET_MODE: ${{ inputs.mode }}
           MEMBERSHIP_LAUNCH_TEST_ENABLED: 'true'
           STRIPE_SECRET_KEY: ${{ secrets.MEMBERSHIP_SANDBOX_KEY }}
-          SMTP_HOST: gvam1027.siteground.biz
-          SMTP_PORT: '465'
-          SMTP_USER: noreply@insightthecity.com
-          PASSWORD_RESET_FROM: ITC Club <noreply@insightthecity.com>
         run: |
           set -euo pipefail
           JWT_SECRET="$(gcloud secrets versions access latest --secret=JWT_SECRET --project=itc-developer-502721)"
-          SMTP_PASSWORD="$(gcloud secrets versions access latest --secret=NOREPLY_EMAIL_PASSWORD --project=itc-developer-502721)"
           echo "::add-mask::$JWT_SECRET"
-          echo "::add-mask::$SMTP_PASSWORD"
-          export JWT_SECRET SMTP_PASSWORD
+          export JWT_SECRET
           curl -fsSL -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
           chmod +x /tmp/cloud-sql-proxy
           /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres &
