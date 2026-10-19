@@ -22,6 +22,7 @@ async function sendCode(email, code, language) {
       to: [email],
       subject: language === 'en' ? 'Your ITC Club password reset code' : language === 'pt' ? 'Seu código de recuperação ITC Club' : 'Tu código de recuperación ITC Club',
       text: emailText(code, language),
+      html: require('./password-reset-email').render(code, language, RESET_MINUTES),
   });
 }
 

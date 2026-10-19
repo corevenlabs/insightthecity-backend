@@ -17,6 +17,7 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
   let reset = null;
   let passwordHash = null;
   let sentCode = null;
+  let sentMessage = null;
   try {
     process.env.RESEND_API_KEY = 'test-key';
     process.env.PASSWORD_RESET_FROM = 'ITC Club <test@example.com>';
@@ -24,6 +25,7 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
     mailer.isConfigured = () => true;
     mailer.send = async (message) => {
       sentCode = message.text.match(/\b\d{8}\b/)[0];
+      sentMessage = message;
     };
     db.query = async (sql, values) => {
       if (sql.includes('SELECT id, email, language')) return { rows: [user] };
@@ -45,7 +47,16 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
       release() {},
     });
 
-    await service.requestReset(user.email);
+    for (const language of ['es','en','pt',null]) {
+      user.language = language;
+      await service.requestReset(user.email);
+      const lang = ['es','en','pt'].includes(user.language) ? user.language : 'es';
+      assert.match(sentMessage.html, new RegExp(`<html lang="${lang}">`));
+      assert.ok(sentMessage.html.includes(`/email-assets/password-reset-${lang}-v1.png`));
+      assert.ok(sentMessage.html.includes(sentCode));
+      const expected = {es:'Tu código de recuperación ITC Club',en:'Your ITC Club password reset code',pt:'Seu código de recuperação ITC Club'}[lang];
+      assert.equal(sentMessage.subject, expected);
+    }
     assert.match(sentCode, /^\d{8}$/);
     assert.equal(await service.resetPassword(user.email, '99999999' === sentCode ? '88888888' : '99999999', 'new-password'), false);
     assert.equal(reset.attempts, 1);
