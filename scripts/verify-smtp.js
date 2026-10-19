@@ -6,7 +6,7 @@ const mailer = require('../services/password-reset-mail.service');
   console.log('Conexión TLS y autenticación SMTP correctas.');
   const recipient = process.argv[2];
   if (recipient) {
-    await mailer.send({ to: [recipient], subject: 'Prueba de correo ITC Club', text: 'La conexión de ITC Club con SiteGround funciona. Este mensaje es una prueba y no cambia ninguna contraseña.' });
+    await mailer.send({ to: [recipient], ...require('../services/technical-email').smtpTest() });
     console.log('Servidor SMTP aceptó el correo de prueba. Confirma su recepción en el buzón.');
   }
 })().catch((error) => {

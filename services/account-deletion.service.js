@@ -66,7 +66,7 @@ async function processJob(id) {
         try {
           const recipients=(await c.query("SELECT email FROM admins WHERE is_active AND role='admin'")).rows.map(x=>x.email);
           if (!recipients.length || !mail.isConfigured()) throw new Error('NO_ALERT_RECIPIENT');
-          await mail.send({to:recipients,subject:'ITC Club · Account deletion needs attention',text:`Request ${id} is pending at stage ${stage}. Review the protected account deletion endpoint. Automatic retries will continue.`});
+          await mail.send({to:recipients,...require('./technical-email').deletionAlert(id,stage)});
           await c.query('UPDATE account_deletions SET alerted_at=NOW() WHERE id=$1',[id]);
         } catch { console.error('[account deletion alert pending]',id); }
       }

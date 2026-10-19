@@ -4,6 +4,17 @@
 const fs=require('fs'),path=require('path'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'public/email');
 const data=[
+ ['lifecycle-deletion-code-es-v1.png',['Verifica','tu correo.'],'',1,50,130,92],
+ ['lifecycle-deletion-code-en-v1.png',['Verify','your email.'],'',1,50,130,92],
+ ['lifecycle-deletion-code-pt-v1.png',['Verifique','seu e-mail.'],'',1,50,130,92],
+ ['lifecycle-deletion-requested-es-v1.png',['Solicitud','recibida.'],'',1,50,130,92],
+ ['lifecycle-deletion-requested-en-v1.png',['Request','received.'],'',1,50,130,92],
+ ['lifecycle-deletion-requested-pt-v1.png',['Solicitação','recebida.'],'',1,50,130,92],
+ ['lifecycle-deletion-completed-es-v1.png',['Cuenta','eliminada.'],'',1,50,130,92],
+ ['lifecycle-deletion-completed-en-v1.png',['Account','deleted.'],'',1,50,130,92],
+ ['lifecycle-deletion-completed-pt-v1.png',['Conta','excluída.'],'',1,50,130,92],
+ ['lifecycle-alert-en-v1.png',['Review','required.'],'',1,50,130,92],
+ ['lifecycle-smtp-es-v1.png',['Prueba','de correo.'],'',1,50,130,92],
  ['password-reset-es-v1.png',['Recupera','tu acceso.'],'',1,50,130,92],
  ['password-reset-en-v1.png',['Recover','your access.'],'',1,50,130,92],
  ['password-reset-pt-v1.png',['Recupere','seu acesso.'],'',1,50,130,92],
