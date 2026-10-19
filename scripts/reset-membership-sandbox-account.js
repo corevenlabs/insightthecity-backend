@@ -14,7 +14,7 @@ const ident=s=>{if(!/^[a-z][a-z0-9_]*$/.test(s))throw Error('Invalid schema iden
  const customers=[];for await(const customer of stripe.customers.list({email:TARGET,limit:100})){if(customer.email?.toLowerCase()!==TARGET)throw Error('Unexpected customer');const subscriptions=[];for await(const sub of stripe.subscriptions.list({customer:customer.id,status:'all',limit:100})){if(sub.livemode!==false)throw Error('Live subscription found');subscriptions.push({id:sub.id,status:sub.status,userId:sub.metadata?.user_id,invitationId:sub.metadata?.launch_invitation_id});}customers.push({id:customer.id,subscriptions});}
  console.log(JSON.stringify({target:TARGET,user:user?{id:user.id,customerId:user.stripe_customer_id,subscriptionId:user.stripe_subscription_id,status:user.subscription_status,premium:user.is_premium,hasAvatar:Boolean(user.avatar_url)}:null,counts,invitations:invites,customers}));
  if(process.env.MEMBERSHIP_RESET_MODE==='audit')return;
- const EXPECTED={userId:13,customerId:'cus_VSvNgZnsDoJoXg',subscriptionId:'sub_1URzWyEbsP0HgIufRO3zfO3n',invitationId:'f63ec822-f42c-4e0b-a39c-3a7d228f4ce5'};
+ const EXPECTED={userId:14,customerId:'cus_VSwNd7RkNrtFyN',subscriptionId:'sub_1US0UyEbsP0HgIufuMePmd3C',invitationId:'8ed6c0d7-df05-4d05-b912-a46973e30fa9'};
  function validate(current,rows,owned){
   if(!current||current.id!==EXPECTED.userId||current.stripe_customer_id!==EXPECTED.customerId||current.stripe_subscription_id!==EXPECTED.subscriptionId||current.avatar_url)throw Error('Account differs from the audited test account');
   if(rows.length!==1||rows[0].id!==EXPECTED.invitationId||rows[0].user_id!==EXPECTED.userId||rows[0].subscription_id!==EXPECTED.subscriptionId)throw Error('Invitation differs from audit');
@@ -24,7 +24,7 @@ const ident=s=>{if(!/^[a-z][a-z0-9_]*$/.test(s))throw Error('Invalid schema iden
  validate(user,invites,counts);
  if(customers.length!==1||customers[0].id!==EXPECTED.customerId||customers[0].subscriptions.length!==1)throw Error('Unexpected Sandbox billing records');
  const known=await stripe.subscriptions.retrieve(EXPECTED.subscriptionId);
- if(known.customer!==EXPECTED.customerId||known.livemode!==false||known.metadata?.user_id!=='13'||known.metadata?.launch_invitation_id!==EXPECTED.invitationId)throw Error('Subscription ownership differs from audit');
+ if(known.customer!==EXPECTED.customerId||known.livemode!==false||known.metadata?.user_id!=='14'||known.metadata?.launch_invitation_id!==EXPECTED.invitationId)throw Error('Subscription ownership differs from audit');
  const canceled=known.status==='canceled'?known:await stripe.subscriptions.cancel(known.id,{invoice_now:false,prorate:false});
  if(canceled.status!=='canceled'||canceled.livemode!==false)throw Error('Sandbox subscription cancellation not confirmed');
  console.log('Authorized Sandbox subscription canceled immediately; no invoice or prorated charge requested.');
