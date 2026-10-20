@@ -126,3 +126,11 @@ no el enlace desnudo `buy.stripe.com`: una compra directa allí sin referencia f
 no permite crear/identificar la cuenta ni comprobar los 300 destinatarios.
 No se ha implementado un enlace de registro general con lista autorizada/OTP.
 Estos cambios no crean pagos ni modifican el enlace live hasta que se publique.
+
+
+## Conservar secretos sin activar la campaña
+
+`MEMBERSHIP_LIVE_SECRETS_ATTACHED=true` conserva los cuatro bindings live en
+cada despliegue. No cambia el modo de campaña a live ni permite nuevas activaciones.
+Es independiente de `MEMBERSHIP_LIVE_CONFIGURED` y
+`MEMBERSHIP_LAUNCH_LIVE_ENABLED`. Las pruebas de Sandbox continúan disponibles.
