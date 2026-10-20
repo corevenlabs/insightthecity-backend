@@ -1,10 +1,10 @@
 /* global Stripe */
 const form=document.querySelector('form'),status=document.querySelector('#form-status'),button=form.querySelector('button[type=submit]');
 const invitation=location.hash.slice(1),storageKey='itc-launch:'+invitation;
-let authToken=null,elements,stripe,paymentComplete=false,ready=false,busy=false,activated=false,setupConfirmed=false;
+let hosted=false,authToken=null,elements,stripe,paymentComplete=false,ready=false,busy=false,activated=false,setupConfirmed=false;
 function remember(token){authToken=token;try{sessionStorage.setItem(storageKey,JSON.stringify({token,until:Date.now()+30*60*1000}));}catch{/* Password resumption is still available. */}}
 function forget(){authToken=null;try{sessionStorage.removeItem(storageKey);}catch{}}
-function canSubmit(){return ready&&!busy&&form.checkValidity()&&(paymentComplete||setupConfirmed||activated);}
+function canSubmit(){return ready&&!busy&&form.checkValidity()&&(hosted||paymentComplete||setupConfirmed||activated);}
 function update(){button.disabled=!canSubmit();}
 async function request(path,body={},token=authToken){
  const response=await fetch('/api/payment/launch/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify({invitation,...body})});
@@ -15,13 +15,14 @@ function showSuccess(data){activated=true;document.querySelector('#signup').hidd
 async function finish(){status.textContent='Confirmando tu mes gratis…';const data=await request('complete');showSuccess(data);}
 (async()=>{try{
  if(!/^[a-f0-9]{64}$/.test(invitation))throw Error('Abre el enlace privado que recibiste por correo.');
- const data=await request('preview',{},null);activated=data.activated;
+ const data=await request('preview',{},null);activated=data.activated;hosted=data.checkoutMode==='payment_link';
  try{const saved=JSON.parse(sessionStorage.getItem(storageKey)||'null');if(saved?.until>Date.now())authToken=saved.token;}catch{/* No persistent credentials required. */}
  // Stripe may return after bank authentication. Never trust redirect_status as proof.
  if(authToken&&(activated||new URLSearchParams(location.search).has('setup_intent'))){try{await finish();history.replaceState(null,'',location.pathname+'#'+invitation);return;}catch(error){status.textContent=error.message;}}
  if(authToken)authToken=null;
  if(data.resume){document.querySelector('#resume-notice').hidden=false;document.querySelector('label[for=password]').textContent='Contraseña que creaste';form.password.autocomplete='current-password';button.textContent=activated?'Ver mi activación':'Continuar y activar mi mes gratis';}
  if(activated){document.querySelector('#payment-section').hidden=true;ready=true;update();return;}
+ if(hosted){document.querySelector('#payment-element').textContent='Registrarás tu tarjeta en la página segura de Stripe después de crear tu cuenta.';button.textContent='Crear mi cuenta y continuar a Stripe';ready=true;update();return;}
  if(typeof Stripe!=='function')throw Error('No se pudo cargar el formulario seguro. Recarga la página o desactiva el bloqueador para este sitio.');
  stripe=Stripe(data.publishableKey);
  elements=stripe.elements({mode:'setup',currency:'usd',paymentMethodTypes:['card'],locale:'es',fonts:[{family:'Roboto',src:`url(${location.origin}/brand-assets/fonts/Roboto_400Regular.ttf)`,weight:'400'}],appearance:{theme:'night',variables:{fontFamily:'Roboto, Arial, sans-serif',colorPrimary:'#ffdf55',colorBackground:'#171717',colorText:'#ffffff',borderRadius:'8px'}}});
@@ -33,8 +34,9 @@ form.addEventListener('input',update);form.addEventListener('change',update);
 form.addEventListener('submit',async event=>{
  event.preventDefault();if(!canSubmit())return;busy=true;update();status.textContent='Preparando tu activación…';
  try{
-  if(!activated&&!setupConfirmed){const {error}=await elements.submit();if(error)throw Error(error.message);}
+  if(!hosted&&!activated&&!setupConfirmed){const {error}=await elements.submit();if(error)throw Error(error.message);}
   if(!authToken){const auth=await request('register',{email:form.email.value.trim(),name:form.elements.namedItem('name').value,password:form.password.value,acceptLegal:form.acceptLegal.checked,consent:form.consent.checked},null);remember(auth.token);accountReady();}
+  if(hosted&&!activated){const checkout=await request('payment-link',{acceptLegal:form.acceptLegal.checked,consent:form.consent.checked});location.assign(checkout.checkoutUrl);return;}
   if(activated||setupConfirmed){await finish();return;}
   const data=await request('prepare',{acceptLegal:form.acceptLegal.checked,consent:form.consent.checked});
   if(data.setupStatus==='succeeded'){setupConfirmed=true;await finish();return;}

@@ -13,4 +13,9 @@ ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS welcome_resen
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_claimed_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_retry_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_confirmation_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS livemode BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_billing_source TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE IF EXISTS account_deletions ADD COLUMN IF NOT EXISTS stripe_billing_source TEXT NOT NULL DEFAULT 'normal';
+UPDATE users SET stripe_billing_source='campaign' WHERE id IN (SELECT user_id FROM membership_launch_invitations WHERE user_id IS NOT NULL AND (setup_intent_id IS NOT NULL OR checkout_id IS NOT NULL OR subscription_id IS NOT NULL));
+ALTER TABLE membership_launch_invitations ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ;
 COMMIT;

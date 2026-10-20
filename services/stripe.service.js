@@ -59,14 +59,6 @@ async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, 
     return { id: session.id, url: session.url };
 }
 
-async function createLaunchSetup({customerId,userId,invitationId,key}) {
-    return client().setupIntents.create({customer:customerId,payment_method_types:['card'],usage:'off_session',metadata:{user_id:String(userId),launch_invitation_id:invitationId}},{idempotencyKey:key});
-}
-async function retrieveLaunchSetup(id) { return client().setupIntents.retrieve(id); }
-async function createLaunchSubscription({customerId,userId,paymentMethod,invitationId,key}) {
-    return client().subscriptions.create({customer:customerId,items:[{price:process.env.STRIPE_PRICE_ID}],default_payment_method:paymentMethod,trial_period_days:30,trial_settings:{end_behavior:{missing_payment_method:'cancel'}},metadata:{user_id:String(userId),launch_invitation_id:invitationId}},{idempotencyKey:key});
-}
-
 async function createGuideCheckoutSession({ guide, user, baseUrl, appReturnUrl }) {
     const session = await client().checkout.sessions.create({
         mode: 'payment',
@@ -157,7 +149,7 @@ function listPartnerPaymentLinkSessions(offer = "founding") {
     return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
-    createLaunchSetup, retrieveLaunchSetup, createLaunchSubscription,
+    retrieveInvoice: id => client().invoices.retrieve(id),
     retrievePartnerReceiptData,
     listPartnerPaymentLinkSessions,
     retrievePartnerPaymentLinkSession,

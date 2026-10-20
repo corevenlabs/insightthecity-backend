@@ -1,7 +1,7 @@
 const {test,after}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs');
 if(process.env.DB_DATABASE!=='itc_crm_test'||process.env.DB_HOST!=='127.0.0.1')throw Error('Isolated database only');
 process.env.JWT_SECRET='isolated-launch-test-key';process.env.STRIPE_SECRET_KEY='sk_test_mock';process.env.MEMBERSHIP_LAUNCH_TEST_ENABLED='true';
-const db=require('../config/db'),launch=require('../services/membership-launch.service'),stripe=require('../services/stripe.service');
+const db=require('../config/db'),launch=require('../services/membership-launch.service'),stripe=require('../services/membership-campaign-stripe.service');
 after(()=>db.end());
 test('invitation-only sandbox membership: identity, consent, concurrency, trial, activation and capacity',async t=>{
  for(const file of ['schema.sql','security-hardening.sql','legal-evidence.sql','membership-launch.sql'])await db.query(fs.readFileSync('database/'+file,'utf8'));

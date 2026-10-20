@@ -51,7 +51,9 @@ async function createSubscription(req, res, next) {
             return res.status(409).json({ success: false, message: 'Ya tienes una membresía activa.' });
         }
 
+        if(user.stripe_billing_source==='campaign')return res.status(409).json({success:false,message:'Administra tu membresía desde Mi membresía.'});
         const language = user.language || 'es';
+        const stripeService = require('../services/membership-billing.service').forUser(user);
         const [plan, customerId] = await Promise.all([stripeService.getPlan(), stripeService.ensureCustomer(user)]);
 
         // Prueba del consentimiento: momento + versión vigente de los términos de suscripción.
@@ -103,7 +105,7 @@ async function createPortal(req, res, next) {
         if (!user?.stripe_customer_id) {
             return res.status(404).json({ success: false, message: 'No tienes una suscripción pagada para administrar.' });
         }
-        const url = await stripeService.createPortalSession({
+        const url = await require('../services/membership-billing.service').forUser(user).createPortalSession({
             customerId: user.stripe_customer_id,
             returnUrl: stripeService.returnUrl(publicBaseUrl(req), returnUrl, 'result=portal'),
         });

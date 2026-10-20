@@ -1,5 +1,4 @@
 const db = require('../config/db');
-const stripe = require('./stripe.service');
 const uploads = require('./uploads.service');
 const mail = require('./password-reset-mail.service');
 const crypto = require('crypto');
@@ -8,11 +7,11 @@ async function request(userId, connection = null) {
   const c = connection || await db.connect();
   try {
     if (!connection) await c.query('BEGIN');
-    const user = (await c.query('SELECT id,email,language,stripe_subscription_id,subscription_status FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
+    const user = (await c.query('SELECT id,email,language,stripe_subscription_id,subscription_status,stripe_billing_source FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
     if (!user) { if (!connection) await c.query('ROLLBACK'); return null; }
-    const job = (await c.query(`INSERT INTO account_deletions(user_id,email,subscription_id,stripe_done,language)
-      VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id) DO UPDATE SET user_id=EXCLUDED.user_id RETURNING *`,
-    [user.id,user.email,user.stripe_subscription_id,!user.stripe_subscription_id || ['canceled','incomplete_expired'].includes(user.subscription_status),user.language || 'es'])).rows[0];
+    const job = (await c.query(`INSERT INTO account_deletions(user_id,email,subscription_id,stripe_done,language,stripe_billing_source)
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(user_id) DO UPDATE SET user_id=EXCLUDED.user_id RETURNING *`,
+    [user.id,user.email,user.stripe_subscription_id,!user.stripe_subscription_id || ['canceled','incomplete_expired'].includes(user.subscription_status),user.language || 'es',user.stripe_billing_source||'normal'])).rows[0];
     await c.query('UPDATE users SET is_active=FALSE WHERE id=$1',[userId]);
     if (!connection) await c.query('COMMIT');
     return job;
@@ -36,7 +35,7 @@ async function processJob(id) {
     let stage='stripe';
     try {
       if (!job.stripe_done) {
-        await stripe.cancelSubscriptionNow(job.subscription_id);
+        await require('./membership-billing.service').forUser(job).cancelSubscriptionNow(job.subscription_id);
         await c.query('UPDATE account_deletions SET stripe_done=TRUE WHERE id=$1',[id]);
       }
       stage='data';

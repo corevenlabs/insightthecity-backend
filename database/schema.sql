@@ -400,3 +400,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_stripe_subscription ON users (stripe
 
 -- Experiencias con alcohol u otro contenido 21+: la app muestra el aviso de edad.
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS is_age_restricted BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_billing_source TEXT NOT NULL DEFAULT 'normal';
