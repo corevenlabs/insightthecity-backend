@@ -25,6 +25,8 @@ function serialize(row) {
     images: row.access === 'premium' ? [row.image_url, ...(Array.isArray(row.gallery_urls) ? row.gallery_urls : [])].filter(Boolean) : [row.image_url].filter(Boolean),
     date: row.date_label,
     location: row.location,
+    shortAddress: row.short_address ?? null,
+    mapsUrl: row.maps_url ?? null,
     region: row.region,
     access: row.access,
     partnerOffer: ['founding', 'strategic'].includes(row.partner_offer) ? row.partner_offer : null,
@@ -74,6 +76,8 @@ function deserialize(body) {
     gallery_urls: body.images !== undefined ? body.images.slice(1) : undefined,
     date_label: body.date ?? body.date_label,
     location: body.location,
+    short_address: body.shortAddress === undefined ? undefined : body.shortAddress?.trim() || null,
+    maps_url: body.mapsUrl === undefined ? undefined : body.mapsUrl?.trim() || null,
     region: body.region,
     access: body.access,
     description: body.description,
@@ -104,6 +108,22 @@ function deserialize(body) {
     is_age_restricted: body.isAgeRestricted,
     includes: body.includes,
   };
+}
+
+function validateLocation(body) {
+  for (const [key, limit] of [['shortAddress', 100], ['location', 500], ['mapsUrl', 2048]]) {
+    if (body[key] != null && (typeof body[key] !== 'string' || body[key].trim().length > limit)) return `${key}: usa texto de hasta ${limit} caracteres.`;
+  }
+  if (body.mapsUrl?.trim()) {
+    try {
+      const url = new URL(body.mapsUrl.trim());
+      const allowed = (url.hostname === 'www.google.com' || url.hostname === 'google.com') && url.pathname.startsWith('/maps')
+        || ['maps.google.com', 'maps.app.goo.gl'].includes(url.hostname)
+        || url.hostname === 'goo.gl' && url.pathname.startsWith('/maps/');
+      if (url.protocol !== 'https:' || url.username || url.password || url.port || !allowed) throw new Error('invalid');
+    } catch { return 'Usa un enlace HTTPS válido de Google Maps.'; }
+  }
+  return null;
 }
 
 function validateMemberBenefit(body, requireBenefit) {
@@ -192,6 +212,8 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    const locationError = validateLocation(req.body);
+    if (locationError) return res.status(400).json({ success: false, message: locationError });
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium');
     if (benefitError) return res.status(400).json({ success: false, message: benefitError });
     const galleryError = validateGallery(req.body, true);
@@ -216,6 +238,8 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    const locationError = validateLocation(req.body);
+    if (locationError) return res.status(400).json({ success: false, message: locationError });
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium' && req.body.memberBenefit !== undefined);
     if (benefitError) return res.status(400).json({ success: false, message: benefitError });
     const galleryError = validateGallery(req.body, false);
@@ -252,6 +276,7 @@ module.exports = {
   deserialize,
   validateMemberBenefit,
   validateGallery,
+  validateLocation,
   listExperiences,
   getExperience,
   createExperience,

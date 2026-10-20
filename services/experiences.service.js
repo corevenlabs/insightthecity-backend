@@ -33,6 +33,13 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  if (data.short_address !== undefined || data.maps_url !== undefined) {
+    await client.query(`UPDATE experiences SET
+      short_address = CASE WHEN $2::boolean THEN $3::text ELSE short_address END,
+      maps_url = CASE WHEN $4::boolean THEN $5::text ELSE maps_url END
+      WHERE id = $1`, [id, data.short_address !== undefined, data.short_address ?? null,
+      data.maps_url !== undefined, data.maps_url ?? null]);
+  }
   if (data.is_age_restricted !== undefined) {
     await client.query(`UPDATE experiences SET is_age_restricted = $2 WHERE id = $1`, [id, Boolean(data.is_age_restricted)]);
   }
