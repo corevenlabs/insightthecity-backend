@@ -1,5 +1,4 @@
 const db = require('../config/db');
-const stripe = require('./stripe.service');
 const { applySubscription } = require('./subscription.service');
 const mail = require('./password-reset-mail.service');
 
@@ -16,6 +15,7 @@ async function changeRenewal(userId, cancel) {
     const { rows } = await connection.query('SELECT * FROM users WHERE id = $1 AND is_active = TRUE FOR UPDATE', [userId]);
     const account = rows[0];
     if (!account?.stripe_subscription_id || !account.stripe_customer_id) fail('No tienes una suscripción pagada para administrar.', 404);
+    const stripe=require('./membership-billing.service').forUser(account);
     let subscription = await stripe.retrieveSubscription(account.stripe_subscription_id);
     const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
     if (customerId !== account.stripe_customer_id) fail('No se pudo verificar la titularidad de la suscripción.', 403);

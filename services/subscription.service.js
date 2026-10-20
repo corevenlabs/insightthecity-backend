@@ -53,6 +53,7 @@ async function applySubscription(userId, subscription, connection = db) {
     `UPDATE users SET
        stripe_customer_id = COALESCE($2, stripe_customer_id),
        stripe_subscription_id = $3,
+       stripe_billing_source = $11,
        subscription_status = $4,
        subscription_current_period_end = CASE WHEN $5::bigint IS NULL THEN NULL ELSE to_timestamp($5::bigint) END,
        subscription_cancel_at_period_end = $6,
@@ -74,6 +75,7 @@ async function applySubscription(userId, subscription, connection = db) {
       price?.currency ?? null,
       price?.recurring?.interval ?? null,
       PREMIUM_STATUSES.has(subscription.status),
+      subscription.metadata?.launch_invitation_id?'campaign':'normal',
     ]
   );
   return rows[0] || null;
@@ -118,8 +120,8 @@ async function retryPendingConfirmations() {
 }
 
 // Verifica una sesión de Checkout recién completada y activa la membresía.
-async function confirmCheckout(userId, sessionId) {
-  const session = await stripeService.retrieveCheckoutSession(sessionId, { expand: ['subscription'] });
+async function confirmCheckout(userId, sessionId, billing = stripeService) {
+  const session = await billing.retrieveCheckoutSession(sessionId, { expand: ['subscription'] });
   const belongsToUser = session.mode === 'subscription'
     && String(session.client_reference_id) === String(userId)
     && session.status === 'complete';
@@ -144,7 +146,7 @@ async function syncIfStale(userId) {
     return;
   }
   try {
-    const subscription = await stripeService.retrieveSubscription(row.stripe_subscription_id);
+    const subscription = await require('./membership-billing.service').forUser(row).retrieveSubscription(row.stripe_subscription_id);
     const updatedUser = await applySubscription(userId, subscription);
     await sendConfirmationOnce(updatedUser);
   } catch (error) {

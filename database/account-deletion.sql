@@ -18,3 +18,5 @@ CREATE TABLE IF NOT EXISTS account_deletions (
 CREATE INDEX IF NOT EXISTS account_deletions_pending ON account_deletions(next_attempt_at) WHERE status='pending';
 
 ALTER TABLE account_deletions ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'es';
+
+ALTER TABLE account_deletions ADD COLUMN IF NOT EXISTS stripe_billing_source TEXT NOT NULL DEFAULT 'normal';

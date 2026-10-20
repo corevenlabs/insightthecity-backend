@@ -12,9 +12,10 @@ function download(req,res){const url=storeUrl(req.query.platform);if(url){res.se
 async function activation(req,res,next){
  try{
   const id=String(req.query.session_id||'');if(!/^cs_[A-Za-z0-9_]{8,250}$/.test(id))return res.status(400).send('Sesión inválida. Abre tu invitación original.');
-  const session=await require('../services/stripe.service').retrieveCheckoutSession(id,{expand:['subscription']});
+  const session=await require('../services/membership-campaign-stripe.service').retrieveCheckoutSession(id,{expand:['subscription']});
+  if(require('../services/membership-payment-link.service').isSession(session)){const user=await require('../services/membership-payment-link.service').confirmSession(id);return page(res,{title:user?.is_premium?'Tu mes gratis está activo':'Consulta tu membresía',message:'Entra con el correo y la contraseña que elegiste. Recibirás la bienvenida cuando la activación esté confirmada.'});}
   if(session.mode!=='subscription'||session.status!=='complete'||!session.subscription?.metadata?.launch_invitation_id)return page(res,{title:'Estamos confirmando tu activación',message:'No repitas el checkout. Recibirás un correo cuando Stripe confirme tu activación.'});
-  const user=await require('../services/subscription.service').confirmCheckout(session.client_reference_id,id);
+  const user=await require('../services/subscription.service').confirmCheckout(session.client_reference_id,id,require('../services/membership-campaign-stripe.service'));
   if(!user?.is_premium||user.subscription_status!=='trialing')return page(res,{title:'Consulta tu membresía en la app',message:'Entra con tu cuenta para consultar el estado actual de tu membresía.'});
   return page(res,{title:'Tu mes gratis está activo',message:'Tu activación está confirmada. Te enviaremos un correo con las fechas de tu membresía. Descarga la app cuando esté disponible e inicia sesión con la cuenta que creaste.'});
  }catch(e){next(e);}

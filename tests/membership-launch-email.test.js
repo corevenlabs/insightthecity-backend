@@ -17,7 +17,7 @@ test('missing or unsafe download destinations show availability instead of fake 
  }finally{if(original===undefined)delete process.env.APP_STORE_DOWNLOAD_URL;else process.env.APP_STORE_DOWNLOAD_URL=original;}
 });
 test('return page confirms only completed launch sessions and never claims an unpaid checkout is active',async()=>{
- const stripe=require('../services/stripe.service'),subs=require('../services/subscription.service'),controller=require('../controllers/membership-download.controller');
+ const stripe=require('../services/membership-campaign-stripe.service'),subs=require('../services/subscription.service'),controller=require('../controllers/membership-download.controller');
  const oldRetrieve=stripe.retrieveCheckoutSession,oldConfirm=subs.confirmCheckout;let body,confirmed=0;
  const res={set(){},type(){return this;},status(){return this;},send(v){body=v;}};
  try{

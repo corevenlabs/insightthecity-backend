@@ -1,8 +1,9 @@
 // Single-page invitation checkout. Card details go directly from Stripe Elements to Stripe.
-const db=require('../config/db'),stripe=require('./stripe.service'),launch=require('./membership-launch.service');
+const db=require('../config/db'),stripe=require('./membership-campaign-stripe.service'),launch=require('./membership-launch.service');
+const mode=require('./membership-mode.service');
 const NOTICE='30 días gratis. Después se cobrarán US$4.99 al mes automáticamente hasta que canceles. Puedes cancelar antes del primer cargo en Perfil > Mi membresía.';
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
-function publishableKey(){const key=process.env.STRIPE_PUBLISHABLE_KEY||'';if(!/^pk_test_[A-Za-z0-9]+$/.test(key))fail('La activación está temporalmente no disponible. Inténtalo más tarde.',503);return key;}
+function publishableKey(){const key=mode.publishableKey();if(!mode.configured()||!new RegExp(`^pk_${mode.live()?'live':'test'}_[A-Za-z0-9]+$`).test(key))fail('La activación está temporalmente no disponible. Inténtalo más tarde.',503);return key;}
 async function transaction(fn){const c=await db.connect();try{await c.query('BEGIN');const value=await fn(c);await c.query('COMMIT');return value;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
 async function owner(c,userId,token){
  const invite=await launch.lookup(c,token,true);
@@ -12,7 +13,7 @@ async function owner(c,userId,token){
  return {invite,user};
 }
 async function prepare({userId,token,acceptLegal,consent}){
- launch.available();publishableKey();if(acceptLegal!==true||consent!==true)fail('Debes aceptar los términos, la privacidad y la renovación automática.');
+ launch.available();if(require('./membership-payment-link.service').enabled())fail('Continúa con el checkout de Stripe de tu invitación.',409);await mode.requirePublishedLegal();publishableKey();if(acceptLegal!==true||consent!==true)fail('Debes aceptar los términos, la privacidad y la renovación automática.');
  return transaction(async c=>{
   const {invite,user}=await owner(c,userId,token);
   if(invite.activated_at||user.stripe_subscription_id)fail('Tu membresía ya fue activada.',409);
@@ -20,8 +21,8 @@ async function prepare({userId,token,acceptLegal,consent}){
   // An old hosted checkout must not remain usable alongside the new card form.
   if(invite.checkout_id){const old=await stripe.retrieveCheckoutSession(invite.checkout_id);if(old.status==='complete')fail('Tu activación ya se completó. Consulta Mi membresía.',409);if(old.status==='open')await stripe.expireCheckoutSession(old.id);}
   const customerId=await stripe.ensureCustomer(user,`launch-customer:${user.id}`);
-  await c.query('UPDATE users SET stripe_customer_id=$2,autorenew_consent_at=NOW() WHERE id=$1',[user.id,customerId]);
-  if(invite.setup_intent_id){const setup=await stripe.retrieveLaunchSetup(invite.setup_intent_id);if(setup.status!=='canceled')return {clientSecret:setup.client_secret,setupStatus:setup.status};}
+  await c.query("UPDATE users SET stripe_customer_id=$2,stripe_billing_source='campaign',autorenew_consent_at=NOW() WHERE id=$1",[user.id,customerId]);
+  if(invite.setup_intent_id){const setup=await stripe.retrieveLaunchSetup(invite.setup_intent_id);if(!mode.matches(setup)||setup.customer!==customerId||setup.metadata?.user_id!==String(userId)||setup.metadata?.launch_invitation_id!==invite.id)fail('La tarjeta no coincide con tu activación.',409);if(setup.status!=='canceled')return {clientSecret:setup.client_secret,setupStatus:setup.status};}
   const legal=require('./legal.service');
   await legal.recordAcceptance(c,{userId:user.id,language:'es',context:'subscription',slugs:legal.SUBSCRIPTION_SLUGS,customerReference:customerId,renewal:{affirmativeConsent:true,amountCents:499,currency:'usd',interval:'month',trialDays:30,invitationId:invite.id,notice:NOTICE,stage:'card_setup_requested'}});
   const setup=await stripe.createLaunchSetup({customerId,userId:user.id,invitationId:invite.id,key:`launch-setup:${invite.id}:${invite.setup_intent_id||'first'}`});
@@ -33,12 +34,12 @@ async function complete({userId,token}){
  launch.available();
  const sub=await transaction(async c=>{
   const {invite,user}=await owner(c,userId,token);
-  if(invite.subscription_id){const existing=await stripe.retrieveSubscription(invite.subscription_id);if(existing.livemode!==false||existing.metadata?.user_id!==String(userId)||existing.metadata?.launch_invitation_id!==invite.id||String(existing.customer?.id||existing.customer)!==user.stripe_customer_id)fail('La suscripción no coincide con tu cuenta.',409);return existing;}
+  if(invite.subscription_id){const existing=await stripe.retrieveSubscription(invite.subscription_id);if(!mode.matches(existing)||existing.metadata?.user_id!==String(userId)||existing.metadata?.launch_invitation_id!==invite.id||String(existing.customer?.id||existing.customer)!==user.stripe_customer_id)fail('La suscripción no coincide con tu cuenta.',409);return existing;}
   if(user.stripe_subscription_id)fail('Esta cuenta ya tiene una suscripción.',409);
   if(!invite.setup_intent_id)fail('Completa primero los datos de tu tarjeta.',409);
   const setup=await stripe.retrieveLaunchSetup(invite.setup_intent_id);
   if(setup.status!=='succeeded')fail('La tarjeta aún no está confirmada. Completa la verificación del banco.',409);
-  if(setup.livemode!==false||setup.customer!==user.stripe_customer_id||setup.metadata?.user_id!==String(userId)||setup.metadata?.launch_invitation_id!==invite.id||!setup.payment_method)fail('La tarjeta no coincide con tu activación.',409);
+  if(!mode.matches(setup)||setup.customer!==user.stripe_customer_id||setup.metadata?.user_id!==String(userId)||setup.metadata?.launch_invitation_id!==invite.id||!setup.payment_method)fail('La tarjeta no coincide con tu activación.',409);
   const subscription=await stripe.createLaunchSubscription({userId,customerId:user.stripe_customer_id,paymentMethod:setup.payment_method,invitationId:invite.id,key:`launch-subscription:${invite.id}`});
   await c.query('UPDATE membership_launch_invitations SET subscription_id=$2 WHERE id=$1',[invite.id,subscription.id]);
   return subscription;
