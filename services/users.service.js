@@ -10,7 +10,7 @@ const stripeService = require("./stripe.service");
 const PUBLIC_FIELDS = `id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests,
   subscription_status, subscription_current_period_end, subscription_cancel_at_period_end,
   subscription_amount_cents, subscription_currency, subscription_interval,
-  (stripe_customer_id IS NOT NULL) AS has_billing_account`;
+  (stripe_customer_id IS NOT NULL) AS has_billing_account, ai_consent_version, ai_consent_at`;
 
 // Fila completa -> datos que puede ver el propio usuario (sin hashes ni ids de Stripe).
 function publicUser(row) {
@@ -33,6 +33,7 @@ function publicUser(row) {
     subscription_currency: row.subscription_currency ?? null,
     subscription_interval: row.subscription_interval ?? null,
     has_billing_account: row.has_billing_account ?? Boolean(row.stripe_customer_id),
+    ai_chat_consent: require("./ai-consent.service").hasConsent(row),
   };
 }
 
