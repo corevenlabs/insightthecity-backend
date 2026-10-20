@@ -33,6 +33,9 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  if (data.locations !== undefined) {
+    await client.query('UPDATE experiences SET locations=$2::jsonb WHERE id=$1', [id, JSON.stringify(data.locations)]);
+  }
   if (data.short_address !== undefined || data.maps_url !== undefined) {
     await client.query(`UPDATE experiences SET
       short_address = CASE WHEN $2::boolean THEN $3::text ELSE short_address END,

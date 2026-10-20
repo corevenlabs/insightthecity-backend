@@ -18,3 +18,16 @@ test('accepts Google Maps links and rejects unrelated or executable links', () =
   assert.ok(validateLocation({ mapsUrl: {} }));
   assert.equal(validateLocation({ shortAddress: null, mapsUrl: null }), null);
 });
+test('branches validate, round-trip and clear without changing omitted locations',()=>{
+  const locations=Array.from({length:6},(_,i)=>({name:`Sucursal ${i+1}`,address:'Test St',placeId:`ChIJ_test_${i}`,benefitApplies:true}));
+  assert.equal(validateLocation({locations,mapsUrl:'https://www.google.com/maps/d/viewer?mid=demo'}),null);
+  assert.ok(validateLocation({locations}));
+  assert.deepEqual(serialize({locations:deserialize({locations}).locations}).locations,locations);
+  assert.equal(deserialize({}).locations,undefined);
+  assert.deepEqual(deserialize({locations:[]}).locations,[]);
+  assert.ok(validateLocation({locations:[locations[0],locations[0]]}));
+  assert.ok(validateLocation({locations:[{...locations[0],placeId:''}]}));
+  assert.ok(validateLocation({locations:[{...locations[0],benefitApplies:false}]}));
+  assert.ok(validateLocation({locations:null}));
+  assert.ok(validateLocation({locations:Array.from({length:21},(_,i)=>({...locations[0],placeId:`place_${i}`}))}));
+});

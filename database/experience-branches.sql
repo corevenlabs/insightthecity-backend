@@ -1,0 +1,1 @@
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS locations JSONB NOT NULL DEFAULT '[]'::jsonb;

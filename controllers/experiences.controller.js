@@ -27,6 +27,7 @@ function serialize(row) {
     location: row.location,
     shortAddress: row.short_address ?? null,
     mapsUrl: row.maps_url ?? null,
+    locations: Array.isArray(row.locations) ? row.locations : [],
     region: row.region,
     access: row.access,
     partnerOffer: ['founding', 'strategic'].includes(row.partner_offer) ? row.partner_offer : null,
@@ -75,6 +76,7 @@ function deserialize(body) {
     image_url: body.images !== undefined ? body.images[0] ?? null : body.image ?? body.image_url,
     gallery_urls: body.images !== undefined ? body.images.slice(1) : undefined,
     date_label: body.date ?? body.date_label,
+    locations: body.locations === undefined ? undefined : body.locations.map(item => ({ name: item.name.trim(), address: item.address.trim(), placeId: item.placeId.trim(), benefitApplies: item.benefitApplies })),
     location: body.location,
     short_address: body.shortAddress === undefined ? undefined : body.shortAddress?.trim() || null,
     maps_url: body.mapsUrl === undefined ? undefined : body.mapsUrl?.trim() || null,
@@ -111,6 +113,24 @@ function deserialize(body) {
 }
 
 function validateLocation(body) {
+  if (body.locations !== undefined) {
+    if (!Array.isArray(body.locations) || body.locations.length > 20) return 'Agrega como máximo 20 sucursales.';
+    const seen = new Set();
+    for (const item of body.locations) {
+      if (!item || typeof item !== 'object' || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100 || typeof item.address !== 'string' || !item.address.trim() || item.address.length > 500 || typeof item.placeId !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(item.placeId.trim()) || typeof item.benefitApplies !== 'boolean') return 'Completa nombre, dirección, Place ID y aplicación del beneficio en cada sucursal.';
+      if (seen.has(item.placeId.trim())) return 'No repitas la misma sucursal (Place ID).';
+      seen.add(item.placeId.trim());
+    }
+    const ids = body.locations.filter(item => item.benefitApplies).map(item => item.placeId.trim());
+    if (body.locations.length && !ids.length) return 'Selecciona al menos una sucursal donde aplique el beneficio.';
+    if (ids.length > 1) {
+      try {
+        const map = new URL(body.mapsUrl);
+        if (map.protocol !== 'https:' || !['google.com', 'www.google.com'].includes(map.hostname) || !/^\/maps\/d\/(?:u\/\d+\/)?(?:view|viewer|edit)$/.test(map.pathname) || !map.searchParams.get('mid')) throw Error('map');
+      } catch { return 'Para varias sucursales agrega el enlace público de Google My Maps con los pines juntos.'; }
+    }
+    if (('https://www.google.com/maps/@?api=1&map_action=shortlist&place_ids=' + ids.map(encodeURIComponent).join(',')).length > 2048) return 'El enlace de sucursales supera el tamaño admitido por Google Maps.';
+  }
   for (const [key, limit] of [['shortAddress', 100], ['location', 500], ['mapsUrl', 2048]]) {
     if (body[key] != null && (typeof body[key] !== 'string' || body[key].trim().length > limit)) return `${key}: usa texto de hasta ${limit} caracteres.`;
   }
