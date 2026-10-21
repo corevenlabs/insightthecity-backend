@@ -38,6 +38,9 @@ async function issueCode(req, res, next) {
 async function showCode(req, res, next) {
   try {
     const record = await service.find(req.params.token);
+    // A no-referrer policy makes ordinary browser form POSTs send Origin: null.
+    // Keep the same-site origin so confirmation passes CORS without allowing null origins.
+    res.set('Referrer-Policy', 'same-origin');
     res.status(record ? 200 : 404).type('html').send(validationPage(record, req.params.token, service.state(record)));
   } catch (error) { next(error); }
 }

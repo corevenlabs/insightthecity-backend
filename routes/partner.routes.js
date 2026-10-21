@@ -60,6 +60,25 @@ router.get(
   }),
 );
 router.get(
+  "/clients/:id/images-download",
+  all,
+  wrap(async (req, res) => {
+    const row = await S.get(db, req.params.id, req.admin);
+    const files = (await db.query("SELECT id,kind,mime,bytes FROM partner_files WHERE client_id=$1 ORDER BY created_at,id", [row.id])).rows;
+    const { safePart, imageName } = require("../services/partner-file-download.service");
+    // Validate names before starting a streamed response.
+    const images = files.map(file => ({ file, name: imageName(row.business_name, file) }));
+    const { ZipArchive } = await import("archiver");
+    const archive = new ZipArchive({ zlib: { level: 6 } });
+    res.attachment(`${safePart(row.business_name, "ITC-CLUB")}-imagenes.zip`);
+    archive.on("error", () => res.destroy());
+    res.on("close", () => archive.abort());
+    archive.pipe(res);
+    for (const { file, name } of images) archive.append(file.bytes, { name });
+    await archive.finalize();
+  }),
+);
+router.get(
   "/clients/:id/download",
   all,
   wrap(async (req, res) => {
