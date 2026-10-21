@@ -1,3 +1,4 @@
+const { partnerContact } = require('./partner-contact.service');
 const jwt = require("jsonwebtoken");
 const PDF = require("pdfkit");
 const { escape } = require("./membership-email.service");
@@ -32,6 +33,7 @@ function pdf(a, client) {
   });
 }
 function render({ client, owner = {}, acceptance: a }) {
+  owner = partnerContact(owner);
   const first = client.contact_name?.trim().split(/\s+/)[0] || "there";
   const partnership = client.offer === "strategic" ? "Strategic Founding Partner" : client.offer === "founding" ? "Founding Partner" : "Partner";
   const title = "Your accepted terms, for your records.";

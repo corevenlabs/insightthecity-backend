@@ -1,3 +1,4 @@
+const { partnerContact } = require('./partner-contact.service');
 const db = require("../config/db");
 const mail = require("./password-reset-mail.service");
 const { escape } = require("./membership-email.service");
@@ -152,6 +153,7 @@ function render(
   kind,
   { client = {}, owner = {}, url, note = "", preview, language = "en" },
 ) {
+  owner = partnerContact(owner);
   const strategic = client.offer === "strategic";
   const partnership = strategic ? "Strategic Founding Partner" : "Founding Partner";
   const foundingInvitation = kind === "payment" && ["founding", "strategic"].includes(client.offer);

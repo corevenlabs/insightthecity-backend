@@ -1,3 +1,4 @@
+const { partnerContact } = require('./partner-contact.service');
 const db = require("../config/db");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -67,12 +68,12 @@ async function activity(c, row, actor, kind, note = "") {
   );
 }
 async function owner(c, row) {
-  return (
+  return partnerContact((
     await c.query(
       "SELECT id,email,name,phone,language FROM admins WHERE id=$1",
       [row.owner_id],
     )
-  ).rows[0];
+  ).rows[0]);
 }
 async function enqueue(c, row, kind, key, note = "", extra = {}) {
   const who = await owner(c, row);
