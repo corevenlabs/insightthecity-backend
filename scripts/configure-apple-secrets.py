@@ -19,8 +19,8 @@ for name in ('APPLE_PRIVATE_KEY', 'APPLE_TOKEN_ENCRYPTION_KEY'):
     if run(['secrets', 'describe', name], check=False).returncode != 0:
         result = run(['secrets', 'create', name, '--replication-policy=automatic', '--data-file=-'], value=value, check=False)
         if result.returncode:
-            raise SystemExit('Could not create Apple runtime secret: ' + name)
+            raise SystemExit('Could not create Apple runtime secret: ' + name + '\n' + result.stderr.replace(value, '[redacted]'))
     result = run(['secrets', 'add-iam-policy-binding', name, '--member=serviceAccount:' + account, '--role=roles/secretmanager.secretAccessor'], check=False)
     if result.returncode:
-        raise SystemExit('Could not grant runtime access to Apple secret: ' + name)
+        raise SystemExit('Could not grant runtime access to Apple secret: ' + name + '\n' + result.stderr.replace(value, '[redacted]'))
 print('Apple runtime secrets are provisioned; values were not logged.')
