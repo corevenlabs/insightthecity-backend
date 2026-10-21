@@ -10,13 +10,14 @@ const stripeService = require("./stripe.service");
 const PUBLIC_FIELDS = `id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests,
   subscription_status, subscription_current_period_end, subscription_cancel_at_period_end,
   subscription_amount_cents, subscription_currency, subscription_interval,
-  (stripe_customer_id IS NOT NULL) AS has_billing_account, ai_consent_version, ai_consent_at`;
+  (password_hash IS NOT NULL) AS has_password, (stripe_customer_id IS NOT NULL) AS has_billing_account, ai_consent_version, ai_consent_at`;
 
 // Fila completa -> datos que puede ver el propio usuario (sin hashes ni ids de Stripe).
 function publicUser(row) {
   if (!row) return null;
   return {
     id: row.id,
+    has_password: row.has_password ?? Boolean(row.password_hash),
     name: row.name,
     email: row.email,
     is_premium: row.is_premium,

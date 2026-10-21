@@ -38,6 +38,8 @@ async function processJob(id) {
         await require('./membership-billing.service').forUser(job).cancelSubscriptionNow(job.subscription_id);
         await c.query('UPDATE account_deletions SET stripe_done=TRUE WHERE id=$1',[id]);
       }
+      stage='apple';
+      await require('./apple-tokens.service').revokeForUser(c,job.user_id);
       stage='data';
       if (!job.data_done) {
         await c.query('BEGIN');

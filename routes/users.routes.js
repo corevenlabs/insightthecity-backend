@@ -20,6 +20,14 @@ router.post('/register',require('../middleware/auth-input'),security.limit('sign
 router.post('/login',require('../middleware/auth-input'),...security.auth('user-login'),login);
 router.post('/password-reset/request',...security.auth('password-request',10),passwordReset.requestReset);
 router.post('/password-reset/confirm',...security.auth('password-confirm',30),passwordReset.resetPassword);
+const apple = require('../services/apple-auth.service');
+const appleResponse = fn => async (req,res,next) => {
+  try { res.json({ success:true, ...await fn(req) }); }
+  catch(error) { if (error.status) return res.status(error.status).json({ success:false, message:error.message, code:error.code }); next(error); }
+};
+router.post('/apple/challenge',security.limit('apple-challenge',30,300),appleResponse(async () => ({ nonce:await apple.challenge() })));
+router.post('/apple/login',security.limit('apple-login',30,300),appleResponse(req => apple.authenticate(req.body)));
+router.post('/apple/link',requireUserAuth,security.limit('apple-link',10,300),appleResponse(req => apple.authenticate(req.body,req.user.id)));
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.delete("/me", requireUserAuth, deleteMe);
 
