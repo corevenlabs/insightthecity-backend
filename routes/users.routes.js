@@ -28,6 +28,7 @@ const appleResponse = fn => async (req,res,next) => {
 router.post('/apple/challenge',security.limit('apple-challenge',30,300),appleResponse(async () => ({ nonce:await apple.challenge() })));
 router.post('/apple/login',security.limit('apple-login',30,300),appleResponse(req => apple.authenticate(req.body)));
 router.post('/apple/link',requireUserAuth,security.limit('apple-link',10,300),appleResponse(req => apple.authenticate(req.body,req.user.id)));
+router.post('/google/login',security.limit('google-login',20,300),appleResponse(req => require('../services/google-auth.service').authenticate(req.body)));
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.delete("/me", requireUserAuth, deleteMe);
 
