@@ -77,6 +77,7 @@ app.use("/api/places", placesRouter)
 app.use("/api/payment", paymentRoutes);
 app.use("/api/payment/launch", require("./routes/membership-launch.routes"));
 app.use("/api/experiences", experiencesRouter);
+app.use("/api/experience-drafts", require("./routes/experience-drafts.routes"));
 app.use("/api/auth", authRouter);
 app.use("/api/staff", require("./routes/staff.routes"));
 app.use("/api/partners", require("./routes/partner.routes"));
