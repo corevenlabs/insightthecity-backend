@@ -153,16 +153,16 @@ async function list({ section, publishedOnly, sort, order, start, end, filter } 
   return { rows, total };
 }
 
-async function getById(id) {
-  const { rows } = await db.query(`${BASE_SELECT} WHERE e.id = $1`, [id]);
+async function getById(id, connection = db) {
+  const { rows } = await connection.query(`${BASE_SELECT} WHERE e.id = $1`, [id]);
   return rows[0] || null;
 }
 
-async function create(data) {
+async function create(data, connection = null) {
   const id = (data.id && slugify(data.id)) || slugify(data.title);
-  const client = await db.connect();
+  const client = connection || await db.connect();
   try {
-    await client.query("BEGIN");
+    if (!connection) await client.query("BEGIN");
     await client.query(
       `INSERT INTO experiences
         (id, title, category, image_url, date_label, location, region, access,
@@ -196,20 +196,20 @@ async function create(data) {
       await client.query(`UPDATE experiences SET gallery_urls = $2::jsonb WHERE id = $1`, [id, JSON.stringify(data.gallery_urls)]);
     }
     await saveMemberBenefit(client, id, data);
-    await client.query("COMMIT");
+    if (!connection) await client.query("COMMIT");
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (!connection) await client.query("ROLLBACK");
     throw err;
   } finally {
-    client.release();
+    if (!connection) client.release();
   }
-  return getById(id);
+  return getById(id, connection || db);
 }
 
-async function update(id, data) {
-  const client = await db.connect();
+async function update(id, data, connection = null) {
+  const client = connection || await db.connect();
   try {
-    await client.query("BEGIN");
+    if (!connection) await client.query("BEGIN");
     const { rowCount } = await client.query(
       `UPDATE experiences SET
          title = COALESCE($2, title),
@@ -252,7 +252,7 @@ async function update(id, data) {
       ]
     );
     if (rowCount === 0) {
-      await client.query("ROLLBACK");
+      if (!connection) await client.query("ROLLBACK");
       return null;
     }
     if (data.tags !== undefined) {
@@ -265,14 +265,14 @@ async function update(id, data) {
       await client.query(`UPDATE experiences SET gallery_urls = $2::jsonb WHERE id = $1`, [id, JSON.stringify(data.gallery_urls)]);
     }
     await saveMemberBenefit(client, id, data);
-    await client.query("COMMIT");
+    if (!connection) await client.query("COMMIT");
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (!connection) await client.query("ROLLBACK");
     throw err;
   } finally {
-    client.release();
+    if (!connection) client.release();
   }
-  return getById(id);
+  return getById(id, connection || db);
 }
 
 async function remove(id) {

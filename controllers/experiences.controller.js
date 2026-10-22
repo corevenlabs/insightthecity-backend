@@ -249,7 +249,7 @@ const createExperience = async (req, res, next) => {
     if (req.body.region && !['NY', 'NJ'].includes(req.body.region)) {
       return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
     }
-    const row = await service.create(deserialize(req.body));
+    const row = await service.create(deserialize(req.body), req.experienceConnection);
     res.status(201).json(serialize(row));
   } catch (err) {
     next(err);
@@ -272,7 +272,7 @@ const updateExperience = async (req, res, next) => {
     if (req.body.region && !['NY', 'NJ'].includes(req.body.region)) {
       return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
     }
-    const row = await service.update(req.params.id, deserialize(req.body));
+    const row = await service.update(req.params.id, deserialize(req.body), req.experienceConnection);
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
     res.json(serialize(row));
   } catch (err) {

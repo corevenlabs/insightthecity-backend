@@ -337,21 +337,36 @@ async function action(id, input, actor) {
         `changes:${id}:${row.submission_version}`,
         note,
       );
+    } else if (op === "return-draft") {
+      if(actor.role !== 'admin') R.fail('Solo el administrador puede devolver el borrador',403);
+      if(row.form_status !== 'ready' || row.activated_at) R.fail('Este perfil no está pendiente de aprobación',409);
+      await c.query("UPDATE partner_clients SET form_status='submitted',updated_at=NOW() WHERE id=$1",[id]);
     } else if (op === "ready") {
       if (
         !["admin", "editor", "executive"].includes(actor.role) ||
         row.form_status !== "submitted"
       )
         R.fail("Primero revisa un formulario enviado");
+      if(actor.role === 'executive' && !row.experience_id)
+        R.fail('Prepara el borrador de experiencia antes de enviarlo a aprobación',409);
+      if(row.experience_id) {
+        const draft = await require('./experiences.service').getById(row.experience_id,c);
+        if(!draft) R.fail('No se encontró la experiencia preparada',409);
+        const validator = require('../controllers/experiences.controller');
+        const error = validator.validateGallery({access:'premium',isPublished:true,images:[draft.image_url,...(draft.gallery_urls || [])].filter(Boolean)},true)
+          || validator.validateMemberBenefit({memberBenefit:draft.member_benefit,benefitAction:draft.benefit_action,benefitUrl:draft.benefit_url,couponInventoryMode:draft.coupon_inventory_mode,couponTotal:draft.coupon_total,couponPerUser:draft.coupon_per_user},true);
+        if(error || !['qr','external'].includes(draft.benefit_action)) R.fail(error || 'Configura el beneficio antes de enviarlo a aprobación',400);
+      }
       await c.query(
         "UPDATE partner_clients SET form_status='ready',updated_at=NOW() WHERE id=$1",
         [id],
       );
       const who = await owner(c, row);
       const administrators = (await c.query("SELECT id,email,language FROM admins WHERE is_active AND role='admin' ORDER BY id")).rows;
+      const approvalCycle = crypto.randomUUID();
       for (const recipient of administrators) {
         await mail.queue(c, {
-          key: `approval:${row.id}:${row.submission_version}:${recipient.id}`,
+          key: `approval:${row.id}:${row.submission_version}:${approvalCycle}:${recipient.id}`,
           clientId: row.id,
           to: recipient.email,
           kind: "approval",
@@ -372,8 +387,10 @@ async function action(id, input, actor) {
           R.clean(input.experience_id, 120),
         ])
       ).rows[0];
-      if (!exp || !exp.is_published || exp.access !== "premium")
-        R.fail("Vincula una experiencia premium publicada");
+      if (!exp || exp.access !== "premium" || (!exp.is_published && row.experience_id !== exp.id))
+        R.fail("Vincula el borrador del cliente o una experiencia premium publicada");
+      if (row.experience_id && row.experience_id !== exp.id)
+        R.fail("Aprueba la experiencia vinculada a este cliente",409);
       const validators = require("../controllers/experiences.controller");
       const images = [
         exp.image_url,
@@ -397,6 +414,10 @@ async function action(id, input, actor) {
         );
       if (invalid || !["qr", "external"].includes(exp.benefit_action))
         R.fail(invalid || "Configura el canje QR o enlace de la experiencia");
+      if (!exp.is_published) {
+        await c.query('UPDATE experiences SET is_published=TRUE,updated_at=NOW() WHERE id=$1',[exp.id]);
+        exp.is_published = true;
+      }
       const starts = new Date(),
         ends = R.addSixMonths(starts);
       await c.query(

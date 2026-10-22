@@ -39,6 +39,8 @@ router.post(
   ),
 );
 router.post("/clients/:id/moderation", admin, wrap(async (req,res)=>res.json(await S.moderate(req.params.id, req.body, req.admin))));
+router.get('/clients/:id/experience', all, require('../controllers/partner-experience.controller').draft);
+router.put('/clients/:id/experience', all, require('../controllers/partner-experience.controller').draft);
 router.get(
   "/clients/:id",
   all,

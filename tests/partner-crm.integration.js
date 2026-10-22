@@ -406,12 +406,25 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         ).status,
         403,
       );
+      const draftPayload = {title:'Partner Cafe Draft',category:'FOOD',tags:['FOOD'],region:'NY',access:'premium',isPublished:false,images:['https://example.com/1.jpg','https://example.com/2.jpg','https://example.com/3.jpg','https://example.com/4.jpg'],memberBenefit:'2 x 1',benefitAction:'qr'};
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'other',method:'PUT',data:draftPayload})).status,404);
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:{...draftPayload,isPublished:true}})).status,403);
+      const createdDraft = await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:draftPayload});
+      assert.equal(createdDraft.status,201);
+      assert.equal(createdDraft.body.isPublished,false);
+      const draftId=createdDraft.body.id;
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive'})).body.id,draftId);
+      assert.equal((await fetch(base+`/experiences/${draftId}`)).status,401);
+      assert.ok(!(await (await fetch(base+'/experiences')).json()).some(item=>item.id===draftId));
+      assert.equal((await api(`/experiences/${draftId}`,{role:'editor',method:'PUT',data:{isPublished:true}})).status,403);
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:{...draftPayload,title:'Partner Cafe Draft Updated'}})).status,200);
       const pending = await api(`/partners/clients/${strategic.id}/actions`, {
         role: "executive", method: "POST", data: { action: "ready" },
       });
       assert.equal(pending.status, 200);
       assert.equal(pending.body.form_status, "ready");
       assert.equal(pending.body.activated_at, null);
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:draftPayload})).status,409);
       const notices = (await db.query("SELECT recipient,message FROM partner_mail WHERE client_id=$1 AND dedupe_key LIKE 'approval:%'", [strategic.id])).rows;
       assert.equal(notices.length, 1);
       assert.equal(notices[0].recipient, actors.admin.email);
@@ -422,19 +435,26 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       await db.query(
         "INSERT INTO experiences(id,title,category,access,is_published,image_url,gallery_urls,member_benefit,benefit_action) VALUES('cafe','Cafe','FOOD','premium',TRUE,'https://example.com/1.jpg','[\"https://example.com/2.jpg\",\"https://example.com/3.jpg\",\"https://example.com/4.jpg\"]','2 x 1','qr')",
       );
+      assert.equal((await api(`/partners/clients/${strategic.id}/actions`,{role:'executive',method:'POST',data:{action:'return-draft'}})).status,403);
+      assert.equal((await api(`/partners/clients/${strategic.id}/actions`,{role:'admin',method:'POST',data:{action:'return-draft'}})).status,200);
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:{...draftPayload,title:'Reviewed Cafe Draft'}})).status,200);
+      assert.equal((await api(`/partners/clients/${strategic.id}/actions`,{role:'executive',method:'POST',data:{action:'ready'}})).status,200);
+      assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE client_id=$1 AND dedupe_key LIKE 'approval:%'",[strategic.id])).rows[0].count),2);
       const activated = await api(`/partners/clients/${strategic.id}/actions`, {
         role: "admin",
         method: "POST",
-        data: { action: "activate", experience_id: "cafe" },
+        data: { action: "activate", experience_id: draftId },
       });
       assert.equal(activated.status, 200);
       assert.ok(activated.body.activated_at);
+      assert.equal((await api(`/experiences/${draftId}`)).body.isPublished,true);
+      assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:draftPayload})).status,403);
       assert.equal(
         (
           await api(`/partners/clients/${strategic.id}/actions`, {
             role: "admin",
             method: "POST",
-            data: { action: "activate", experience_id: "cafe" },
+            data: { action: "activate", experience_id: draftId },
           })
         ).status,
         409,
@@ -453,7 +473,8 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     },
   );
   await t.test("publications derive partner type only from an activated unambiguous client link", async () => {
-    assert.equal((await api("/experiences/cafe")).body.partnerOffer, "strategic");
+    const targetId=(await S.detail(strategic.id,actors.admin)).experience_id;
+    assert.equal((await api(`/experiences/${targetId}`)).body.partnerOffer, "strategic");
     const partner = await S.create({business_name:"Disclosure cafe",contact_name:"Owner",email:"disclosure@example.com",category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);
     await db.query("INSERT INTO experiences(id,title,category,access,is_published) VALUES('disclosure','Disclosure','FOOD','premium',TRUE)");
     await db.query("UPDATE partner_clients SET experience_id='disclosure' WHERE id=$1", [partner.id]);
@@ -462,10 +483,10 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     assert.equal((await api("/experiences/disclosure")).body.partnerOffer, "founding");
     const list = (await api("/experiences")).body;
     assert.equal(list.find(item=>item.id==='disclosure').partnerOffer, "founding");
-    await db.query("UPDATE partner_clients SET experience_id='cafe' WHERE id=$1", [partner.id]);
-    assert.equal((await api("/experiences/cafe")).body.partnerOffer, null);
+    await db.query("UPDATE partner_clients SET experience_id=$2 WHERE id=$1", [partner.id,targetId]);
+    assert.equal((await api(`/experiences/${targetId}`)).body.partnerOffer, null);
     await db.query("UPDATE partner_clients SET experience_id=NULL WHERE id=$1", [partner.id]);
-    assert.equal((await api("/experiences/cafe")).body.partnerOffer, "strategic");
+    assert.equal((await api(`/experiences/${targetId}`)).body.partnerOffer, "strategic");
   });
   await t.test(
     "Stripe validates actual session, amount and currency; replay does not duplicate mail or period",
