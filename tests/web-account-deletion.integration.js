@@ -71,3 +71,29 @@ test('complete web request sends matching code, receipt and final emails in the 
  const job=(await db.query("SELECT id FROM account_deletions WHERE status='completed' ORDER BY completed_at DESC LIMIT 1")).rows[0];
  if(job)await db.query('DELETE FROM account_deletions WHERE id=$1',[job.id]);
 });
+
+test('Apple-only member can request deletion by email without creating a password',async()=>{
+ await db.query(fs.readFileSync('database/apple-auth.sql','utf8'));
+ const email=`apple-deletion-${Date.now()}@example.test`;
+ const user=(await db.query("INSERT INTO users(email,password_hash,is_premium,stripe_subscription_id,subscription_status) VALUES($1,NULL,TRUE,'sub_apple_local_only','active') RETURNING id",[email])).rows[0];
+ await db.query('INSERT INTO apple_auth_identities(subject,user_id) VALUES($1,$2)',['apple-delete-local-'+user.id,user.id]);
+ const worker=deletion.processJob;deletion.processJob=async()=>{};
+ try {
+  const issued=await service.requestCode(email);
+  const code=messages.at(-1).text.match(/\b\d{8}\b/)[0];
+  assert.equal((await db.query('SELECT is_active FROM users WHERE id=$1',[user.id])).rows[0].is_active,true);
+  const verified=await service.verifyCode(issued.challenge,code);
+  assert.ok(verified?.proof);
+  assert.equal((await db.query('SELECT is_active FROM users WHERE id=$1',[user.id])).rows[0].is_active,true);
+  assert.equal((await service.confirm(verified.proof,true)).requested,true);
+  const row=(await db.query('SELECT is_active,password_hash FROM users WHERE id=$1',[user.id])).rows[0];
+  assert.equal(row.is_active,false);assert.equal(row.password_hash,null);
+  const job=(await db.query('SELECT * FROM account_deletions WHERE user_id=$1',[user.id])).rows[0];
+  assert.equal(job.subscription_id,'sub_apple_local_only');assert.equal(job.stripe_done,false);assert.equal(job.status,'pending');
+  assert.equal(await service.confirm(verified.proof,true),null);
+ }finally{
+  deletion.processJob=worker;
+  await db.query('DELETE FROM account_deletions WHERE user_id=$1',[user.id]);
+  await db.query('DELETE FROM users WHERE id=$1',[user.id]);
+ }
+});
