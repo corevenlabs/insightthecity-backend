@@ -67,8 +67,41 @@ async function authenticate(body, linkUserId) {
     await client.query('UPDATE apple_auth_identities SET refresh_token_encrypted=$1 WHERE subject=$2', [exchanged.encrypted,claims.sub]);
     await client.query('DELETE FROM apple_auth_challenges WHERE id=$1', [body.nonce]);
     await client.query('COMMIT');
-    return { token:users.signToken(user), user:users.publicUser(user) };
+    return { token:users.signToken(user,claims.sub), user:users.publicUser(user) };
   } catch (error) { await client.query('ROLLBACK'); if (error.code === '23505') throw fail(409, 'La cuenta ya existe o ya está vinculada. Usa tu correo para acceder.'); throw error; }
   finally { client.release(); }
 }
 module.exports = { verify, challenge, authenticate };
+
+// A recent Apple authentication is recorded only in a server-signed session.
+// Older sessions must prove the already-linked Apple subject with a fresh challenge.
+async function requestDeletion(userId, session, body) {
+  if(body.confirm !== true) throw fail(400,'Confirma la eliminación de tu cuenta');
+  const now=Math.floor(Date.now()/1000);
+  const recent=String(session.id)===String(userId) && session.auth_provider==='apple' && Number.isInteger(session.auth_time)
+    && session.auth_time<=now+30 && session.auth_time>=now-300 && typeof session.apple_sub==='string';
+  let claims;
+  if(!recent) {
+    if(!body.identityToken) throw fail(409,'Verifica tu identidad con Apple para continuar.','APPLE_REAUTH_REQUIRED');
+    claims=await verify(body.identityToken,body.nonce);
+  }
+  const c=await db.connect();let job;
+  try {
+    await c.query('BEGIN');
+    if(!recent){
+      const challengeRow=await c.query('SELECT id FROM apple_auth_challenges WHERE id=$1 AND expires_at>NOW() FOR UPDATE',[body.nonce]);
+      if(!challengeRow.rowCount) throw fail(401,'Vuelve a verificar tu identidad con Apple','APPLE_REAUTH_REQUIRED');
+    }
+    const user=(await c.query('SELECT id,is_active FROM users WHERE id=$1 FOR UPDATE',[userId])).rows[0];
+    if(!user?.is_active)throw fail(403,'Cuenta no disponible');
+    const identity=(await c.query('SELECT subject FROM apple_auth_identities WHERE user_id=$1',[userId])).rows[0];
+    if(!identity || identity.subject!==(recent?session.apple_sub:claims.sub))throw fail(403,'La cuenta de Apple no corresponde a este perfil');
+    if(!recent)await c.query('DELETE FROM apple_auth_challenges WHERE id=$1',[body.nonce]);
+    job=await require('./account-deletion.service').request(userId,c);
+    if(!job)throw fail(409,'No se pudo solicitar la eliminación');
+    await c.query('COMMIT');
+  } catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+  try{await require('./account-deletion.service').processJob(job.id);}catch{console.error('[apple deletion] REQUEST_QUEUED');}
+  return {deletionStatus:'requested'};
+}
+module.exports.requestDeletion=requestDeletion;

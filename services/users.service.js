@@ -41,9 +41,9 @@ function publicUser(row) {
 // Columnas por las que el panel puede ordenar (whitelist anti-inyección).
 const SORTABLE = new Set(["id", "name", "email", "is_premium", "is_active", "created_at"]);
 
-function signToken(user) {
+function signToken(user, appleSubject) {
   return jwt.sign(
-    { id: user.id, email: user.email, type: "user", sv: Number(user.session_version || 0) },
+    { id: user.id, email: user.email, type: "user", sv: Number(user.session_version || 0), ...(appleSubject ? {auth_provider:"apple",auth_time:Math.floor(Date.now()/1000),apple_sub:appleSubject} : {}) },
     process.env.JWT_SECRET,
     { expiresIn: "30d" }
   );

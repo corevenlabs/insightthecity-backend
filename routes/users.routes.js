@@ -21,14 +21,19 @@ router.post('/login',require('../middleware/auth-input'),...security.auth('user-
 router.post('/password-reset/request',...security.auth('password-request',10),passwordReset.requestReset);
 router.post('/password-reset/confirm',...security.auth('password-confirm',30),passwordReset.resetPassword);
 const apple = require('../services/apple-auth.service');
-const appleResponse = fn => async (req,res,next) => {
-  try { res.json({ success:true, ...await fn(req) }); }
+const appleResponse = (fn,status=200) => async (req,res,next) => {
+  try { res.status(status).json({ success:true, ...await fn(req) }); }
   catch(error) { if (error.status) return res.status(error.status).json({ success:false, message:error.message, code:error.code }); next(error); }
 };
 router.post('/apple/challenge',security.limit('apple-challenge',30,300),appleResponse(async () => ({ nonce:await apple.challenge() })));
 router.post('/apple/login',security.limit('apple-login',30,300),appleResponse(req => apple.authenticate(req.body)));
 router.post('/apple/link',requireUserAuth,security.limit('apple-link',10,300),appleResponse(req => apple.authenticate(req.body,req.user.id)));
 router.post('/google/login',security.limit('google-login',20,300),appleResponse(req => require('../services/google-auth.service').authenticate(req.body)));
+router.get('/me/deletion-method',requireUserAuth,appleResponse(async req => {
+ const user=(await require('../config/db').query('SELECT (password_hash IS NOT NULL) AS has_password,EXISTS(SELECT 1 FROM apple_auth_identities WHERE user_id=users.id) AS has_apple FROM users WHERE id=$1',[req.user.id])).rows[0];
+ return {method:user?.has_password?'password':user?.has_apple?'apple':'email'};
+}));
+router.post('/apple/delete',requireUserAuth,security.limit('apple-delete',10,300,security.user),appleResponse(req => apple.requestDeletion(req.user.id,req.user,req.body || {}),202));
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.delete("/me", requireUserAuth, deleteMe);
 
