@@ -406,16 +406,24 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         ).status,
         403,
       );
-      await api(`/partners/clients/${strategic.id}/actions`, {
-        role: "editor",
-        method: "POST",
-        data: { action: "ready" },
+      const pending = await api(`/partners/clients/${strategic.id}/actions`, {
+        role: "executive", method: "POST", data: { action: "ready" },
       });
+      assert.equal(pending.status, 200);
+      assert.equal(pending.body.form_status, "ready");
+      assert.equal(pending.body.activated_at, null);
+      const notices = (await db.query("SELECT recipient,message FROM partner_mail WHERE client_id=$1 AND dedupe_key LIKE 'approval:%'", [strategic.id])).rows;
+      assert.equal(notices.length, 1);
+      assert.equal(notices[0].recipient, actors.admin.email);
+      assert.ok(notices[0].message.html.includes(`/clientes/${strategic.id}`));
+      assert.equal((await api(`/partners/clients/${strategic.id}/actions`, {role:"executive",method:"POST",data:{action:"ready"}})).status,400);
+      assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE client_id=$1 AND dedupe_key LIKE 'approval:%'", [strategic.id])).rows[0].count),1);
+      assert.equal((await api(`/partners/clients/${strategic.id}/actions`, {role:"editor",method:"POST",data:{action:"activate",experience_id:"cafe"}})).status,403);
       await db.query(
         "INSERT INTO experiences(id,title,category,access,is_published,image_url,gallery_urls,member_benefit,benefit_action) VALUES('cafe','Cafe','FOOD','premium',TRUE,'https://example.com/1.jpg','[\"https://example.com/2.jpg\",\"https://example.com/3.jpg\",\"https://example.com/4.jpg\"]','2 x 1','qr')",
       );
       const activated = await api(`/partners/clients/${strategic.id}/actions`, {
-        role: "editor",
+        role: "admin",
         method: "POST",
         data: { action: "activate", experience_id: "cafe" },
       });
@@ -424,7 +432,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal(
         (
           await api(`/partners/clients/${strategic.id}/actions`, {
-            role: "editor",
+            role: "admin",
             method: "POST",
             data: { action: "activate", experience_id: "cafe" },
           })

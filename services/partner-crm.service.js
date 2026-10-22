@@ -347,9 +347,20 @@ async function action(id, input, actor) {
         "UPDATE partner_clients SET form_status='ready',updated_at=NOW() WHERE id=$1",
         [id],
       );
+      const who = await owner(c, row);
+      const administrators = (await c.query("SELECT id,email,language FROM admins WHERE is_active AND role='admin' ORDER BY id")).rows;
+      for (const recipient of administrators) {
+        await mail.queue(c, {
+          key: `approval:${row.id}:${row.submission_version}:${recipient.id}`,
+          clientId: row.id,
+          to: recipient.email,
+          kind: "approval",
+          data: { client: row, owner: who, language: recipient.language, url: `${mail.PANEL()}/clientes/${row.id}` },
+        });
+      }
     } else if (op === "activate") {
-      if (!["admin", "editor"].includes(actor.role))
-        R.fail("Solo un editor o administrador puede activar", 403);
+      if (actor.role !== "admin")
+        R.fail("Solo un administrador puede aprobar y activar el perfil", 403);
       if (
         row.activated_at ||
         row.form_status !== "ready" ||

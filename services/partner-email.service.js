@@ -14,6 +14,7 @@ const BASE = () =>
   ).replace(/\/$/, "");
 const COPY = {
   en: {
+    approval: ["Business profile pending approval", "The account manager has finished reviewing this profile. Administrator approval and activation are required before the profile is available in the app.", "Review and approve profile"],
     payment: [
       "Your business, in ITC CLUB",
       "Review your agreement and complete the payment to receive your private information form.",
@@ -59,6 +60,7 @@ const COPY = {
     help: "Questions? Contact your assigned executive.",
   },
   es: {
+    approval: ["Perfil pendiente de aprobación", "El ejecutivo terminó de revisar este perfil. Un administrador debe aprobarlo y activarlo antes de que esté disponible en la app.", "Revisar y aprobar perfil"],
     payment: [
       "Tu negocio, en ITC CLUB",
       "Revisa el acuerdo y completa el pago para recibir tu formulario privado.",
@@ -104,6 +106,7 @@ const COPY = {
     help: "¿Tienes dudas? Contacta a tu ejecutivo.",
   },
   pt: {
+    approval: ["Perfil pendente de aprovação", "O executivo terminou a revisão deste perfil. Um administrador deve aprovar e ativar o perfil antes de disponibilizá-lo no aplicativo.", "Revisar e aprovar perfil"],
     payment: [
       "Seu negócio no ITC CLUB",
       "Revise o acordo e conclua o pagamento para receber seu formulário privado.",
