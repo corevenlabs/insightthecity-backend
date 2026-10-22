@@ -1,4 +1,5 @@
 require("dotenv").config()
+if (process.env.APPLE_TEAM_ID) require("./services/apple-tokens.service").validateConfiguration();
 const path = require("path")
 const express = require("express")
 const cors = require("cors")

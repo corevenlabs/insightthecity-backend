@@ -50,3 +50,14 @@ test('Apple refresh token storage is authenticated encryption',()=>{
  assert.throws(()=>tokens.open(altered.toString('base64')));
  delete process.env.APPLE_TOKEN_ENCRYPTION_KEY;
 });
+test('Apple production encryption uses the existing JWT secret with a separate derived key',()=>{
+ const tokens=require('../services/apple-tokens.service');
+ delete process.env.APPLE_TOKEN_ENCRYPTION_KEY;
+ const original=process.env.JWT_SECRET;
+ process.env.JWT_SECRET='local-test-only-stable-managed-secret';
+ const encrypted=tokens.seal('test-refresh-token');
+ assert.equal(tokens.open(encrypted),'test-refresh-token');
+ process.env.JWT_SECRET='different-local-test-secret';
+ assert.throws(()=>tokens.open(encrypted));
+ if(original===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=original;
+});

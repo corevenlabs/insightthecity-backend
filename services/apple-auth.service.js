@@ -20,7 +20,7 @@ async function verify(token, nonce) {
   if (!key) throw fail(401, 'Credencial de Apple inválida');
   let claims;
   try { claims = jwt.verify(token, crypto.createPublicKey({ key, format: 'jwk' }), {
-    algorithms: ['RS256'], issuer: 'https://appleid.apple.com', audience: 'com.insightthecity.app', maxAge: '10m',
+    algorithms: ['RS256'], issuer: 'https://appleid.apple.com', audience: process.env.APPLE_CLIENT_ID || 'com.insightthecity.app', maxAge: '10m',
   }); } catch { throw fail(401, 'La credencial de Apple expiró o no es válida'); }
   if (claims.nonce !== nonce || typeof claims.sub !== 'string' || !claims.sub) throw fail(401, 'Credencial de Apple inválida');
   return claims;
