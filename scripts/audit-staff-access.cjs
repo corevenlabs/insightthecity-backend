@@ -10,7 +10,7 @@ const {Client}=require('pg');
   for(const account of accounts){
    const summary=(await connection.query(`SELECT form_status,payment_status,blocked_at IS NOT NULL AS blocked,activated_at IS NOT NULL AS activated,COUNT(*)::int AS clients FROM partner_clients WHERE owner_id=$1 AND deleted_at IS NULL GROUP BY form_status,payment_status,blocked_at IS NOT NULL,activated_at IS NOT NULL ORDER BY form_status,payment_status`,[account.id])).rows;
    console.log(JSON.stringify({staffId:account.id,assignedClientStates:summary}));
-   const recent=(await connection.query(`SELECT p.action,COUNT(*)::int AS actions,MAX(p.created_at) AS latest FROM partner_activity p WHERE p.actor_id=$1 AND p.created_at>NOW()-INTERVAL '7 days' GROUP BY p.action ORDER BY MAX(p.created_at) DESC`,[account.id])).rows;
+   const recent=(await connection.query(`SELECT p.kind AS action,COUNT(*)::int AS actions,MAX(p.created_at) AS latest FROM partner_activity p WHERE p.actor_id=$1 AND p.created_at>NOW()-INTERVAL '7 days' GROUP BY p.kind ORDER BY MAX(p.created_at) DESC`,[account.id])).rows;
    console.log(JSON.stringify({staffId:account.id,recentActions:recent}));
   }
   await connection.query('COMMIT');
