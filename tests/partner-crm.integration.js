@@ -167,6 +167,30 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
             ).status,
             201,
           );
+      // Manual sharing prepares the same invitation without queueing or sending mail.
+      const manual = await S.create({ business_name: "Manual Invite", contact_name: "Owner", email: "manual@example.com", category: "strategic", language: "en" }, actors.executive);
+      const sentBefore = emails.length;
+      const generated = await S.action(manual.id, { action: "generate-link" }, actors.executive);
+      assert.equal(generated.form_status, "invited");
+      assert.ok(generated.terms_snapshot.en);
+      assert.equal(emails.length, sentBefore);
+      assert.equal(Number((await db.query("SELECT COUNT(*) FROM partner_mail WHERE client_id=$1", [manual.id])).rows[0].count), 0);
+      const version = jwt.decode(token(generated)).v;
+      const again = await S.action(manual.id, { action: "generate-link" }, actors.executive);
+      assert.equal(jwt.decode(token(again)).v, version);
+      assert.equal(again.link_expires_at.getTime(), generated.link_expires_at.getTime());
+      assert.equal((await api("/partners/access", { token: token(generated) })).status, 200);
+      assert.equal((await api(`/partners/clients/${manual.id}/actions`, { role: "other", method: "POST", data: { action: "generate-link" } })).status, 404);
+      assert.equal((await api(`/partners/clients/${manual.id}/actions`, { role: "editor", method: "POST", data: { action: "generate-link" } })).status, 403);
+      // The client can save into the same record, and an optional email preserves that draft.
+      await S.save(token(generated), { content: { businessName: "Manual saved draft" }, language: "en" });
+      assert.equal((await S.detail(manual.id, actors.executive)).content.businessName, "Manual saved draft");
+      const emailed = await S.action(manual.id, { action: "invite" }, actors.executive);
+      assert.equal(emailed.form_status, "draft");
+      assert.equal(jwt.decode(token(emailed)).v, version);
+      assert.equal(emails.length, sentBefore + 1);
+      await S.action(manual.id, { action: "invite" }, actors.executive);
+      assert.equal(emails.length, sentBefore + 1);
       let result = await api(`/partners/clients/${strategic.id}/actions`, {
         role: "executive",
         method: "POST",

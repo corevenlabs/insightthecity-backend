@@ -210,12 +210,21 @@ async function action(id, input, actor) {
     const op = input.action;
     if (row.blocked_at) R.fail("Desbloquea el cliente antes de realizar esta acción", 409);
     if (!["ready", "activate"].includes(op)) manage(actor);
-    if (op === "invite") {
+    if (op === "generate-link") {
       await termsSnapshot(c, row);
-      if (row.form_status !== "not_sent")
-        R.fail("La invitación ya fue creada; usa reenviar", 409);
+      if (row.form_status === "not_sent") {
+        await c.query("UPDATE partner_clients SET form_status='invited',link_expires_at=NOW()+INTERVAL '90 days',updated_at=NOW() WHERE id=$1", [id]);
+      } else if (new Date(row.link_expires_at) <= new Date()) {
+        R.fail("El enlace venció; renueva la invitación antes de compartirlo", 409);
+      }
+    } else if (op === "invite") {
+      await termsSnapshot(c, row);
+      if (!["not_sent", "invited", "draft", "changes_requested"].includes(row.form_status))
+        R.fail("El formulario ya fue enviado", 409);
+      if (new Date(row.link_expires_at) <= new Date())
+        R.fail("El enlace venció; renueva la invitación", 409);
       await c.query(
-        "UPDATE partner_clients SET form_status='invited',updated_at=NOW() WHERE id=$1",
+        "UPDATE partner_clients SET form_status=CASE WHEN form_status='not_sent' THEN 'invited' ELSE form_status END,updated_at=NOW() WHERE id=$1",
         [id],
       );
       await enqueue(
@@ -545,7 +554,7 @@ async function action(id, input, actor) {
       );
     return id;
   });
-  await sendPending(result);
+  if (input.action !== "generate-link") await sendPending(result);
   return detail(id, actor);
 }
 async function publicView(token) {
