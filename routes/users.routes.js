@@ -30,9 +30,10 @@ router.post('/apple/login',security.limit('apple-login',30,300),appleResponse(re
 router.post('/apple/link',requireUserAuth,security.limit('apple-link',10,300),appleResponse(req => apple.authenticate(req.body,req.user.id)));
 router.post('/google/login',security.limit('google-login',20,300),appleResponse(req => require('../services/google-auth.service').authenticate(req.body)));
 router.get('/me/deletion-method',requireUserAuth,appleResponse(async req => {
- const user=(await require('../config/db').query('SELECT (password_hash IS NOT NULL) AS has_password,EXISTS(SELECT 1 FROM apple_auth_identities WHERE user_id=users.id) AS has_apple FROM users WHERE id=$1',[req.user.id])).rows[0];
- return {method:user?.has_password?'password':user?.has_apple?'apple':'email'};
+ const user=(await require('../config/db').query('SELECT (password_hash IS NOT NULL) AS has_password,EXISTS(SELECT 1 FROM apple_auth_identities WHERE user_id=users.id) AS has_apple,EXISTS(SELECT 1 FROM google_auth_identities WHERE user_id=users.id) AS has_google FROM users WHERE id=$1',[req.user.id])).rows[0];
+ return {method:user?.has_google?'google':user?.has_password?'password':user?.has_apple?'apple':'email'};
 }));
+router.post('/google/delete',requireUserAuth,security.limit('google-delete',10,300,security.user),appleResponse(req => require('../services/google-deletion.service').requestDeletion(req.user.id,req.body || {}),202));
 router.post('/apple/delete',requireUserAuth,security.limit('apple-delete',10,300,security.user),appleResponse(req => apple.requestDeletion(req.user.id,req.user,req.body || {}),202));
 router.get("/me", requireUserAuth, me); // literal antes que "/:id"
 router.delete("/me", requireUserAuth, deleteMe);
