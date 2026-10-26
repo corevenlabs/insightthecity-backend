@@ -1,3 +1,4 @@
+const { normalizeSocialUrl, validateSocialLinks } = require('../utils/socialLinks');
 const { normalizeTags, tagsForRecord } = require("../utils/experienceTags");
 const service = require("../services/experiences.service");
 
@@ -28,6 +29,9 @@ function serialize(row) {
     shortAddress: row.short_address ?? null,
     mapsUrl: row.maps_url ?? null,
     locations: Array.isArray(row.locations) ? row.locations : [],
+    instagramUrl: row.instagram_url ?? null,
+    tiktokUrl: row.tiktok_url ?? null,
+    facebookUrl: row.facebook_url ?? null,
     region: row.region,
     access: row.access,
     partnerOffer: ['founding', 'strategic'].includes(row.partner_offer) ? row.partner_offer : null,
@@ -80,6 +84,9 @@ function deserialize(body) {
     location: body.location,
     short_address: body.shortAddress === undefined ? undefined : body.shortAddress?.trim() || null,
     maps_url: body.mapsUrl === undefined ? undefined : body.mapsUrl?.trim() || null,
+    instagram_url: normalizeSocialUrl('instagramUrl', body.instagramUrl),
+    tiktok_url: normalizeSocialUrl('tiktokUrl', body.tiktokUrl),
+    facebook_url: normalizeSocialUrl('facebookUrl', body.facebookUrl),
     region: body.region,
     access: body.access,
     description: body.description,
@@ -232,6 +239,8 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    const socialError = validateSocialLinks(req.body);
+    if (socialError) return res.status(400).json({ success: false, message: socialError });
     const locationError = validateLocation(req.body);
     if (locationError) return res.status(400).json({ success: false, message: locationError });
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium');
@@ -258,6 +267,8 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    const socialError = validateSocialLinks(req.body);
+    if (socialError) return res.status(400).json({ success: false, message: socialError });
     const locationError = validateLocation(req.body);
     if (locationError) return res.status(400).json({ success: false, message: locationError });
     const benefitError = validateMemberBenefit(req.body, req.body.access === 'premium' && req.body.memberBenefit !== undefined);
@@ -297,6 +308,7 @@ module.exports = {
   validateMemberBenefit,
   validateGallery,
   validateLocation,
+  validateSocialLinks,
   listExperiences,
   getExperience,
   createExperience,

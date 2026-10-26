@@ -267,6 +267,9 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     "draft save, distinct photos, consent and locked submission",
     async () => {
       const access = token(strategic);
+      content.instagramUrl = 'https://www.instagram.com/testbusiness/';
+      content.tiktokUrl = 'https://www.tiktok.com/@testbusiness';
+      content.facebookUrl = 'https://www.facebook.com/testbusiness/';
       assert.equal(
         (
           await api("/partners/access/save", {
@@ -287,6 +290,10 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
         ).status,
         400,
       );
+      const savedSocial = (await api(`/partners/clients/${strategic.id}`)).body.content;
+      assert.equal(savedSocial.instagramUrl, content.instagramUrl);
+      assert.equal(savedSocial.tiktokUrl, content.tiktokUrl);
+      assert.equal(savedSocial.facebookUrl, content.facebookUrl);
       for (let i = 0; i < 5; i++) {
         const f = new FormData();
         f.append("kind", i ? "photo" : "logo");

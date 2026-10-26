@@ -15,7 +15,7 @@ test('executive without clients creates own drafts, submits, admin returns and p
  }
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;
  const api=async(path,actor='one',method='GET',body)=>{const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt.sign({id:roleIds[actor],type:'staff'},process.env.JWT_SECRET)},body:body&&JSON.stringify(body)});return {status:r.status,body:await r.json()};};
- const body={title:'Executive draft local',category:'Food',tags:['Food'],region:'NY',access:'free',image:'https://example.test/photo.jpg',images:['https://example.test/photo.jpg'],isPublished:false};
+ const body={instagramUrl:'https://www.instagram.com/testbusiness/',tiktokUrl:'https://www.tiktok.com/@testbusiness',facebookUrl:'https://www.facebook.com/testbusiness/',title:'Executive draft local',category:'Food',tags:['Food'],region:'NY',access:'free',image:'https://example.test/photo.jpg',images:['https://example.test/photo.jpg'],isPublished:false};
  let draft;
  try{
   assert.equal((await api('/drafts','editor')).status,403);
@@ -38,7 +38,7 @@ test('executive without clients creates own drafts, submits, admin returns and p
   assert.equal((await api(path,'one','PUT',{...body,title:'Ready draft'})).status,200);
   await api(path+'/submit','one','POST',{});
   const approved=await api(path+'/approve','admin','POST',{});assert.equal(approved.status,200);assert.equal(approved.body.status,'approved');
-  const exp=(await db.query('SELECT * FROM experiences WHERE id=$1',[approved.body.experience_id])).rows[0];assert.equal(exp.is_published,true);assert.equal(exp.title,'Ready draft');
+  const exp=(await db.query('SELECT * FROM experiences WHERE id=$1',[approved.body.experience_id])).rows[0];assert.equal(exp.is_published,true);assert.equal(exp.title,'Ready draft');assert.equal(exp.instagram_url,body.instagramUrl);assert.equal(exp.tiktok_url,body.tiktokUrl);assert.equal(exp.facebook_url,body.facebookUrl);
   assert.equal((await api(path+'/approve','admin','POST',{})).status,409);
   assert.equal((await api(path,'one','PUT',body)).status,409);
  }finally{

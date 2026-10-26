@@ -1,3 +1,4 @@
+const { normalizeSocialUrl } = require('../utils/socialLinks');
 const crypto = require("crypto");
 function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });
@@ -76,6 +77,9 @@ const FIELDS = {
   hours: 1000,
   website: 1000,
   social: 1000,
+  instagramUrl: 1000,
+  tiktokUrl: 1000,
+  facebookUrl: 1000,
   benefit: 200,
   cardBenefit: 60,
   conditions: 2000,
@@ -94,6 +98,7 @@ function content(input, submit = false) {
   const data = {};
   for (const [key, max] of Object.entries(FIELDS))
     data[key] = clean(input?.[key], max);
+  for (const field of ['instagramUrl', 'tiktokUrl', 'facebookUrl']) data[field] = normalizeSocialUrl(field, input?.[field]) || '';
   if (data.businessEmail) data.businessEmail = email(data.businessEmail);
   if (data.website) data.website = https(data.website);
   if (data.url) data.url = https(data.url);

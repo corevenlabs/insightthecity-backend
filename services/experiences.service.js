@@ -33,6 +33,9 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  for (const column of ['instagram_url', 'tiktok_url', 'facebook_url']) {
+    if (data[column] !== undefined) await client.query(`UPDATE experiences SET ${column}=$2 WHERE id=$1`, [id, data[column]]);
+  }
   if (data.locations !== undefined) {
     await client.query('UPDATE experiences SET locations=$2::jsonb WHERE id=$1', [id, JSON.stringify(data.locations)]);
   }
