@@ -12,9 +12,9 @@ function render(language,kind='completed',data={}){
  const title=c[kind],body=c[`${kind}Body`],note=kind==='completed'?c.retained:c[`${kind}Note`];
  const {layout,paragraph,panel}=require('./email-layout');
  const ui={
-  es:{codeLabel:'TU CÓDIGO DE VERIFICACIÓN',expires:'Vence en 15 minutos',verify:'Verificación previa',pending:'SOLICITUD EN PROCESO',pendingDetail:'Recibirás otro correo cuando la eliminación haya finalizado.',done:'ELIMINACIÓN COMPLETADA'},
-  en:{codeLabel:'YOUR VERIFICATION CODE',expires:'Expires in 15 minutes',verify:'Verification step',pending:'REQUEST IN PROGRESS',pendingDetail:'We will email you again once deletion is complete.',done:'DELETION COMPLETED'},
-  pt:{codeLabel:'SEU CÓDIGO DE VERIFICAÇÃO',expires:'Expira em 15 minutos',verify:'Verificação prévia',pending:'SOLICITAÇÃO EM ANDAMENTO',pendingDetail:'Enviaremos outro e-mail quando a exclusão for concluída.',done:'EXCLUSÃO CONCLUÍDA'}
+  es:{codeLabel:'Tu código de verificación',expires:'Vence en 15 minutos',verify:'Verificación previa',pending:'Solicitud en proceso',pendingDetail:'Recibirás otro correo cuando la eliminación haya finalizado.',done:'Eliminación completada'},
+  en:{codeLabel:'Your verification code',expires:'Expires in 15 minutes',verify:'Verification step',pending:'Request in progress',pendingDetail:'We will email you again once deletion is complete.',done:'Deletion completed'},
+  pt:{codeLabel:'Seu código de verificação',expires:'Expira em 15 minutos',verify:'Verificação prévia',pending:'Solicitação em andamento',pendingDetail:'Enviaremos outro e-mail quando a exclusão for concluída.',done:'Exclusão concluída'}
  }[lang];
  const label=text=>`<p style="margin:0 0 12px;font-size:11px;line-height:1.5;letter-spacing:1px;font-weight:700;color:#FDDD56">${escape(text)}</p>`;
  let content=paragraph(c.hello)+paragraph(body);

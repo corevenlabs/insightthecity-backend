@@ -6,7 +6,7 @@ test('one email typography covers membership, deletion and text-only password co
  const samples=['welcome','cancel','resume'].map(kind=>membership.membershipEmail(user,kind));
  for(const kind of ['code','requested','completed'])samples.push(deletion.render('es',kind,{code:'12345678'}));
  samples.push({subject:'Tu código',text:'Código: 12345678\nVence en 15 minutos.'});
- for(const before of samples){const after=brand.email(before);assert.equal(after.text,before.text);assert.equal(after.subject,before.subject);assert.match(after.html,/data-itc-typography="v2"/);assert.match(after.html,/font-family:Arial,Helvetica,sans-serif/);assert.match(after.html,/RobotoCondensed_900Black.ttf/);assert.doesNotMatch(after.html,/Impact|Arial Narrow/);assert.equal(brand.email(after).html,after.html);}
+ for(const before of samples){const after=brand.email(before);assert.equal(after.text,before.text);assert.equal(after.subject,before.subject);assert.match(after.html,/data-itc-typography="v3"/);assert(after.html.includes(`font-family:${brand.EMAIL_STACK}`));assert.match(after.html,/RobotoCondensed_900Black.ttf/);assert.doesNotMatch(after.html,/Impact/);assert.equal(brand.email(after).html,after.html);}
  const plain=brand.email({text:'<script>alert(1)</script>\n12345678'});assert.doesNotMatch(plain.html,/<script>/);assert.match(plain.html,/&lt;script&gt;/);
 });
 test('HTML page middleware adds self-hosted typography, keeps strict CSP, and leaves JSON untouched',()=>{
@@ -24,7 +24,7 @@ test('email fonts are inline even in nested tables and previously normalized HTM
  assert.doesNotMatch(result.html,/font-family:Roboto[;}]|Segoe UI|-apple-system|Impact/);
  const tags=result.html.match(/<(?:body|table|tr|td|h1|p|a)\b[^>]*>/g);
  assert.equal(tags.length,7);
- for(const tag of tags)assert.match(tag,/font-family:(?:ITCBanner,Roboto Condensed,Arial,Helvetica|Arial,Helvetica),sans-serif!important/);
- assert.match(result.html,/color:#ddd/);assert.match(result.html,/font-weight:700/);
+ for(const tag of tags)assert(tag.includes(`font-family:${brand.EMAIL_STACK}!important`));
+ assert.match(result.html,/color:#ddd/);assert.match(result.html,/font-weight:900!important/);
  assert.equal(brand.email(result).html,result.html);
 });

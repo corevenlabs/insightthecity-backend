@@ -3,38 +3,7 @@
 // deliberately outside this renderer and is not modified.
 const fs=require('fs'),path=require('path'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'public/email');
-const data=[
- ['lifecycle-deletion-code-es-v1.png',['Verifica','tu correo.'],'',1,50,130,92],
- ['lifecycle-deletion-code-en-v1.png',['Verify','your email.'],'',1,50,130,92],
- ['lifecycle-deletion-code-pt-v1.png',['Verifique','seu e-mail.'],'',1,50,130,92],
- ['lifecycle-deletion-requested-es-v1.png',['Solicitud','recibida.'],'',1,50,130,92],
- ['lifecycle-deletion-requested-en-v1.png',['Request','received.'],'',1,50,130,92],
- ['lifecycle-deletion-requested-pt-v1.png',['Solicitação','recebida.'],'',1,50,130,92],
- ['lifecycle-deletion-completed-es-v1.png',['Cuenta','eliminada.'],'',1,50,130,92],
- ['lifecycle-deletion-completed-en-v1.png',['Account','deleted.'],'',1,50,130,92],
- ['lifecycle-deletion-completed-pt-v1.png',['Conta','excluída.'],'',1,50,130,92],
- ['lifecycle-alert-en-v1.png',['Review','required.'],'',1,50,130,92],
- ['lifecycle-smtp-es-v1.png',['Prueba','de correo.'],'',1,50,130,92],
- ['password-reset-es-v1.png',['Recupera','tu acceso.'],'',1,50,130,92],
- ['password-reset-en-v1.png',['Recover','your access.'],'',1,50,130,92],
- ['password-reset-pt-v1.png',['Recupere','seu acesso.'],'',1,50,130,92],
- ['membership-cancel-es-v1.png',['Renovación','cancelada.'],'',1,50,95,76],
- ['membership-resume-es-v1.png',['Renovación','reactivada.'],'',1,50,95,76],
- ['membership-cancel-en-v1.png',['Renewal','canceled.'],'',1,50,95,76],
- ['membership-resume-en-v1.png',['Renewal','reactivated.'],'',1,50,95,76],
- ['membership-cancel-pt-v1.png',['Renovação','cancelada.'],'',1,50,95,76],
- ['membership-resume-pt-v1.png',['Renovação','reativada.'],'',1,50,95,76],
- ['membership-invitation-register-es-v1.png',['¡Vamos a','estrenar la app!'],'',1,50,180,89],
- ['partner-welcome-banner-v2.png',['Welcome to','ITC CLUB.'],'Let’s build this together.',1,50,86,92],
- ['partner-invitation-banner-v2.png',['Your business.','Our community.','Let’s grow together.'],'An invitation to join ITC CLUB',2,50,70,88],
- ['partner-accepted-terms-banner-v2.png',['Your accepted terms.','For your records.'],'A copy of your participation agreement',1,50,117,90],
- ['partner-corrections-banner-v2.png',['Let’s show','what makes','your business special.'],'',2,50,88,92],
- ['membership-welcome-es-phone-v2.png',['YA ERES','PARTE DEL','CLUB.'],'Nueva York tiene más para ti.',2,50,145,77],
- ['membership-welcome-en-phone-v2.png',['YOU’RE','PART OF THE','CLUB.'],'New York has more for you.',2,50,145,77],
- ['membership-welcome-pt-phone-v2.png',['VOCÊ JÁ FAZ','PARTE DO','CLUB.'],'Nova York tem mais para você.',2,50,145,77],
- ['membership-account-created-es-v2.png',['YA TIENES','TU CUENTA'],'',1,50,195,78],
- ['membership-trial-active-es-v2.png',['YA ERES PARTE','DEL CLUB'],'',1,50,195,78],
-];
+const data=require('../config/email-banner-spec.json');
 // Approved bundled fonts keep every email banner consistent.
 const font=fs.readFileSync(path.join(root,'public/brand/fonts/RobotoCondensed_900Black.ttf')).toString('base64');
 const subtitleFont=font;

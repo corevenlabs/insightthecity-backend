@@ -42,7 +42,7 @@ test('membership welcome uses the approved subscription copy, typography and loc
   assert.doesNotMatch(message.html, /email-assets\/new-york.jpg/);
   assert.match(message.html, /Hola, Oswaldo/);
   assert.match(message.html, /font-family:Arial,Helvetica,sans-serif/);
-  assert.match(message.html, /YA ERES PARTE DEL CLUB/);
+  assert.match(message.html, /Ya eres parte del club/);
   assert.match(message.html, /Nueva York tiene más para ti/);
   assert.match(message.html, /Explorar mis beneficios/);
   assert.match(message.text, /Tu membresía de ITC Club ya está activa/);
