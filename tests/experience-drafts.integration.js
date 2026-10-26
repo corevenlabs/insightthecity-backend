@@ -9,6 +9,8 @@ let server,base;const ids=[];
 after(async()=>{if(server)await new Promise(r=>server.close(r));await db.end();});
 test('executive without clients creates own drafts, submits, admin returns and publishes once',async()=>{
  await db.query(fs.readFileSync('database/experience-drafts.sql','utf8'));
+ await db.query(fs.readFileSync('database/experience-draft-activity.sql','utf8'));
+ await db.query(fs.readFileSync('database/experience-draft-activity.sql','utf8'));
  const roleIds={};
  for(const [key,role] of [['one','executive'],['two','executive'],['admin','admin'],['editor','editor']]){
   const id=(await db.query('INSERT INTO admins(name,email,password_hash,role,is_active) VALUES($1,$2,$3,$4,TRUE) RETURNING id',[key,`${key}-${Date.now()}@draft.test`,'unused-test-hash',role])).rows[0].id;ids.push(id);roleIds[key]=id;
@@ -32,15 +34,41 @@ test('executive without clients creates own drafts, submits, admin returns and p
   assert.equal((await api(path,'one','PUT',{...body,title:'Changed'})).status,409);
   assert.equal((await api(path+'/approve','one','POST',{})).status,403);
   assert.equal((await api(path+'/return','one','POST',{})).status,403);
+  const corrected=await api(path,'admin','PUT',{...body,title:'Admin correction',owner_id:roleIds.admin});
+  assert.equal(corrected.status,200);assert.equal(corrected.body.status,'pending');
+  assert.equal(corrected.body.owner_id,roleIds.one);
+  assert.equal(corrected.body.payload.title,'Admin correction');
+  assert.equal(corrected.body.activity[0].kind,'saved');
+  assert.equal(corrected.body.activity[0].actor_name,'admin');
+  assert.equal((await api(path,'two','PUT',body)).status,404);
+  assert.equal((await api(path,'editor','PUT',body)).status,403);
+  assert.equal((await api(path,'one','PUT',body)).status,409);
   assert.equal((await db.query('SELECT 1 FROM experiences WHERE id=$1',['draft-'+draft.id])).rowCount,0);
   assert.ok((await db.query('SELECT 1 FROM partner_mail WHERE dedupe_key LIKE $1',[`experience-review:${draft.id}:1:%`])).rowCount>=1);
   assert.equal((await api(path+'/return','admin','POST',{note:'Ajustar texto'})).body.review_note,'Ajustar texto');
   assert.equal((await api(path,'one','PUT',{...body,title:'Ready draft'})).status,200);
   await api(path+'/submit','one','POST',{});
-  const approved=await api(path+'/approve','admin','POST',{});assert.equal(approved.status,200);assert.equal(approved.body.status,'approved');
-  const exp=(await db.query('SELECT * FROM experiences WHERE id=$1',[approved.body.experience_id])).rows[0];assert.equal(exp.is_published,true);assert.equal(exp.title,'Ready draft');assert.equal(exp.instagram_url,body.instagramUrl);assert.equal(exp.tiktok_url,body.tiktokUrl);assert.equal(exp.facebook_url,body.facebookUrl);
+  const beforeInvalid=(await api(path,'admin')).body.activity.length;
+  assert.equal((await api(path+'/approve','admin','POST',{payload:{...body,title:''}})).status,400);
+  assert.equal((await api(path,'admin')).body.status,'pending');
+  assert.equal((await api(path,'admin')).body.activity.length,beforeInvalid);
+  const approved=await api(path+'/approve','admin','POST',{payload:{...body,title:'Final unsaved admin correction'}});assert.equal(approved.status,200);assert.equal(approved.body.status,'approved');
+  const exp=(await db.query('SELECT * FROM experiences WHERE id=$1',[approved.body.experience_id])).rows[0];assert.equal(exp.is_published,true);assert.equal(exp.title,'Final unsaved admin correction');assert.equal(approved.body.payload.title,exp.title);assert.equal(approved.body.owner_id,roleIds.one);assert.equal(approved.body.reviewed_by,roleIds.admin);assert.equal(approved.body.activity[0].kind,'published');assert.equal(approved.body.activity[0].actor_name,'admin');assert.equal(exp.instagram_url,body.instagramUrl);assert.equal(exp.tiktok_url,body.tiktokUrl);assert.equal(exp.facebook_url,body.facebookUrl);
   assert.equal((await api(path+'/approve','admin','POST',{})).status,409);
   assert.equal((await api(path,'one','PUT',body)).status,409);
+  assert.equal((await api('/experiences/'+exp.id,'admin','PUT',{...body,title:'Published admin edit',isPublished:true})).status,200);
+  assert.equal((await api('/experiences/'+exp.id,'one','PUT',body)).status,403);
+  assert.equal((await api(path,'admin')).body.owner_id,roleIds.one);
+  const direct=(await api('/drafts','admin','POST',body)).body;
+  try {
+   const published=await api('/drafts/'+direct.id+'/approve','admin','POST',{payload:{...body,title:'Admin publishes preparation directly'}});
+   assert.equal(published.status,200);assert.equal(published.body.status,'approved');
+   assert.equal(published.body.owner_id,roleIds.admin);
+   assert.equal((await api('/drafts/'+direct.id+'/approve','admin','POST',{})).status,409);
+  } finally {
+   await db.query('DELETE FROM experience_drafts WHERE id=$1',[direct.id]);
+   await db.query('DELETE FROM experiences WHERE id=$1',['draft-'+direct.id]);
+  }
  }finally{
   if(draft){await db.query('DELETE FROM partner_mail WHERE dedupe_key LIKE $1',[`experience-review:${draft.id}:%`]);await db.query('DELETE FROM experience_drafts WHERE id=$1',[draft.id]);await db.query('DELETE FROM experiences WHERE id=$1',['draft-'+draft.id]);}
   await db.query('DELETE FROM admins WHERE id=ANY($1::int[])',[ids]);

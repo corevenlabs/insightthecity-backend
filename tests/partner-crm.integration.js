@@ -456,6 +456,14 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal(pending.body.form_status, "ready");
       assert.equal(pending.body.activated_at, null);
       assert.equal((await api(`/partners/clients/${strategic.id}/experience`,{role:'executive',method:'PUT',data:draftPayload})).status,409);
+      const adminCorrection = await api(`/partners/clients/${strategic.id}/experience`,{role:'admin',method:'PUT',data:{...draftPayload,title:'Administrator correction in review'}});
+      assert.equal(adminCorrection.status,200);
+      assert.equal(adminCorrection.body.title,'Administrator correction in review');
+      const afterCorrection = await S.detail(strategic.id,actors.admin);
+      assert.equal(afterCorrection.form_status,'ready');
+      assert.equal(afterCorrection.owner_id,actors.executive.id);
+      assert.equal(afterCorrection.activity[0].actor_name,actors.admin.name);
+      assert.equal(afterCorrection.activity[0].kind,'experience-draft');
       const notices = (await db.query("SELECT recipient,message FROM partner_mail WHERE client_id=$1 AND dedupe_key LIKE 'approval:%'", [strategic.id])).rows;
       assert.equal(notices.length, 1);
       assert.equal(notices[0].recipient, actors.admin.email);
