@@ -103,6 +103,7 @@ app.use(manejadorErrors)
 
 const PORT = process.env.PORT || 3000
 if (require.main === module) app.listen(PORT, () =>{
+    console.log(`Node.js runtime: ${process.versions.node}`)
     console.log(`Servidor corriendo en puerto ${PORT}`)
 })
 
