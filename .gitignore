@@ -13,4 +13,5 @@ yarn-error.log*
 # Imágenes subidas con UPLOAD_DRIVER=local (en producción van a Cloud Storage).
 uploads/
 
-
+# Temporary Google Workload Identity credentials
+gha-creds-*.json

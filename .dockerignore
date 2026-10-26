@@ -11,3 +11,6 @@ uploads
 output
 coverage
 *.log
+
+# Temporary Google Workload Identity credentials
+gha-creds-*.json
