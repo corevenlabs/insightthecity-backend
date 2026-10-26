@@ -17,6 +17,6 @@ for(const [path,method,max,seconds] of [['prepare',payment.prepare,10,60],['comp
  });
 }
 router.post('/retry-emails',require('../middleware/membership-email-worker'),async(req,res,next)=>{
- try{res.json({success:true,...await require('../services/subscription.service').retryPendingConfirmations(),paymentNotices:await require('../services/membership-payment-alert.service').retry()});}catch(e){next(e);}
+ try{res.json({success:true,...await require('../services/subscription.service').retryPendingConfirmations(),paymentNotices:await require('../services/membership-payment-alert.service').retry(),passwordNotices:await require('../services/password-change-notification.service').retry()});}catch(e){next(e);}
 });
 module.exports=router;

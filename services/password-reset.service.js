@@ -2,6 +2,7 @@ const { createHmac, randomInt, timingSafeEqual } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const mailer = require('./password-reset-mail.service');
+const notifications = require('./password-change-notification.service');
 
 const RESET_MINUTES = 15;
 const REQUEST_DELAY_SECONDS = 60;
@@ -62,10 +63,11 @@ async function requestReset(email) {
 
 async function resetPassword(email, code, password) {
   const client = await db.connect();
+  let notificationId;
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `SELECT r.user_id, r.code_hash, r.expires_at, r.attempts
+      `SELECT r.user_id, r.code_hash, r.expires_at, r.attempts, u.email, u.language
        FROM password_reset_codes r JOIN users u ON u.id = r.user_id
        WHERE LOWER(u.email) = $1 AND u.is_active = TRUE FOR UPDATE OF r`,
       [email.trim().toLowerCase()]
@@ -83,16 +85,19 @@ async function resetPassword(email, code, password) {
       return false;
     }
     const passwordHash = await bcrypt.hash(password, 12);
-    await client.query('UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2', [passwordHash, reset.user_id]);
+    const updated = await client.query('UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2 RETURNING session_version', [passwordHash, reset.user_id]);
+    notificationId = await notifications.enqueue(client, reset, updated.rows[0].session_version);
     await client.query('DELETE FROM password_reset_codes WHERE user_id = $1', [reset.user_id]);
     await client.query('COMMIT');
-    return true;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
   }
+  try { await notifications.deliver(notificationId); }
+  catch { console.error('[password changed notification] DELIVERY_PENDING'); }
+  return true;
 }
 
 module.exports = { requestReset, resetPassword, emailText };

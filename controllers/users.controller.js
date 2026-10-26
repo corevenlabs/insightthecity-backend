@@ -60,13 +60,13 @@ const login = async (req, res, next) => {
 
     const result = await usersService.login(email, password);
     if (!result) {
-      return res.status(401).json({ success: false, message: "Credenciales inválidas" });
+      return res.status(401).json({ success: false, message: "La contraseña no es correcta", code: "INVALID_PASSWORD" });
     }
 
     res.json({ success: true, ...result });
   } catch (err) {
-    if (err.status === 403) {
-      return res.status(403).json({ success: false, message: err.message });
+    if (err.status === 403 || err.status === 401) {
+      return res.status(err.status).json({ success: false, message: err.message, code: err.code });
     }
     next(err);
   }

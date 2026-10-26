@@ -105,7 +105,8 @@ async function register({ name, email, password, language = "es" }) {
 async function login(email, password) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const user = await findByEmail(normalizedEmail);
-  if (!user || !user.password_hash) return null;
+  if (!user) throw Object.assign(new Error('No encontramos una cuenta con ese correo.'), {status:401,code:'ACCOUNT_NOT_FOUND'});
+  if (!user.password_hash) throw Object.assign(new Error('Esta cuenta usa Apple o Google. Usa tu acceso habitual o recupera la contraseña.'), {status:401,code:'LOGIN_PROVIDER_REQUIRED'});
 
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return null;

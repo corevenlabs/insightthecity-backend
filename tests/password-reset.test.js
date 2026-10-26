@@ -4,8 +4,13 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const service = require('../services/password-reset.service');
 const mailer = require('../services/password-reset-mail.service');
+const notices = require('../services/password-change-notification.service');
 
 test('recuperación envía código, rechaza uno incorrecto y consume el correcto una sola vez', async () => {
+  const originalEnqueue = notices.enqueue, originalDeliver = notices.deliver;
+  let noticeCount = 0;
+  notices.enqueue = async () => { noticeCount++; return "test-notice"; };
+  notices.deliver = async () => {};
   const originalQuery = db.query;
   const originalConnect = db.connect;
   const originalSend = mailer.send;
@@ -40,7 +45,7 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
         if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return {};
         if (sql.includes('SELECT r.user_id')) return { rows: reset ? [reset] : [] };
         if (sql.includes('SET attempts = attempts + 1')) { reset.attempts++; return {}; }
-        if (sql.includes('UPDATE users SET password_hash')) { passwordHash = values[0]; return {}; }
+        if (sql.includes('UPDATE users SET password_hash')) { passwordHash = values[0]; return {rows:[{session_version:1}]}; }
         if (sql.includes('DELETE FROM password_reset_codes')) { reset = null; return {}; }
         throw new Error(`Unexpected transaction query: ${sql}`);
       },
@@ -63,7 +68,9 @@ test('recuperación envía código, rechaza uno incorrecto y consume el correcto
     assert.equal(await service.resetPassword(user.email, sentCode, 'new-password'), true);
     assert.equal(await bcrypt.compare('new-password', passwordHash), true);
     assert.equal(await service.resetPassword(user.email, sentCode, 'another-password'), false);
+    assert.equal(noticeCount,1);
   } finally {
+    notices.enqueue = originalEnqueue; notices.deliver = originalDeliver;
     db.query = originalQuery;
     db.connect = originalConnect;
     mailer.send = originalSend;
