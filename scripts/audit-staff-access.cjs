@@ -15,7 +15,8 @@ const {Client}=require('pg');
   const drafts=(await c.query(`SELECT d.id,d.owner_id,d.status,d.experience_id,d.payload->>'title' AS title,e.is_published,d.created_at,d.updated_at
     FROM experience_drafts d LEFT JOIN experiences e ON e.id=d.experience_id
     WHERE d.payload->>'title' ~* $1 ORDER BY d.updated_at DESC`,[pattern])).rows;
-  console.log(JSON.stringify({clients,drafts},null,2));
+  const experiences=(await c.query('SELECT id,title,access,is_published FROM experiences ORDER BY title')).rows;
+  console.log(JSON.stringify({clients,drafts,experiences},null,2));
   await c.query('COMMIT');
  }catch(e){await c.query('ROLLBACK');throw e;}finally{await c.end();}
 })().catch(e=>{console.error(e.code||'PUBLICATION_AUDIT_FAILED');process.exitCode=1;});
