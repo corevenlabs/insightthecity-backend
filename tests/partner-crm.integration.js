@@ -1170,7 +1170,14 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       if(failOnce){failOnce=false;session.status='expired';throw Object.assign(Error('Amount verification failed'),{status:409,failedCheckout:{sessionId:id,customerId:'cus_fixed',attempt:row.checkout_attempt+1}});}
       return{session,customerId:'cus_fixed',attempt:row.checkout_attempt+1};
     };
-    try{for(const offer of ['founding','strategic']){
+    try{
+      const legacyClient=await S.create({business_name:'Legacy fixed amount',contact_name:'Owner',email:'legacy-fixed@example.com',category:'partner',offer:'founding',payment_method:'stripe'},actors.admin);
+      const legacyInvite=await S.action(legacyClient.id,{action:'invite'},actors.admin);
+      const legacySession={id:'cs_legacy_fixed',metadata:{purchase_type:'partner',partner_id:legacyClient.id},mode:'payment',currency:'usd',amount_total:30000,payment_status:'paid',status:'complete',payment_intent:'pi_legacy_fixed'};
+      sessions.set(legacySession.id,legacySession);
+      await db.query('UPDATE partner_clients SET stripe_session_id=$2 WHERE id=$1',[legacyClient.id,legacySession.id]);
+      await S.sync(token(legacyInvite));assert.equal((await S.detail(legacyClient.id,actors.admin)).payment_status,'paid');
+      for(const offer of ['founding','strategic']){
       const client=await S.create({business_name:'Fixed '+offer,contact_name:'Owner',email:'fixed-'+offer+'@example.com',category:offer==='strategic'?'strategic':'partner',offer,payment_method:offer==='strategic'?'waived':'stripe'},actors.admin);
       const invited=await S.action(client.id,{action:'invite'},actors.admin),access=token(invited),consent={language:'en',signerName:'Owner',accept:true};
       failOnce=true;await assert.rejects(S.checkout(access,consent));assert.equal((await S.detail(client.id,actors.admin)).checkout_attempt,1);

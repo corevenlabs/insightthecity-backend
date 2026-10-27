@@ -861,6 +861,8 @@ async function sync(token) {
     const session=await require('./stripe.service').retrievePartnerPaymentLinkSession(row.stripe_session_id);
     if (paymentLink.isSession(session) && session.status==='complete' && ['paid','no_payment_required'].includes(session.payment_status))
       await confirmPaymentLink(session);
+    else if (session.metadata?.purchase_type==='partner' && session.payment_status==='paid')
+      await confirmPayment(session);
     return publicView(token);
   }
   if ((paymentLink.strategicCheckout(row) || (row.payment_method === "stripe" && row.payment_status === "pending" && row.offer === "founding")) && paymentLink.configured() && !row.stripe_session_id) {
