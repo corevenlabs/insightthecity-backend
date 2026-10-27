@@ -703,6 +703,7 @@ async function acceptCommercial(c, row, input, extra = {}) {
   ]);
 }
 async function checkout(token, input) {
+  if (paymentLink.serverCheckout()) await sync(token);
   let clientId;
   const result = await transaction(async (c) => {
     const row = await fromToken(token, c, true);
@@ -713,8 +714,36 @@ async function checkout(token, input) {
     )
       R.fail("No hay un pago pendiente por Stripe", 409);
     if (paymentLink.strategicCheckout(row) || (row.offer === "founding" && paymentLink.configured())) {
-      const url = paymentLink.checkoutUrl(row);
       await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row), pricing: { amountBeforeTax: row.amount_cents, currency: "usd", taxExclusive: !paymentLink.testMode() && row.offer === "founding" } });
+      if (paymentLink.serverCheckout()) {
+        const stripe = require('./stripe.service');
+        if (row.stripe_session_id) {
+          const existing = await stripe.retrievePartnerPaymentLinkSession(row.stripe_session_id);
+          if (require('./partner-server-checkout').validateOpen(existing,row)) return {url:existing.url};
+          if (existing.status==='complete' || existing.payment_status==='paid' || (existing.payment_intent && !await stripe.canRetirePartnerCheckout(existing)))
+            R.fail('Tu pago está en verificación. Vuelve a tu invitación y actualiza su estado antes de continuar.',409);
+          if (existing.status==='open') await stripe.expirePartnerCheckout(existing.id);
+        }
+        // Retire superseded pages belonging to this exact invitation, never another client.
+        for await (const previous of stripe.listOpenPartnerSessions(row.offer)) {
+          if (previous.client_reference_id!==paymentLink.reference(row)) continue;
+          if (!await stripe.canRetirePartnerCheckout(previous))
+            R.fail('Hay un pago en verificación para esta invitación. Contacta a tu ejecutivo antes de reintentar.',409);
+          await stripe.expirePartnerCheckout(previous.id);
+        }
+        let created;
+        try {created = await stripe.createServerPartnerCheckout(row,link(row));}
+        catch(error) {
+          if (!error.failedCheckout) throw error;
+          const failed=error.failedCheckout;
+          await c.query('UPDATE partner_clients SET stripe_session_id=$2,stripe_partner_customer_id=$3,checkout_attempt=$4 WHERE id=$1',[row.id,failed.sessionId,failed.customerId,failed.attempt]);
+          return {checkoutError:error.message};
+        }
+        await c.query('UPDATE partner_clients SET stripe_session_id=$2,stripe_partner_customer_id=$3,checkout_attempt=$4,updated_at=NOW() WHERE id=$1',
+          [row.id,created.session.id,created.customerId,created.attempt]);
+        return {url:created.session.url};
+      }
+      const url = paymentLink.checkoutUrl(row);
       if (paymentLink.manualFor(row)) return { url };
       if (row.stripe_session_id) {
         const stripe = require("./stripe.service");
@@ -747,6 +776,7 @@ async function checkout(token, input) {
     return { url: session.url };
   });
   await sendPending(clientId);
+  if (result.checkoutError) R.fail(result.checkoutError,409);
   return result;
 }
 async function confirmPaymentLink(session) {
@@ -759,7 +789,7 @@ async function confirmPaymentLink(session) {
     const free = paymentLink.strategicCheckout(row);
     if ((!free && (row.offer !== "founding" || row.payment_method !== "stripe" || row.payment_status !== "pending" || row.amount_cents !== 30000)) ||
         !paymentLink.isSession(session, row.offer) || row.form_status === "not_sent" ||
-        row.stripe_session_id || session.client_reference_id !== paymentLink.reference(row)) return false;
+        (paymentLink.isServerSession(session) ? row.stripe_session_id !== session.id || session.metadata.partner_id!==row.id : row.stripe_session_id) || session.client_reference_id !== paymentLink.reference(row)) return false;
     if (session.mode !== "payment" || session.status !== "complete" || session.livemode !== !paymentLink.testMode() || session.currency !== "usd" ||
         !require('./partner-payment-amounts').paymentAmounts(session, row) ||
         !require('./partner-payment-amounts').settledPayment(session, free) ||
@@ -827,6 +857,12 @@ async function confirmPayment(session) {
 async function sync(token) {
   const row = await fromToken(token);
   if (paymentLink.manualFor(row)) return publicView(token);
+  if (row.stripe_session_id && ['founding','strategic'].includes(row.offer) && paymentLink.configured() && !row.payment_verified_at) {
+    const session=await require('./stripe.service').retrievePartnerPaymentLinkSession(row.stripe_session_id);
+    if (paymentLink.isSession(session) && session.status==='complete' && ['paid','no_payment_required'].includes(session.payment_status))
+      await confirmPaymentLink(session);
+    return publicView(token);
+  }
   if ((paymentLink.strategicCheckout(row) || (row.payment_method === "stripe" && row.payment_status === "pending" && row.offer === "founding")) && paymentLink.configured() && !row.stripe_session_id) {
     const stripe = require("./stripe.service");
     for await (const session of stripe.listPartnerPaymentLinkSessions(row.offer)) {

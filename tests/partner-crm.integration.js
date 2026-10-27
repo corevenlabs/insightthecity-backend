@@ -57,6 +57,7 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     "security-hardening.sql",
     "experience-gallery.sql",
     "partner-crm.sql",
+    "partner-checkout.sql",
     "account-deletion.sql",
     "web-account-deletion.sql",
     "legal-evidence.sql",
@@ -1152,6 +1153,44 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       );
     },
   );
+  await t.test("fixed-discount sessions preserve invitations, reuse retries and verify both offers before receipts", async()=>{
+    const old={};for(const key of ['createServerPartnerCheckout','retrievePartnerPaymentLinkSession','listOpenPartnerSessions','expirePartnerCheckout','listPartnerPaymentLinkSessions'])old[key]=stripe[key];
+    process.env.PARTNER_SERVER_CHECKOUT_ENABLED='true';process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID='plink_fixed_founding';process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID='plink_fixed_strategic';
+    const sessions=new Map();let count=0,failOnce=false;const expired=[];
+    stripe.listPartnerPaymentLinkSessions=()=> (async function*(){})();
+    stripe.listOpenPartnerSessions=()=> (async function*(){})();
+    stripe.expirePartnerCheckout=async id=>{expired.push(id);sessions.get(id).status='expired';};
+    stripe.retrievePartnerPaymentLinkSession=async id=>sessions.get(id);
+    stripe.createServerPartnerCheckout=async row=>{
+      const id='cs_fixed_'+(++count),subtotal=row.offer==='founding'?120000:180000;
+      const session={id,mode:'payment',status:'open',payment_status:'unpaid',livemode:true,currency:'usd',customer_email:row.email,customer_details:{email:row.email},
+        client_reference_id:require('../services/partner-payment-link.service').reference(row),metadata:{itc_partner_checkout:'fixed-discount-v1',partner_id:row.id,offer:row.offer},
+        amount_subtotal:subtotal,amount_total:row.amount_cents,total_details:{amount_discount:subtotal-row.amount_cents,amount_tax:0,amount_shipping:0},automatic_tax:{enabled:true,status:'requires_location_inputs'},url:'https://checkout.stripe.com/c/pay/'+id,payment_intent:null};
+      sessions.set(id,session);
+      if(failOnce){failOnce=false;session.status='expired';throw Object.assign(Error('Amount verification failed'),{status:409,failedCheckout:{sessionId:id,customerId:'cus_fixed',attempt:row.checkout_attempt+1}});}
+      return{session,customerId:'cus_fixed',attempt:row.checkout_attempt+1};
+    };
+    try{for(const offer of ['founding','strategic']){
+      const client=await S.create({business_name:'Fixed '+offer,contact_name:'Owner',email:'fixed-'+offer+'@example.com',category:offer==='strategic'?'strategic':'partner',offer,payment_method:offer==='strategic'?'waived':'stripe'},actors.admin);
+      const invited=await S.action(client.id,{action:'invite'},actors.admin),access=token(invited),consent={language:'en',signerName:'Owner',accept:true};
+      failOnce=true;await assert.rejects(S.checkout(access,consent));assert.equal((await S.detail(client.id,actors.admin)).checkout_attempt,1);
+      const first=await S.checkout(access,consent);assert.match(first.url,/checkout.stripe.com/);
+      assert.equal((await S.checkout(access,consent)).url,first.url);
+      let session=sessions.get((await S.detail(client.id,actors.admin)).stripe_session_id);
+      session.amount_total=180000;session.total_details.amount_discount=0;
+      const second=await S.checkout(access,consent);assert.notEqual(second.url,first.url);assert.ok(expired.includes(session.id));
+      session=sessions.get((await S.detail(client.id,actors.admin)).stripe_session_id);
+      assert.equal(await S.confirmPaymentLink({...session,id:'cs_unbound',status:'complete'}),false);
+      await assert.rejects(S.confirmPaymentLink({...session,status:'complete',payment_status:'paid',payment_intent:'pi_invalid',amount_total:999}));
+      Object.assign(session,{status:'complete',payment_status:offer==='strategic'?'no_payment_required':'paid',payment_intent:offer==='strategic'?null:'pi_fixed_'+count,automatic_tax:{enabled:true,status:'complete'},created:Math.floor(Date.now()/1000)});
+      await S.sync(access);
+      const done=await S.detail(client.id,actors.admin);
+      assert.equal(done.payment_status,offer==='strategic'?'waived':'paid');assert.equal(jwt.verify(token(done),process.env.JWT_SECRET).v,jwt.verify(access,process.env.JWT_SECRET).v);assert.equal((await S.fromToken(access)).id,client.id);assert.equal(done.activated_at,null);
+      assert.equal(done.stripe_payment_receipt.amounts.total,offer==='strategic'?0:30000);
+      assert.equal(await S.confirmPaymentLink(session),true);
+      await assert.rejects(S.checkout(access,consent));
+    }}finally{Object.assign(stripe,old);delete process.env.PARTNER_SERVER_CHECKOUT_ENABLED;delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID;delete process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID;}
+  });
   await t.test("admin moderation blocks access, preserves evidence and hides deleted clients", async () => {
     const row = await S.create({business_name:"Moderation example",contact_name:"Example",email:"moderation@example.com",phone:"123",language:"en",owner_id:actors.admin.id,category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);
     const before = await S.detail(row.id, actors.admin);

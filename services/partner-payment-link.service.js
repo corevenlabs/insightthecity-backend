@@ -11,6 +11,12 @@ const TEST_URLS = {
   strategic: "https://buy.stripe.com/test_4gM9ATe3QalsegS31pgbm00?prefilled_promo_code=ITCSTRATEGIC100",
 };
 function testMode() { return process.env.PARTNER_PAYMENT_LINK_TEST_MODE === "true"; }
+function serverCheckout() { return process.env.PARTNER_SERVER_CHECKOUT_ENABLED === 'true' && !manual(); }
+function isServerSession(session, offer) {
+  return session.metadata?.itc_partner_checkout === 'fixed-discount-v1' &&
+    ['founding','strategic'].includes(session.metadata?.offer) &&
+    (!offer || session.metadata.offer === offer) && !session.payment_link;
+}
 function strategicCheckout(row) { return (testMode() || Boolean(linkId("strategic"))) && row.offer === "strategic" && row.amount_cents === 0 && row.payment_status === "waived" && ["not_sent", "invited"].includes(row.form_status) && !row.activated_at && !row.payment_verified_at; }
 const strategicTest = strategicCheckout; // Compatibility for existing integrations.
 function presentation(row) { return { payment_tax_exclusive: !testMode() && configured() && row.offer === "founding", payment_test: testMode() && (row.offer === "founding" || row.offer === "strategic"), ...(strategicTest(row) ? { payment_method: "stripe", payment_status: "pending" } : {}) }; }
@@ -35,8 +41,9 @@ function checkoutUrl(row) {
 }
 function linkId(offer) { return process.env[offer === "strategic" ? "STRATEGIC_PARTNER_PAYMENT_LINK_ID" : "FOUNDING_PARTNER_PAYMENT_LINK_ID"]; }
 function isSession(session, offer) {
+  if (!manual() && isServerSession(session, offer)) return true;
   const id = typeof session.payment_link === "string" ? session.payment_link : session.payment_link?.id;
   const offers = offer ? [offer] : ["founding", "strategic"];
   return !manual() && offers.some(value => Boolean(linkId(value)) && id === linkId(value));
 }
-module.exports = { URL, LIVE_URLS, TEST_URLS, strategicCheckout, testMode, strategicTest, presentation, manual, manualFor, configured, reference, clientId, checkoutUrl, linkId, isSession };
+module.exports = { URL, LIVE_URLS, TEST_URLS, serverCheckout, isServerSession, strategicCheckout, testMode, strategicTest, presentation, manual, manualFor, configured, reference, clientId, checkoutUrl, linkId, isSession };

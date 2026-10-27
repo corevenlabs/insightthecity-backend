@@ -50,7 +50,7 @@ async function main() {
     const link = spec.link;
     if (!link) throw new Error(`Approved ${spec.offer} link not found in dedicated Stripe environment`);
     const items = await stripe.paymentLinks.listLineItems(link.id, { limit: 100 });
-    if (!link.active || link.livemode !== !testMode() || items.has_more || items.data.length !== 1 ||
+    if ((!link.active && process.env.PARTNER_SERVER_CHECKOUT_ENABLED !== 'true') || link.livemode !== !testMode() || items.has_more || items.data.length !== 1 ||
         items.data[0].quantity !== 1 || items.data[0].price?.currency !== "usd" ||
         items.data[0].price?.unit_amount !== spec.subtotal || items.data[0].price?.recurring ||
         items.data[0].adjustable_quantity?.enabled || !link.allow_promotion_codes ||
@@ -96,6 +96,10 @@ async function main() {
   }
   const returnUrl = `${base}/api/partners/payment/return?session_id={CHECKOUT_SESSION_ID}`;
   for (const { link } of specifications) {
+    if (process.env.FOUNDING_FINALIZE === 'true' && process.env.PARTNER_SERVER_CHECKOUT_ENABLED === 'true' && link.active) {
+      await stripe.paymentLinks.update(link.id,{active:false,inactive_message:'This payment page has been updated. Please return to your original ITC Club invitation email and confirm your participation to open a new secure checkout.'});
+      console.log('Legacy public payment link retired; existing ITC invitation URLs preserved: '+link.id);
+    }
     if (process.env.FOUNDING_FINALIZE === "true" && (link.after_completion?.type !== "redirect" || link.after_completion.redirect?.url !== returnUrl))
       await stripe.paymentLinks.update(link.id, { after_completion: { type: "redirect", redirect: { url: returnUrl } } });
   }

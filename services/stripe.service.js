@@ -149,6 +149,16 @@ function listPartnerPaymentLinkSessions(offer = "founding") {
     return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
+    canRetirePartnerCheckout: async session => {
+        if (session.status!=='open' && session.status!=='expired') return false;
+        if (session.payment_status!=='unpaid') return false;
+        if (!session.payment_intent) return true;
+        const p=await partnerLinkClient().paymentIntents.retrieve(typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent.id,{expand:['latest_charge']});
+        return ['canceled','requires_payment_method'].includes(p.status) && p.amount_received===0 && !p.latest_charge?.paid;
+    },
+    createServerPartnerCheckout: (row,url) => require('./partner-server-checkout').create(partnerLinkClient(),row,url),
+    expirePartnerCheckout: id => partnerLinkClient().checkout.sessions.expire(id),
+    listOpenPartnerSessions: offer => partnerLinkClient().checkout.sessions.list({payment_link:require('./partner-payment-link.service').linkId(offer),limit:100,status:'open'}),
     retrieveInvoice: id => client().invoices.retrieve(id),
     retrievePartnerReceiptData,
     listPartnerPaymentLinkSessions,
