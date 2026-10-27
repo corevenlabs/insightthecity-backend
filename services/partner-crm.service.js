@@ -434,6 +434,7 @@ async function action(id, input, actor) {
         );
       if (invalid || !["qr", "external"].includes(exp.benefit_action))
         R.fail(invalid || "Configura el canje QR o enlace de la experiencia");
+      await require('./partner-publication.service').link(c,row,exp.id,actor);
       if (!exp.is_published) {
         await c.query('UPDATE experiences SET is_published=TRUE,updated_at=NOW() WHERE id=$1',[exp.id]);
         exp.is_published = true;

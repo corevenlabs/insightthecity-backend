@@ -1219,6 +1219,12 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     assert.equal((await S.list(actors.admin)).find(x=>x.id===client.id).publication_status,'unpublished');
     const detached=await S.action(client.id,{action:'unlink-experience',experience_id:publication.id},actors.admin);
     assert.equal(detached.publication_status,'unlinked');assert.equal(detached.activated_at,null);assert.equal(emails.length,count);
+    await db.query(`UPDATE experiences SET access='premium',is_published=TRUE,image_url='https://example.com/1.jpg',gallery_urls='["https://example.com/2.jpg","https://example.com/3.jpg","https://example.com/4.jpg"]',member_benefit='Benefit',benefit_action='qr' WHERE id=$1`,[publication.id]);
+    await S.action(client.id,{action:'link-experience',experience_id:publication.id},actors.admin);
+    await db.query("UPDATE partner_clients SET form_status='ready' WHERE id=$1",[other.id]);
+    await assert.rejects(S.action(other.id,{action:'activate',experience_id:publication.id},actors.admin));
+    assert.equal((await S.detail(other.id,actors.admin)).activated_at,null);
+    assert.equal(emails.length,count);
   });
   await t.test("admin moderation blocks access, preserves evidence and hides deleted clients", async () => {
     const row = await S.create({business_name:"Moderation example",contact_name:"Example",email:"moderation@example.com",phone:"123",language:"en",owner_id:actors.admin.id,category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);
