@@ -58,6 +58,8 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
     "experience-gallery.sql",
     "partner-crm.sql",
     "partner-checkout.sql",
+    "experience-drafts.sql",
+    "partner-publications.sql",
     "account-deletion.sql",
     "web-account-deletion.sql",
     "legal-evidence.sql",
@@ -1197,6 +1199,26 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       assert.equal(await S.confirmPaymentLink(session),true);
       await assert.rejects(S.checkout(access,consent));
     }}finally{Object.assign(stripe,old);delete process.env.PARTNER_SERVER_CHECKOUT_ENABLED;delete process.env.FOUNDING_PARTNER_PAYMENT_LINK_ID;delete process.env.STRATEGIC_PARTNER_PAYMENT_LINK_ID;}
+  });
+  await t.test("publication links track real visibility without changing commercial state or sending emails",async()=>{
+    const make=async suffix=>S.create({business_name:'Publication '+suffix,contact_name:'Owner',email:'pub-'+suffix+'@example.com',category:'strategic',offer:'strategic',payment_method:'waived'},actors.admin);
+    const client=await make('one'),other=await make('two');
+    const publication=(await db.query("INSERT INTO experiences(id,title,category,access,is_published) VALUES('publication-link-test','Publication example','Food','free',TRUE) RETURNING id")).rows[0];
+    const before=await S.detail(client.id,actors.admin),count=emails.length;
+    await assert.rejects(S.action(client.id,{action:'link-experience',experience_id:publication.id},actors.executive));
+    const linked=await S.action(client.id,{action:'link-experience',experience_id:publication.id},actors.admin);
+    assert.equal(linked.publication_status,'published');assert.equal(linked.experience_title,'Publication example');
+    for(const key of ['form_status','activated_at','expires_at','owner_id','payment_status'])assert.deepEqual(linked[key],before[key]);
+    assert.equal(emails.length,count);
+    await S.action(client.id,{action:'link-experience',experience_id:publication.id},actors.admin);
+    assert.equal((await db.query("SELECT COUNT(*)::int n FROM partner_activity WHERE client_id=$1 AND kind='link-experience'",[client.id])).rows[0].n,1);
+    await assert.rejects(S.action(other.id,{action:'link-experience',experience_id:publication.id},actors.admin));
+    assert.equal((await S.list(actors.admin)).find(x=>x.id===client.id).publication_status,'published');
+    await db.query('UPDATE experiences SET is_published=FALSE WHERE id=$1',[publication.id]);
+    assert.equal((await S.detail(client.id,actors.admin)).publication_status,'unpublished');
+    assert.equal((await S.list(actors.admin)).find(x=>x.id===client.id).publication_status,'unpublished');
+    const detached=await S.action(client.id,{action:'unlink-experience',experience_id:publication.id},actors.admin);
+    assert.equal(detached.publication_status,'unlinked');assert.equal(detached.activated_at,null);assert.equal(emails.length,count);
   });
   await t.test("admin moderation blocks access, preserves evidence and hides deleted clients", async () => {
     const row = await S.create({business_name:"Moderation example",contact_name:"Example",email:"moderation@example.com",phone:"123",language:"en",owner_id:actors.admin.id,category:"partner",offer:"founding",payment_method:"stripe"}, actors.admin);

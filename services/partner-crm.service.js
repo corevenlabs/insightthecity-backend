@@ -103,7 +103,7 @@ async function moderate(id, input, actor) {
   return transaction(async c => {
     const row = await get(c, id, actor, true);
     if (input.business_name !== row.business_name) R.fail("Confirma el nombre del negocio", 400);
-    if (input.action === "delete" && row.experience_id)
+    if (input.action === "delete" && (row.experience_id || (await c.query('SELECT 1 FROM experience_drafts WHERE client_id=$1',[id])).rowCount))
       R.fail("Este cliente tiene una publicación vinculada. Gestiona esa publicación antes de eliminarlo.", 409);
     if (input.action !== "unblock" && (await c.query("SELECT 1 FROM partner_mail WHERE client_id=$1 AND status='sending' LIMIT 1", [id])).rowCount)
       R.fail("Hay un correo en proceso. Espera un momento y vuelve a intentar.", 409);
@@ -120,7 +120,7 @@ async function moderate(id, input, actor) {
 async function list(actor) {
   return (
     await db.query(
-      `SELECT p.blocked_at,p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id WHERE p.deleted_at IS NULL AND ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
+      `SELECT p.blocked_at,p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,COALESCE(e.title,d.payload->>'title') AS experience_title,e.is_published AS experience_published,d.id AS experience_draft_id,d.status AS experience_draft_status,CASE WHEN e.id IS NULL AND d.id IS NOT NULL THEN 'draft' WHEN e.id IS NULL THEN 'unlinked' WHEN e.is_published THEN 'published' ELSE 'unpublished' END AS publication_status,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id LEFT JOIN experiences e ON e.id=p.experience_id LEFT JOIN experience_drafts d ON d.client_id=p.id WHERE p.deleted_at IS NULL AND ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
       [actor.role !== "executive", actor.id],
     )
   ).rows;
@@ -134,6 +134,7 @@ async function detail(id, actor) {
     )
   ).rows;
   const who = await owner(db, row);
+  const publication=await require('./partner-publication.service').state(db,row.experience_id,row.id);
   if (actor.role === "editor")
     return {
       id: row.id,
@@ -141,6 +142,7 @@ async function detail(id, actor) {
       form_status: row.form_status,
       content: row.content,
       experience_id: row.experience_id,
+      ...publication,
       activated_at: row.activated_at,
       expires_at: row.expires_at,
       files,
@@ -156,6 +158,7 @@ async function detail(id, actor) {
   );
   return {
     ...row,
+    ...publication,
     ...paymentLink.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     files,
@@ -210,7 +213,15 @@ async function action(id, input, actor) {
     const op = input.action;
     if (row.blocked_at) R.fail("Desbloquea el cliente antes de realizar esta acción", 409);
     if (!["ready", "activate"].includes(op)) manage(actor);
-    if (op === "generate-link") {
+    if (op === 'link-experience') {
+      await require('./partner-publication.service').link(c,row,R.clean(input.experience_id,120),actor);
+    } else if (op === 'unlink-experience') {
+      if(actor.role!=='admin')R.fail('Solo el administrador puede desvincular publicaciones',403);
+      if(row.activated_at)R.fail('Una relación con vigencia iniciada requiere revisión administrativa antes de desvincular',409);
+      if(input.experience_id!==row.experience_id)R.fail('La vinculación cambió; actualiza la ficha',409);
+      await c.query('UPDATE experience_drafts SET client_id=NULL WHERE client_id=$1',[row.id]);
+      await c.query('UPDATE partner_clients SET experience_id=NULL,updated_at=NOW() WHERE id=$1',[row.id]);
+    } else if (op === "generate-link") {
       await termsSnapshot(c, row);
       if (row.form_status === "not_sent") {
         await c.query("UPDATE partner_clients SET form_status='invited',link_expires_at=NOW()+INTERVAL '90 days',updated_at=NOW() WHERE id=$1", [id]);
@@ -544,7 +555,7 @@ async function action(id, input, actor) {
       );
       /* El envío se reintenta después de confirmar la transacción. */
     } else R.fail("Acción desconocida");
-    if (op !== "note")
+    if (!["note","link-experience"].includes(op))
       await activity(
         c,
         row,
@@ -554,7 +565,7 @@ async function action(id, input, actor) {
       );
     return id;
   });
-  if (input.action !== "generate-link") await sendPending(result);
+  if (!["generate-link","link-experience","unlink-experience"].includes(input.action)) await sendPending(result);
   return detail(id, actor);
 }
 async function publicView(token) {

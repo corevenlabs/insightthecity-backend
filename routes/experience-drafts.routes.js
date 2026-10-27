@@ -21,19 +21,27 @@ const lock=async(c,req)=>{
  if(!/^[a-f0-9-]{36}$/i.test(req.params.id))fail(404,'Borrador no encontrado');
  const row=(await c.query('SELECT * FROM experience_drafts WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
  if(!row || (req.admin.role!=='admin' && row.owner_id!==req.admin.id))fail(404,'Borrador no encontrado');
+ if(row.client_id)await require('../services/partner-crm.service').get(c,row.client_id,req.admin);
  return row;
 };
 const activity=(c,row,actor,kind)=>c.query('INSERT INTO experience_draft_activity(draft_id,actor_id,kind) VALUES($1,$2,$3)',[row.id,actor.id,kind]);
 const withActivity=async(c,row)=>({...row,activity:(await c.query('SELECT e.id,e.kind,e.created_at,a.name AS actor_name FROM experience_draft_activity e LEFT JOIN admins a ON a.id=e.actor_id WHERE e.draft_id=$1 ORDER BY e.id DESC LIMIT 50',[row.id])).rows});
+const clientForInput=async(c,row,req)=>{
+ const id=Object.hasOwn(req.body||{},'client_id')?(req.body.client_id||null):(row?.client_id||null);
+ if(row?.client_id && row.client_id!==id)fail(409,'El borrador ya tiene un cliente vinculado');
+ if(id && !row?.client_id)await require('../services/partner-publication.service').draftClient(c,id,req.admin,row?.id);
+ return id;
+};
 router.get('/',wrap(async(req,res)=>{
- const rows=(await db.query("SELECT d.*,a.name AS owner_name FROM experience_drafts d LEFT JOIN admins a ON a.id=d.owner_id WHERE ($1::boolean OR d.owner_id=$2) ORDER BY (d.status='pending') DESC,d.updated_at DESC LIMIT 200",[req.admin.role==='admin',req.admin.id])).rows;
+ const rows=(await db.query("SELECT d.*,a.name AS owner_name,p.business_name AS client_name FROM experience_drafts d LEFT JOIN admins a ON a.id=d.owner_id LEFT JOIN partner_clients p ON p.id=d.client_id WHERE ($1::boolean OR (d.owner_id=$2 AND (d.client_id IS NULL OR (p.owner_id=$2 AND p.deleted_at IS NULL)))) ORDER BY (d.status='pending') DESC,d.updated_at DESC LIMIT 200",[req.admin.role==='admin',req.admin.id])).rows;
  res.json(rows);
 }));
 router.post('/',wrap(async(req,res)=>{
  const body=payload(req.body),c=await db.connect();
  try{
   await c.query('BEGIN');
-  const row=(await c.query('INSERT INTO experience_drafts(owner_id,payload) VALUES($1,$2) RETURNING *',[req.admin.id,body])).rows[0];
+  const clientId=await clientForInput(c,null,req);
+  const row=(await c.query('INSERT INTO experience_drafts(owner_id,payload,client_id) VALUES($1,$2,$3) RETURNING *',[req.admin.id,body,clientId])).rows[0];
   await activity(c,row,req.admin,'created');
   await c.query('COMMIT');res.status(201).json(row);
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
@@ -48,7 +56,8 @@ const transaction=fn=>wrap(async(req,res)=>{
 router.get('/:id',transaction(async(c,row)=>row));
 router.put('/:id',transaction(async(c,row,req)=>{
  if(row.status!=='draft' && !(row.status==='pending' && req.admin.role==='admin'))fail(409,'Solo el administrador puede editar durante la revisión. Las experiencias aprobadas se editan desde su publicación');
- const updated=(await c.query('UPDATE experience_drafts SET payload=$2,updated_at=NOW() WHERE id=$1 RETURNING *',[row.id,payload(req.body)])).rows[0];
+ const clientId=await clientForInput(c,row,req);
+ const updated=(await c.query('UPDATE experience_drafts SET payload=$2,client_id=$3,updated_at=NOW() WHERE id=$1 RETURNING *',[row.id,payload(req.body),clientId])).rows[0];
  await activity(c,row,req.admin,'saved');
  return updated;
 }));
@@ -81,12 +90,17 @@ router.post('/:id/return',transaction(async(c,row,req)=>{
 router.post('/:id/approve',transaction(async(c,row,req)=>{
  if(req.admin.role!=='admin')fail(403,'Solo el administrador puede aprobar y publicar');
  if(!['draft','pending'].includes(row.status))fail(409,'Este borrador ya fue aprobado');
+ const clientId=await clientForInput(c,row,req);
  const content=Object.hasOwn(req.body || {},'payload')?payload(req.body.payload):row.payload;
  let status=200,result;
  const capture={status(value){status=value;return this;},json(value){result=value;return this;}};
  await controller.createExperience({...req,body:{...content,id:`draft-${row.id}`,isPublished:true},experienceConnection:c},capture,e=>{throw e;});
  if(status>=400 || !result?.id)fail(status>=400?status:500,result?.message||'No se pudo publicar');
- const updated=(await c.query("UPDATE experience_drafts SET status='approved',payload=$4,experience_id=$2,reviewed_by=$3,updated_at=NOW() WHERE id=$1 RETURNING *",[row.id,result.id,req.admin.id,content])).rows[0];
+ const updated=(await c.query("UPDATE experience_drafts SET status='approved',payload=$4,experience_id=$2,reviewed_by=$3,client_id=$5,updated_at=NOW() WHERE id=$1 RETURNING *",[row.id,result.id,req.admin.id,content,clientId])).rows[0];
+ if(clientId){
+  const client=await require('../services/partner-crm.service').get(c,clientId,req.admin,true);
+  await require('../services/partner-publication.service').link(c,client,result.id,req.admin);
+ }
  if(Object.hasOwn(req.body || {},'payload'))await activity(c,row,req.admin,'saved');
  await activity(c,row,req.admin,'published');
  return updated;

@@ -16,6 +16,8 @@ async function draft(req,res,next) {
       return res.json(controller.serialize(existing));
     }
     if(row.activated_at || existing?.is_published) throw fail(403,'Un perfil publicado solo se modifica desde la administración');
+    if((await c.query("SELECT 1 FROM experience_drafts WHERE client_id=$1 AND status<>'approved'",[row.id])).rowCount)
+      throw fail(409,'Este cliente ya tiene un borrador en Experiencias. Abre ese borrador desde la ficha del cliente.');
     if(row.payment_status === 'pending' || !['submitted','ready'].includes(row.form_status)) throw fail(409,'El cliente debe completar el formulario y el pago antes de preparar la experiencia');
     if(row.form_status === 'ready' && req.admin.role !== 'admin') throw fail(409,'El borrador está pendiente de aprobación. Un administrador debe devolverlo a preparación antes de editarlo');
     if(req.body.isPublished === true || req.body.is_published === true) throw fail(403,'Solo el administrador puede publicar la experiencia');

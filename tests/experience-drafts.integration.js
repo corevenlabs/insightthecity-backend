@@ -10,6 +10,7 @@ after(async()=>{if(server)await new Promise(r=>server.close(r));await db.end();}
 test('executive without clients creates own drafts, submits, admin returns and publishes once',async()=>{
  await db.query(fs.readFileSync('database/experience-drafts.sql','utf8'));
  await db.query(fs.readFileSync('database/experience-draft-activity.sql','utf8'));
+ await db.query(fs.readFileSync('database/partner-publications.sql','utf8'));
  await db.query(fs.readFileSync('database/experience-draft-activity.sql','utf8'));
  const roleIds={};
  for(const [key,role] of [['one','executive'],['two','executive'],['admin','admin'],['editor','editor']]){
@@ -59,6 +60,21 @@ test('executive without clients creates own drafts, submits, admin returns and p
   assert.equal((await api('/experiences/'+exp.id,'admin','PUT',{...body,title:'Published admin edit',isPublished:true})).status,200);
   assert.equal((await api('/experiences/'+exp.id,'one','PUT',body)).status,403);
   assert.equal((await api(path,'admin')).body.owner_id,roleIds.one);
+  const client=(await db.query("INSERT INTO partner_clients(business_name,contact_name,email,owner_id,category,offer,amount_cents,payment_method,payment_status,form_status) VALUES('Bound client','Owner',$1,$2,'strategic','strategic',0,'waived','waived','submitted') RETURNING *",['bound-'+Date.now()+'@example.test',roleIds.one])).rows[0];
+  let bound;
+  try {
+    assert.equal((await api('/drafts','two','POST',{...body,client_id:client.id})).status,404);
+    const createdBound=await api('/drafts','one','POST',{...body,client_id:client.id});assert.equal(createdBound.status,201);bound=createdBound.body;
+    assert.equal(bound.client_id,client.id);
+    assert.equal((await api('/drafts','one','POST',{...body,client_id:client.id})).status,409);
+    const publishedBound=await api('/drafts/'+bound.id+'/approve','admin','POST',{payload:body,client_id:client.id});assert.equal(publishedBound.status,200);
+    const linked=(await db.query('SELECT * FROM partner_clients WHERE id=$1',[client.id])).rows[0];
+    assert.equal(linked.experience_id,publishedBound.body.experience_id);assert.equal(linked.owner_id,roleIds.one);assert.equal(linked.activated_at,null);assert.equal(linked.expires_at,null);assert.equal(linked.form_status,'submitted');
+  } finally {
+    await db.query('DELETE FROM partner_activity WHERE client_id=$1',[client.id]);
+    await db.query('DELETE FROM partner_clients WHERE id=$1',[client.id]);
+    if(bound){await db.query('DELETE FROM experience_drafts WHERE id=$1',[bound.id]);await db.query('DELETE FROM experiences WHERE id=$1',['draft-'+bound.id]);}
+  }
   const direct=(await api('/drafts','admin','POST',body)).body;
   try {
    const published=await api('/drafts/'+direct.id+'/approve','admin','POST',{payload:{...body,title:'Admin publishes preparation directly'}});
