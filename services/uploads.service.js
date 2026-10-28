@@ -43,41 +43,6 @@ async function uploadImage(file, prefix = 'experiences') {
   return `${base}/uploads/${prefix}/${filename}`;
 }
 
-// Los PDFs de pago van a un bucket sin acceso público; nunca se usa GCS_BUCKET como respaldo.
-function privateBucket() {
-  const name = process.env.GCS_PRIVATE_BUCKET;
-  if (!name) throw new Error('GCS_PRIVATE_BUCKET no configurado');
-  if (name === process.env.GCS_BUCKET) throw new Error('GCS_PRIVATE_BUCKET no puede ser el bucket público');
-  return name;
-}
-
-async function uploadPrivatePdf(file) {
-  if (!file?.buffer || file.mimetype !== 'application/pdf' || file.buffer.toString('ascii',0,5)!=='%PDF-') throw new Error('Archivo PDF inválido');
-  const key = buildKey(file.originalname || 'guia.pdf', 'guides');
-  if (DRIVER === 'gcs') {
-    const storage = require('../config/storage');
-    const bucketName = privateBucket();
-    await storage.bucket(bucketName).file(key).save(file.buffer, { contentType: 'application/pdf', resumable: false, metadata: { cacheControl: 'private, no-store' } });
-    return { key, name: file.originalname, size: file.size };
-  }
-  const dir = path.join(__dirname, '..', 'uploads', 'guides');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, path.basename(key)), file.buffer);
-  return { key, name: file.originalname, size: file.size };
-}
-
-function streamPrivatePdf(key, response) {
-  let stream;
-  if (DRIVER === 'gcs') {
-    const storage = require('../config/storage');
-    stream = storage.bucket(privateBucket()).file(key).createReadStream();
-  } else {
-    stream = fs.createReadStream(path.join(__dirname, '..', 'uploads', 'guides', path.basename(key)));
-  }
-  stream.pipe(response);
-  return stream;
-}
-
 // Borra todo lo subido bajo un prefijo (p. ej. las fotos de perfil de un usuario eliminado).
 async function deletePrefix(prefix) {
   if (!/^[a-z]+\/\d+$/.test(prefix)) throw new Error("Prefijo inválido");
@@ -91,4 +56,4 @@ async function deletePrefix(prefix) {
   fs.rmSync(path.join(__dirname, "..", "uploads", prefix), { recursive: true, force: true });
 }
 
-module.exports = { uploadImage, uploadPrivatePdf, streamPrivatePdf, deletePrefix };
+module.exports = { uploadImage, deletePrefix };

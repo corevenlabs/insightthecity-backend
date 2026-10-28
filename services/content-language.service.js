@@ -139,9 +139,8 @@ async function experience(record,language,translator=translateText) {
  return result;
 }
 function article(record,language,translator=translateText) {return fields({...record,originalTitle:record.title,originalExcerpt:record.excerpt},language,['title','excerpt','contentHtml'],translator);}
-function guide(record,language,translator=translateText) {return fields(record,language,['title','description'],translator);}
 async function chatItem(item,language) {
  const localized=item.kind==='news'?await fields(item,language,['title','description']):await experience(item,language);
  return localized;
 }
-module.exports={languageOf,requestLanguage,createTranslator,translateText,experience,article,guide,chatItem,chunks,protectValues,translatePublishedText};
+module.exports={languageOf,requestLanguage,createTranslator,translateText,experience,article,chatItem,chunks,protectValues,translatePublishedText};

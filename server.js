@@ -15,7 +15,6 @@ const uploadsRouter = require("./routes/uploads.routes");
 const newsRouter = require("./routes/news.routes");
 const partnershipsRouter = require("./routes/partnerships.routes");
 const benefitsRouter = require("./routes/benefits.routes");
-const guidesRouter = require("./routes/guides.routes");
 const legalRouter = require("./routes/legal.routes");
 const stripeWebhookRouter = require("./routes/stripe.webhook");
 const { page: legalPage } = require("./controllers/legal.controller");
@@ -88,7 +87,9 @@ app.use("/api/uploads", uploadsRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/partnerships", partnershipsRouter);
 app.use(benefitsRouter);
-app.use('/api/guides', guidesRouter);
+// Compatibility only: older installed apps receive an empty retired catalog.
+app.get(['/api/guides', '/api/guides/mine', '/api/guides/admin'], (_req,res)=>res.json([]));
+app.use('/api/guides', (_req,res)=>res.status(410).json({success:false,message:'Este contenido ya no está disponible.'}));
 app.use("/api/legal", legalRouter);
 // Páginas públicas de Términos, Privacidad, etc. (URLs para las tiendas de apps).
 app.get("/legal/:slug", legalPage);

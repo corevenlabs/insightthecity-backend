@@ -3,7 +3,7 @@ const db = require("../config/db");
 const service = require("../services/experiences.service");
 
 // Contenido inicial (migrado desde la app: src/constants/experiences.ts).
-// section: top_today | drops | que_hacer | ny_al_dia | guias | null
+// section: top_today | drops | que_hacer | ny_al_dia | null
 const experiences = [
   {
     id: "central-park-concert",
@@ -253,21 +253,6 @@ const experiences = [
       "Resumen de cambios importantes en la ciudad: transporte, clima, cierres, eventos masivos y noticias útiles para residentes y visitantes.",
     includes: ["Resumen actualizado", "Alertas prácticas", "Contexto para moverte mejor"],
     recommendation: "Revísalo antes de salir, especialmente si vas a Manhattan o cruzas entre NYC y NJ.",
-  },
-  {
-    id: "nyc-local-guides",
-    title: "Guías para vivir NYC como local",
-    category: "GUÍA TURÍSTICA",
-    image_url: "https://images.unsplash.com/photo-1518391846015-55a9cc003b25",
-    date_label: "Guía recomendada",
-    location: "Nueva York",
-    access: "premium",
-    section: "guias",
-    is_featured: true,
-    description:
-      "Rutas, miradores, museos, rooftops y planes seleccionados para organizar tu visita sin perder tiempo buscando entre cientos de opciones.",
-    includes: ["Ruta sugerida por zonas", "Lugares para fotos", "Tips de horarios y transporte"],
-    recommendation: "Úsala como base para planificar un día completo y ajusta según clima y distancia.",
   },
   {
     id: "liberty-state-park-sunset",

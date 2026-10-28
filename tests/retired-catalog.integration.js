@@ -1,0 +1,8 @@
+const {test,after}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');
+if(process.env.DB_DATABASE!=='itc_crm_test'||process.env.DB_HOST!=='127.0.0.1')throw Error('Use isolated local database');
+const db=require('../config/db');after(()=>db.end());
+test('Retirement hides legacy catalogs without deleting purchases or other experiences',async()=>{
+ const client=await db.connect();
+ try{await client.query('BEGIN');await client.query('CREATE TABLE IF NOT EXISTS public.guides(id integer,is_published boolean,individual_purchase_enabled boolean,updated_at timestamptz)');await client.query('CREATE TEMP TABLE guides(id integer,is_published boolean,individual_purchase_enabled boolean,updated_at timestamptz)');await client.query('CREATE TEMP TABLE experiences(id integer,section text,is_published boolean,updated_at timestamptz)');await client.query('CREATE TEMP TABLE guide_purchases(id integer,amount_cents integer)');await client.query("INSERT INTO guides VALUES(1,true,true,NULL); INSERT INTO experiences VALUES(1,'guias',true,NULL),(2,'top_today',true,NULL); INSERT INTO guide_purchases VALUES(1,100)");await client.query(fs.readFileSync('database/retire-downloadable-guides.sql','utf8'));assert.deepEqual((await client.query('SELECT is_published,individual_purchase_enabled FROM guides')).rows,[{is_published:false,individual_purchase_enabled:false}]);assert.deepEqual((await client.query('SELECT id,is_published FROM experiences ORDER BY id')).rows,[{id:1,is_published:false},{id:2,is_published:true}]);assert.equal((await client.query('SELECT COUNT(*)::int AS n FROM guide_purchases')).rows[0].n,1);
+ }finally{await client.query('ROLLBACK');client.release();}
+});

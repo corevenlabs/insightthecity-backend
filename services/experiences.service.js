@@ -106,7 +106,7 @@ async function replaceIncludes(client, experienceId, includes) {
 }
 
 async function list({ section, publishedOnly, sort, order, start, end, filter } = {}) {
-  const where = [];
+  const where = ["COALESCE(e.section,'') NOT IN ('guias','guides')"]; // Retired catalog content is never exposed.
   const params = [];
 
   if (publishedOnly) where.push(`e.is_published = TRUE`);
@@ -157,7 +157,7 @@ async function list({ section, publishedOnly, sort, order, start, end, filter } 
 }
 
 async function getById(id, connection = db) {
-  const { rows } = await connection.query(`${BASE_SELECT} WHERE e.id = $1`, [id]);
+  const { rows } = await connection.query(`${BASE_SELECT} WHERE e.id = $1 AND COALESCE(e.section,'') NOT IN ('guias','guides')`, [id]);
   return rows[0] || null;
 }
 

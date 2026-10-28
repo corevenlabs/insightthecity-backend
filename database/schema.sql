@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS experiences (
                  CHECK (access IN ('free', 'premium')),
   description    TEXT,
   recommendation TEXT,
-  section        VARCHAR(40),                       -- top_today | drops | que_hacer | ny_al_dia | guias
+  section        VARCHAR(40),                       -- top_today | drops | que_hacer | ny_al_dia
   is_featured    BOOLEAN NOT NULL DEFAULT FALSE,
   sort_order     INTEGER NOT NULL DEFAULT 0,
   is_published   BOOLEAN NOT NULL DEFAULT TRUE,
@@ -305,52 +305,6 @@ CREATE TABLE IF NOT EXISTS benefit_redemptions (
 
 CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_lookup ON benefit_redemptions (token_hash);
 CREATE INDEX IF NOT EXISTS idx_benefit_redemptions_user_experience ON benefit_redemptions (user_id, experience_id);
-
-CREATE TABLE IF NOT EXISTS guides (
-  id BIGSERIAL PRIMARY KEY,
-  title VARCHAR(200) NOT NULL,
-  description TEXT,
-  category VARCHAR(80),
-  language VARCHAR(2) NOT NULL DEFAULT 'es' CHECK (language IN ('es','en','pt')),
-  region VARCHAR(2) NOT NULL DEFAULT 'NY' CHECK (region IN ('NY','NJ')),
-  access VARCHAR(10) NOT NULL DEFAULT 'premium' CHECK (access IN ('free','premium')),
-  cover_url VARCHAR(500),
-  pdf_key VARCHAR(500) NOT NULL,
-  pdf_name VARCHAR(255),
-  pdf_size BIGINT NOT NULL DEFAULT 0,
-  page_count INTEGER,
-  is_featured BOOLEAN NOT NULL DEFAULT FALSE,
-  is_published BOOLEAN NOT NULL DEFAULT TRUE,
-  downloads INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE guides ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 100;
-ALTER TABLE guides ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'usd';
-ALTER TABLE guides ADD COLUMN IF NOT EXISTS individual_purchase_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE guides ADD COLUMN IF NOT EXISTS included_in_membership BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE guides DROP CONSTRAINT IF EXISTS guides_price_cents_check;
-ALTER TABLE guides ADD CONSTRAINT guides_price_cents_check CHECK (price_cents >= 50);
-ALTER TABLE guides DROP CONSTRAINT IF EXISTS guides_currency_check;
-ALTER TABLE guides ADD CONSTRAINT guides_currency_check CHECK (currency ~ '^[a-z]{3}$');
-CREATE INDEX IF NOT EXISTS idx_guides_published ON guides(is_published);
-
-CREATE TABLE IF NOT EXISTS guide_purchases (
-  id BIGSERIAL PRIMARY KEY,
-  guide_id BIGINT NOT NULL REFERENCES guides(id) ON DELETE CASCADE,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  provider VARCHAR(30) NOT NULL DEFAULT 'stripe',
-  transaction_id VARCHAR(255) NOT NULL,
-  amount_cents INTEGER NOT NULL,
-  currency VARCHAR(3) NOT NULL DEFAULT 'usd',
-  status VARCHAR(20) NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','refunded','canceled')),
-  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (provider, transaction_id)
-);
-CREATE INDEX IF NOT EXISTS idx_guide_purchases_user ON guide_purchases(user_id, purchased_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_guide_purchases_owned
-  ON guide_purchases(user_id, guide_id) WHERE status = 'paid';
 
 -- ============================================================
 -- Cumplimiento legal (NY / NJ): documentos legales versionados,

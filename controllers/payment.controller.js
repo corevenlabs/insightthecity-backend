@@ -122,9 +122,10 @@ function returnToApp(req, res) {
     const { to, ...params } = req.query;
     if (!isAllowedAppUrl(to)) return res.status(400).send('Destino inválido');
     const query = new URLSearchParams();
-    for (const key of ['result', 'session_id', 'guide_id']) {
+    for (const key of ['result', 'session_id']) {
         if (typeof params[key] === 'string') query.set(key, params[key]);
     }
+    if (typeof params.guide_id === 'string') { query.set('result','cancel'); query.delete('session_id'); }
     const target = `${to}${to.includes('?') ? '&' : '?'}${query.toString()}`;
     res.set('Cache-Control', 'no-store');
     res.type('html').send(`<!DOCTYPE html>

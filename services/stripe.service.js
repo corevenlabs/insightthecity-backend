@@ -59,36 +59,6 @@ async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, 
     return { id: session.id, url: session.url };
 }
 
-async function createGuideCheckoutSession({ guide, user, baseUrl, appReturnUrl }) {
-    const session = await client().checkout.sessions.create({
-        mode: 'payment',
-        line_items: [{
-            price_data: {
-                currency: guide.currency,
-                unit_amount: guide.priceCents,
-                product_data: {
-                    name: guide.title,
-                    description: `Guía digital de Insight The City: ${guide.title}`,
-                    ...(guide.coverUrl?.startsWith('https://') ? { images: [guide.coverUrl] } : {}),
-                },
-            },
-            quantity: 1,
-        }],
-        customer_email: user.email,
-        client_reference_id: String(user.id),
-        metadata: {
-            purchase_type: 'guide',
-            guide_id: String(guide.id),
-            user_id: String(user.id),
-            price_cents: String(guide.priceCents),
-            currency: guide.currency,
-        },
-        success_url: returnUrl(baseUrl, appReturnUrl, `result=success&session_id={CHECKOUT_SESSION_ID}&guide_id=${guide.id}`),
-        cancel_url: returnUrl(baseUrl, appReturnUrl, `result=cancel&guide_id=${guide.id}`),
-    });
-    return { id: session.id, url: session.url };
-}
-
 async function retrieveCheckoutSession(sessionId, options) {
     return client().checkout.sessions.retrieve(sessionId, options);
 }
@@ -169,7 +139,6 @@ module.exports = {
     getPlan,
     ensureCustomer,
     createCheckoutSession,
-    createGuideCheckoutSession,
     retrieveCheckoutSession,
     expireCheckoutSession,
     retrieveSubscription,
