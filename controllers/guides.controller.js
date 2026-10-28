@@ -84,7 +84,9 @@ const confirmPurchase = async (req, res, next) => {
       amountCents: Number(session.amount_total || session.metadata?.price_cents || 0),
       currency: String(session.currency || session.metadata?.currency || 'usd'),
     });
-    res.json({ success: true, guide });
+    // pdfKey solo lo usa el servidor; el comprador descarga con un ticket firmado.
+    const { pdfKey, ...publicGuide } = guide || {};
+    res.json({ success: true, guide: guide ? publicGuide : guide });
   } catch (error) { next(error); }
 };
 
