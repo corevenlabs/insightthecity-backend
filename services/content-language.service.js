@@ -93,10 +93,11 @@ async function translatePublishedText(text,language,html) {
 function createTranslator({ query=(...args)=>db.query(...args), translate=translatePublishedText }={}) {
  const pending = new Map();
  const memory = new Map();
- return async function translateText(text, language, html=false) {
+ return async function translateText(text, language, html=false, cacheOnly=false) {
   if(typeof text!=='string'||!text.trim()||languageOf(language)==='es')return text;
   const key=hash(text,html), id=`${key}:${language}`;
   if(memory.has(id))return memory.get(id);
+  if(cacheOnly){const saved=(await query('SELECT translated_text FROM content_translations WHERE source_hash=$1 AND language=$2',[key,language])).rows[0];return saved?.translated_text ?? null;}
   if(pending.has(id))return pending.get(id);
   const task=(async()=>{
    const saved=(await query('SELECT translated_text FROM content_translations WHERE source_hash=$1 AND language=$2',[key,language])).rows[0];

@@ -25,7 +25,7 @@ function serialize(row) {
 }
 
 // Versión vigente en el idioma pedido; si no existe, cae al español.
-async function getCurrent(slug, language = "es") {
+async function getCurrent(slug, language = "es", { cacheOnly = false } = {}) {
   const { rows } = await db.query(
     `SELECT * FROM legal_documents
      WHERE slug = $1 AND language = ANY($2::text[]) AND published_at IS NOT NULL
@@ -38,6 +38,9 @@ async function getCurrent(slug, language = "es") {
   // A reading translation of the current published source, never a rewrite or a new legal version.
   // The same object is used by recordAcceptance, so the evidence snapshot matches the displayed text.
   const translation = require('./content-language.service');
+  const title = await translation.translateText(document.title, language, false, cacheOnly);
+  const content = await translation.translateText(document.content, language, false, cacheOnly);
+  if (title === null || content === null) return document;
   return {
     ...document,
     language,
@@ -46,8 +49,8 @@ async function getCurrent(slug, language = "es") {
     sourceVersion: document.version,
     sourceContentHash: require('node:crypto').createHash('sha256').update(document.content).digest('hex'),
     isTranslated: true,
-    title: await translation.translateText(document.title, language),
-    content: await translation.translateText(document.content, language),
+    title,
+    content,
   };
 }
 
@@ -110,7 +113,7 @@ async function removeDraft(id) {
 async function recordAcceptance(client, { userId, language, context, slugs, renewal = null, customerReference = null }) {
   const runner = client || db;
   for (const slug of slugs) {
-    const doc = await getCurrent(slug, language);
+    const doc = await getCurrent(slug, language, { cacheOnly: true }); // Never call a translation provider inside registration/payment transactions.
     if (!doc) console.warn(`[legal] ${slug} no tiene versión publicada; se registra la aceptación sin versión.`);
     await runner.query(
       `INSERT INTO legal_acceptances (user_id, document_id, slug, version, context, user_reference, document_snapshot, renewal_snapshot, customer_reference)
