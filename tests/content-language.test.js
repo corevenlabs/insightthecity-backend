@@ -32,3 +32,9 @@ test('Reconstruction owns the numbers, currency, emails, URLs, entities and lite
   const result=await language.translatePublishedText(source,'en',true);assert.equal(result,'<p>Minimum $50 > 20% &amp; Contact soporte@example.com https://example.com/2026</p>');assert.ok(sent.every(value=>!/[0-9$<>@]/.test(value)));
  }finally{if(previous)require.cache[id]=previous;else delete require.cache[id];}
 });
+
+test('A transient malformed provider response retries without caching or returning broken text',async()=>{
+ const id=require.resolve('../config/openai'),previous=require.cache[id];let calls=0;
+ require.cache[id]={id,filename:id,loaded:true,exports:{responses:{create:async request=>{calls++;return {status:'completed',output_text:calls===1?'invalid JSON':JSON.stringify(Object.fromEntries(Object.keys(JSON.parse(request.input)).map(key=>[key,'Museum'])))};}}}};
+ try{assert.equal(await language.translatePublishedText('Museo','en',false),'Museum');assert.equal(calls,2);}finally{if(previous)require.cache[id]=previous;else delete require.cache[id];}
+});

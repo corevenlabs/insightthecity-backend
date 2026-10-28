@@ -61,7 +61,7 @@ async function requestBatchOnce(items, language) {
 }
 async function requestBatch(items,language) {
  try{return await requestBatchOnce(items,language);}
- catch(error){if(!/Translation added|Incomplete content|Empty translated fragment/.test(error.message))throw error;return requestBatchOnce(items,language);}
+ catch(error){if(!(error instanceof SyntaxError)&&!/Translation added|Incomplete content|Empty translated fragment/.test(error.message))throw error;return requestBatchOnce(items,language);}
 }
 function flush(language) {
  const queue=batches.get(language);batches.delete(language);
