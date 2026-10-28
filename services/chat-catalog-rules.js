@@ -28,7 +28,8 @@ function mentionedTopics(message) {
   for (const [topic, regex] of Object.entries(TOPICS)) {
     const match = text.match(regex); if (!match) continue;
     const before = text.slice(Math.max(0,match.index-55),match.index).split(/[,;]|\b(?:pero|mejor|instead|sino)\b/).at(-1);
-    const negative = /(?:\bno\b.{0,40}|\bsin\b.{0,30}|nothing to do with.{0,20}|not.{0,15}|sem.{0,15})$/.test(before);
+    const after=text.slice(match.index+match[0].length,match.index+match[0].length+12);
+    const negative = /^\s*(?:no|not|nao)\b/.test(after) || /(?:\bno\b.{0,40}|\bsin\b.{0,30}|nothing to do with.{0,20}|not.{0,15}|sem.{0,15})$/.test(before);
     (negative ? no : yes).push(topic);
   }
   return {yes,no};
@@ -50,7 +51,7 @@ function namedItems(message, items) {
   });
 }
 function filtersFor(history, items) {
-  let state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false};
+  let state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false};
   const latest=history.at(-1)||{};
   const saved=[...history].reverse().find(row=>row.role==='assistant' && row.catalog_context?.version===1);
   const fresh=saved && (!saved.created_at || !latest.created_at || new Date(latest.created_at)-new Date(saved.created_at)<2*3600000);
@@ -60,10 +61,11 @@ function filtersFor(history, items) {
   for (const row of messages) {
     const text=normalize(row.message);
     const {yes,no}=mentionedTopics(text);
-    if(RESET.test(text)) state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false};
+    if(RESET.test(text)) state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false};
     const named=namedItems(text,items);
-    const newTopic=yes.length>0 || named.length>0 || /\b(cambie|ahora quiero|cambiar|changed my mind|instead|mudei)\b/.test(text);
-    if(newTopic){state.topics=yes;state.names=[];state.keywords=[];state.source=null;state.needsPrice=false;state.needsHours=false;}
+    const changedTopics=yes.length>0&&(yes.some(t=>!state.topics.includes(t))||state.topics.some(t=>!yes.includes(t)));
+    const newTopic=changedTopics || named.length>0 || /\b(cambie|ahora quiero|cambiar|changed my mind|instead|mudei)\b/.test(text);
+    if(newTopic){state.topics=yes;state.names=[];state.keywords=[];state.source=null;state.needsPrice=false;state.needsHours=false;state.dietary=false;}
     if(yes.length)state.excludedTopics=state.excludedTopics.filter(t=>!yes.includes(t));
     if(no.length){state.excludedTopics=[...new Set([...state.excludedTopics,...no])];state.topics=state.topics.filter(t=>!no.includes(t));state.names=[];state.keywords=[];}
     if(named.length){state.names=named.map(i=>`${i.kind}:${i.id}`);state.excludedTopics=state.excludedTopics.filter(t=>!named.some(i=>classify(i).includes(t)));}
@@ -85,9 +87,13 @@ function filtersFor(history, items) {
     if(/\b(cualquier dia|sin fecha|any day)\b/.test(text))state.when=null;
     if(/\b(precio|precios|cuesta|cuestan|cost|costs|barat[oa]|cheaper|presupuesto|budget|maximo|maxima|menos de \d+|under \d+)\b/.test(text))state.needsPrice=true;
     if(/\b(abiert[oa]s? (?:ahora|hoy)|open now|horarios?|opening hours)\b/.test(text))state.needsHours=true;
+    if(/\b(gluten|alergias?|allerg(?:y|ies)|intoleran(?:cia|ce)|halal|kosher)\b/.test(text))state.dietary=true;
+    if(/\b(sin restricciones alimentarias|no tengo alergias|no dietary restrictions|cualquier comida)\b/.test(text))state.dietary=false;
+    if(/\b(no importa el precio|sin presupuesto|any price|no budget)\b/.test(text))state.needsPrice=false;
+    if(/\b(sin importar el horario|any opening hours)\b/.test(text))state.needsHours=false;
     const subtype=text.match(/\b(pizza|sushi|empanadas?|arepas?|festival(?:es)?|conciertos?|hamburguesa|hamburguesas|vegetarian[oa]|vegan[oa]|peruan[oa]|venezolan[oa]|argentin[oa]|mexican[oa]|italian[oa]|japones[a]?|chino|china)\b/g);
     if(subtype)state.keywords=subtype.map(t=>t.replace(/festivales/,'festival').replace(/s$/,''));
-    if(!yes.length&&!no.length&&!named.length&&!area&&!local&&!REJECT.test(text)&&!RESET.test(text)){
+    if(!yes.length&&!no.length&&!named.length&&!area&&!local&&!REJECT.test(text)&&!RESET.test(text)&&! /\b(no importa el precio|sin presupuesto|any price|no budget|sin restricciones alimentarias|no tengo alergias|no dietary restrictions|sin importar el horario)\b/.test(text)){
       const residual=tokens(text).filter(t=>!['cambie','opinion','tenga','puedo','restaurante','museu','museum','hacer','saludo','noticias','news','novedades','dia','al','seccion','publicaciones','articulos','guias','hola','hoy','manana','fin','semana','weekend'].includes(t));
       if(residual.length && !GENERIC.test(text))state.keywords=residual;
     }

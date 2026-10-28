@@ -161,3 +161,15 @@ test('inglés y portugués conservan los rieles del catálogo',async()=>{
 test('no inventa certificaciones ni seguridad alimentaria',async()=>{
  const r=await ask('Restaurantes sin gluten en NY');assert.deepEqual(r.appItems,[]);assert.match(r.reply,/alérgenos/);
 });
+test('negación posterior: comida no, museos sí',async()=>{
+ const r=await ask('Comida no, museos sí en NY');assert.deepEqual(r.appItems.map(x=>x.id),['legacy-brooklyn-flea']);
+});
+test('una pregunta de zona conserva restricciones alimentarias no verificables',async()=>{
+ const a=await ask('Restaurantes sin gluten en NY');const b=await ask('¿Y restaurantes en Manhattan?',[assistant(a)]);
+ assert.deepEqual(b.appItems,[]);assert.match(b.reply,/alérgenos/);
+});
+test('una pregunta de zona no borra un presupuesto que el catálogo no permite verificar',async()=>{
+ const a=await ask('Comida por menos de 20 dólares en NY');const b=await ask('Comida en Manhattan',[assistant(a)]);
+ assert.deepEqual(b.appItems,[]);assert.match(b.reply,/precios verificados/);
+ const c=await ask('No importa el precio',[assistant(b)]);assert.ok(c.appItems.length>0);
+});
