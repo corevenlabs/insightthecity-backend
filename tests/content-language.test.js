@@ -26,7 +26,7 @@ test('Legal reading translation retains published source and acceptance snapshot
 
 test('Reconstruction owns the numbers, currency, emails, URLs, entities and literal separators',async()=>{
  const id=require.resolve('../config/openai'),previous=require.cache[id];let sent=[];
- require.cache[id]={id,filename:id,loaded:true,exports:{responses:{create:async request=>{assert.ok(Object.values(request.text.format.schema.properties).every(property=>property.pattern==='^[^0-9$€£<>]*$'));const data=JSON.parse(request.input);sent.push(...Object.values(data));return {status:'completed',output_text:JSON.stringify(Object.fromEntries(Object.entries(data).map(([key,text])=>[key,text.replace('Mínimo','Minimum').replace('Contacto','Contact')])))};}}}};
+ require.cache[id]={id,filename:id,loaded:true,exports:{responses:{create:async request=>{assert.ok(Object.values(request.text.format.schema.properties).every(property=>new RegExp(property.pattern).test('Human text')&&!new RegExp(property.pattern).test('  ')&&!new RegExp(property.pattern).test('$50')));const data=JSON.parse(request.input);sent.push(...Object.values(data));return {status:'completed',output_text:JSON.stringify(Object.fromEntries(Object.entries(data).map(([key,text])=>[key,text.replace('Mínimo','Minimum').replace('Contacto','Contact')])))};}}}};
  try{
   const source='<p>Mínimo $50 > 20% &amp; Contacto soporte@example.com https://example.com/2026</p>';
   const result=await language.translatePublishedText(source,'en',true);assert.equal(result,'<p>Minimum $50 > 20% &amp; Contact soporte@example.com https://example.com/2026</p>');assert.ok(sent.every(value=>!/[0-9$<>@]/.test(value)));
