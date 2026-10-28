@@ -20,6 +20,6 @@ test('Legal reading translation retains published source and acceptance snapshot
  try{
   db.query=async()=>({rows:[source]});language.translateText=async text=>'pt: '+text;
   const shown=await legal.getCurrent('privacy','pt');assert.equal(shown.id,44);assert.equal(shown.language,'pt');assert.equal(shown.sourceLanguage,'es');assert.equal(shown.sourceVersion,2);assert.equal(shown.content,'pt: Datos del Club');assert.equal(source.content,'Datos del Club');assert.match(shown.sourceContentHash,/^[a-f0-9]{64}$/);
-  let snapshot;await legal.recordAcceptance({query:async(sql,params)=>{snapshot=JSON.parse(params[6]);return {rows:[]};}},{userId:1,language:'pt',context:'register',slugs:['privacy']});assert.deepEqual(snapshot,shown);
+  let snapshot;await legal.recordAcceptance({query:async(sql,params)=>{snapshot=JSON.parse(params[6]);return {rows:[]};}},{userId:1,language:'pt',context:'register',slugs:['privacy']});assert.deepEqual(snapshot,JSON.parse(JSON.stringify(shown)));
  }finally{db.query=originalQuery;language.translateText=originalTranslate;}
 });
