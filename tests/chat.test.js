@@ -119,7 +119,7 @@ test('el índice editorial recorre las páginas publicadas de la misma sección'
 });
 test('abrir chat no borra memoria; historial y estado pertenecen al usuario',async()=>{
  const original=users.findById;users.findById=async()=>({id:7,name:'José'});
- try{let body;await controller.getChat({user:{id:7}},{json:data=>body=data},e=>{throw e;});assert.deepEqual(body.messages,[]);assert.equal(sql.length,0);}finally{users.findById=original;}
+ try{let body;await controller.getChat({user:{id:7}},{json:data=>body=data},e=>{throw e;});assert.deepEqual(body.messages,[]);assert.match(body.greeting,/José/);assert.equal(sql.length,0);}finally{users.findById=original;}
  await chat.getHistory(42,50);assert.deepEqual(sql[0].params,[42,50]);assert.match(sql[0].query,/catalog_context/);
  await chat.saveMessage(42,'assistant','Texto',{version:1});assert.equal(sql[1].params[0],42);assert.equal(JSON.parse(sql[1].params[3]).version,1);
 });
@@ -172,4 +172,25 @@ test('una pregunta de zona no borra un presupuesto que el catálogo no permite v
  const a=await ask('Comida por menos de 20 dólares en NY');const b=await ask('Comida en Manhattan',[assistant(a)]);
  assert.deepEqual(b.appItems,[]);assert.match(b.reply,/precios verificados/);
  const c=await ask('No importa el precio',[assistant(b)]);assert.ok(c.appItems.length>0);
+});
+
+test('las tarjetas del chat son breves y conservan las condiciones en el documento original',async()=>{
+ const full='Compra presencial. '+('Condiciones completas del beneficio. '.repeat(30));
+ const row={...rows[2],member_benefit_details:full,benefit_instructions:'Revisar condiciones en tienda'};
+ experiences.list=async()=>({rows:[row]});
+ const result=await ask('Comida en NY con beneficios');
+ assert.equal(result.appItems[0].memberBenefit,'3×2 al comprar tus empanadas');
+ assert.equal(result.appItems[0].memberBenefitDetails,'');assert.equal(result.appItems[0].hasConditions,true);
+ assert.equal(row.member_benefit_details,full);assert.ok(result.reply.split(/\s+/).length<15);
+});
+test('el saludo de apertura reconoce el primer nombre y el idioma sin inventarlos',()=>{
+ assert.match(chat.welcomeFor({name:'José Monroy'}),/¡Hola, José!/);
+ assert.ok(!chat.welcomeFor({name:'José Monroy'}).includes('Monroy'));
+ assert.match(chat.welcomeFor({name:'Maria',language:'en'}),/Hi, Maria!/);
+ assert.match(chat.welcomeFor({name:'Ana',language:'pt'}),/Olá, Ana!/);
+ assert.ok(!chat.welcomeFor({}).includes('undefined'));
+});
+test('un beneficio sin resumen corto remite al detalle en lugar de cortar condiciones',async()=>{
+ experiences.list=async()=>({rows:[{...rows[1],card_benefit:null,member_benefit:'Texto largo '.repeat(60)}]});
+ const r=await ask('Comida en NY');assert.equal(r.appItems[0].memberBenefit,'');assert.equal(r.appItems[0].hasBenefit,true);
 });

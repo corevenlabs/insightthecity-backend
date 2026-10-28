@@ -1,5 +1,5 @@
 const usersService = require("../services/users.service");
-const { getHistory, saveMessage, respond } = require("../services/chat.service");
+const { getHistory, saveMessage, respond, welcomeFor } = require("../services/chat.service");
 const aiConsent = require("../services/ai-consent.service");
 
 async function getChat(req, res, next) {
@@ -7,7 +7,7 @@ async function getChat(req, res, next) {
     const user = await usersService.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     // La memoria permanece en el servidor; cada apertura empieza con una pantalla limpia.
-    res.json({ success: true, messages: [], greeting: null, aiConsent: aiConsent.status(user) });
+    res.json({ success: true, messages: [], greeting: welcomeFor(user), aiConsent: aiConsent.status(user) });
   } catch (error) { next(error); }
 }
 
