@@ -14,7 +14,8 @@ function escapeHtml(value) {
 function validationPage(record, token, currentState) {
   const states = {
     valid: { icon: '✓', title: 'BENEFICIO VÁLIDO', message: 'Este código está activo y listo para canjearse.' },
-    redeemed: { icon: '✓', title: 'BENEFICIO CANJEADO', message: 'Este código ya fue utilizado y no puede volver a canjearse.' },
+    redeemed: { icon: '✓', title: 'BENEFICIO CANJEADO', message: 'Canje confirmado. Este código ya no puede volver a usarse.' },
+    used: { icon: '×', title: 'CÓDIGO YA UTILIZADO', message: 'Este código ya se canjeó antes y no puede volver a usarse.' },
     expired: { icon: '×', title: 'CÓDIGO VENCIDO', message: 'La validez de 24 horas terminó o se generó un código nuevo.' },
     invalid: { icon: '×', title: 'CÓDIGO NO VÁLIDO', message: 'No encontramos este beneficio.' },
   };
@@ -41,15 +42,18 @@ async function showCode(req, res, next) {
     // A no-referrer policy makes ordinary browser form POSTs send Origin: null.
     // Keep the same-site origin so confirmation passes CORS without allowing null origins.
     res.set('Referrer-Policy', 'same-origin');
-    res.status(record ? 200 : 404).type('html').send(validationPage(record, req.params.token, service.state(record)));
+    const state = service.state(record);
+    res.status(record ? 200 : 404).type('html').send(validationPage(record, req.params.token, state === 'redeemed' ? 'used' : state));
   } catch (error) { next(error); }
 }
 
 async function redeemCode(req, res, next) {
   try {
-    await service.redeem(req.params.token);
+    // Solo la petición cuyo UPDATE canjeó el código ve el éxito; quien llega después ve "ya utilizado".
+    const redeemedNow = await service.redeem(req.params.token);
     const record = await service.find(req.params.token);
-    const currentState = service.state(record);
+    const state = service.state(record);
+    const currentState = state === 'redeemed' && !redeemedNow ? 'used' : state;
     res.status(record ? 200 : 404).type('html').send(validationPage(record, req.params.token, currentState));
   } catch (error) { next(error); }
 }

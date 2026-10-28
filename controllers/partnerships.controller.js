@@ -16,7 +16,10 @@ function serialize(row) {
 
 async function getFeatured(req, res, next) {
   try {
-    const partnership = serialize(await service.getFeatured());
+    const row = await service.getFeatured();
+    // Una alianza no publicada solo la ve el staff; la app recibe null (ya lo trata como "sin alianza").
+    if (row && !row.is_published && !req.admin) return res.json({ success: true, partnership: null });
+    const partnership = serialize(row);
     if (!partnership) {
       return res.status(404).json({ success: false, message: 'Partnership no disponible' });
     }

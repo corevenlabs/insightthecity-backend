@@ -10,7 +10,8 @@ test('QR page preserves same-origin form submission and CORS still rejects untru
   let redeemed = false;
   service.find = async () => ({ title: 'Example', expires_at: new Date(Date.now() + 3600000).toISOString() });
   service.state = () => redeemed ? 'redeemed' : 'valid';
-  service.redeem = async () => { redeemed = true; };
+  // Igual que el UPDATE real: solo la primera petición canjea y recibe una fila.
+  service.redeem = async () => { if (redeemed) return null; redeemed = true; return { redeemed_at: new Date() }; };
   const app = express();
   app.use(security.headers, security.cors);
   app.get('/benefit/:token', controller.showCode);
@@ -35,6 +36,13 @@ test('QR page preserves same-origin form submission and CORS still rejects untru
     assert.match(body, /BENEFICIO CANJEADO/);
     assert.doesNotMatch(body, /CONFIRMAR CANJE/);
     assert.equal(redeemed, true);
+    // Una segunda confirmación (doble envío o carrera) no muestra éxito.
+    const second = await fetch(`${base}/api/benefits/example/redeem`, { method: 'POST', headers: { Origin: 'https://itc-backend-1031252664334.us-east1.run.app' } });
+    const secondBody = await second.text();
+    assert.match(secondBody, /CÓDIGO YA UTILIZADO/);
+    assert.doesNotMatch(secondBody, /BENEFICIO CANJEADO/);
+    // Volver a escanear un código ya canjeado tampoco parece un éxito.
+    assert.match(await (await fetch(`${base}/benefit/example`)).text(), /CÓDIGO YA UTILIZADO/);
   } finally {
     Object.assign(service, original);
     await new Promise(resolve => server.close(resolve));
