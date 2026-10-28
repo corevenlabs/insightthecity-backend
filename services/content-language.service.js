@@ -1,5 +1,6 @@
 const { createHash } = require('node:crypto');
 const db = require('../config/db');
+const {cardDescriptionFor}=require('./experience-card-description');
 const MAX_CACHE = 3000;
 let activeRequests=0;
 const waiting=[];
@@ -130,7 +131,7 @@ async function fields(record,language,names,translator=translateText) {
 }
 async function experience(record,language,translator=translateText) {
  // Venue names, canonical categories/tags, addresses, prices and eligibility flags stay intact.
- const result=await fields({...record,originalDate:record.date},language,['description','date','includes','recommendation','cardBenefit','memberBenefit','memberBenefitDetails','benefitCta','benefitInstructions','ticketCta'],translator);
+ const result=await fields({...record,originalDate:record.date,cardDescription:cardDescriptionFor(record)},language,['cardDescription','description','date','includes','recommendation','cardBenefit','memberBenefit','memberBenefitDetails','benefitCta','benefitInstructions','ticketCta'],translator);
  if(languageOf(language)!=='es'&&typeof record.title==='string') {
   const separator=record.title.indexOf(':');
   if(separator>0)result.title=record.title.slice(0,separator+1)+' '+await translator(record.title.slice(separator+1).trim(),language);
