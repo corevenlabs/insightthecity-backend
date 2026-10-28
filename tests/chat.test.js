@@ -8,6 +8,8 @@ stub('../services/places.service',{searchPlaces:async()=>{externalCalls++;throw 
 const experiences=require('../services/experiences.service');
 const news=require('../services/news.service');
 const users=require('../services/users.service');
+const localization=require('../services/content-language.service');
+localization.chatItem=async (item)=>item; // Catalog rules are tested independently from the translation provider.
 const chat=require('../services/chat.service');
 const rules=require('../services/chat-catalog-rules');
 const controller=require('../controllers/chat.controller');

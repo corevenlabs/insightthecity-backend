@@ -1,3 +1,4 @@
+const contentLanguage = require('../services/content-language.service');
 const { listNews, getNews, SECTIONS } = require("../services/news.service");
 
 // Envía el error con su status propio (400/404/502) en vez de caer al 500 genérico.
@@ -16,7 +17,7 @@ const list = async (req, res) => {
       });
     }
     const data = await listNews({ section, page, perPage });
-    res.json({ success: true, ...data });
+    res.json({ success: true, ...data, items: await Promise.all(data.items.map(item => contentLanguage.article(item, contentLanguage.requestLanguage(req)))) });
   } catch (err) {
     fail(res, err);
   }
@@ -25,7 +26,7 @@ const list = async (req, res) => {
 const getOne = async (req, res) => {
   try {
     const article = await getNews(req.params.id);
-    res.json({ success: true, article });
+    res.json({ success: true, article: await contentLanguage.article(article, contentLanguage.requestLanguage(req)) });
   } catch (err) {
     fail(res, err);
   }

@@ -1,3 +1,4 @@
+const contentLanguage = require('./content-language.service');
 const db = require('../config/db');
 const experiencesService = require('./experiences.service');
 const newsService = require('./news.service');
@@ -122,6 +123,6 @@ async function respond({ user={}, history=[], now=new Date() }) {
   const intro=copy[source==='ny-al-dia'?'news':source==='que-hacer'?'guides':'intro'];
   // Only catalog strings supply names and offers; the model cannot invent facts.
   const reply=[intro,f.when?copy.date:''].filter(Boolean).join(' ');
-  return {reply,appItems:found.map(item=>({...item,preview:previewFor(item),image:imageFor(item.image)})),places:[],showMembership,source,filters:f,context:saved};
+  return {reply,appItems:await Promise.all(found.map(async item=>{const localized=await contentLanguage.chatItem(item,user.language);return {...localized,preview:previewFor(localized),image:imageFor(item.image)};})),places:[],showMembership,source,filters:f,context:saved};
 }
 module.exports={getHistory,saveMessage,respond,greetingFor,welcomeFor,relevantItems,withoutLinks,experienceItem,clearCatalogCache:()=>editorialCache.clear()};

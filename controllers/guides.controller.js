@@ -1,3 +1,4 @@
+const contentLanguage = require('../services/content-language.service');
 const service = require('../services/guides.service');
 const stripeService = require('../services/stripe.service');
 const { uploadPrivatePdf, streamPrivatePdf } = require('../services/uploads.service');
@@ -5,11 +6,11 @@ const { createGuideDownloadToken, verifyGuideDownloadToken } = require('../servi
 const { isAllowedAppUrl, publicBaseUrl } = require('../utils/appReturn');
 
 const list = async (req, res, next) => {
-  try { res.json(await service.list(Boolean(req.admin))); } catch (error) { next(error); }
+  try { res.json(await Promise.all((await service.list(Boolean(req.admin))).map(item => contentLanguage.guide(item, contentLanguage.requestLanguage(req))))); } catch (error) { next(error); }
 };
 
 const listMine = async (req, res, next) => {
-  try { res.json(await service.list(false, req.user.id)); } catch (error) { next(error); }
+  try { res.json(await Promise.all((await service.list(false, req.user.id)).map(item => contentLanguage.guide(item, contentLanguage.requestLanguage(req))))); } catch (error) { next(error); }
 };
 
 const upload = async (req, res, next) => {

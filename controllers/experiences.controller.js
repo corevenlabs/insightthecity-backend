@@ -1,3 +1,4 @@
+const contentLanguage = require('../services/content-language.service');
 const { normalizeSocialUrl, validateSocialLinks } = require('../utils/socialLinks');
 const { normalizeTags, tagsForRecord } = require("../utils/experienceTags");
 const service = require("../services/experiences.service");
@@ -221,7 +222,7 @@ const listExperiences = async (req, res, next) => {
 
     // Header que react-admin (ra-data-simple-rest) necesita para la paginación.
     res.set("Content-Range", `experiences ${start || 0}-${Math.max((start || 0), (end || rows.length) - 1)}/${total}`);
-    res.json(rows.map(serialize));
+    res.json(await Promise.all(rows.map(row => contentLanguage.experience(serialize(row), contentLanguage.requestLanguage(req)))));
   } catch (err) {
     next(err);
   }
@@ -231,7 +232,7 @@ const getExperience = async (req, res, next) => {
   try {
     const row = await service.getById(req.params.id);
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
-    res.json(serialize(row));
+    res.json(await contentLanguage.experience(serialize(row), contentLanguage.requestLanguage(req)));
   } catch (err) {
     next(err);
   }
