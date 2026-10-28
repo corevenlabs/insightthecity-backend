@@ -2,6 +2,7 @@ const db = require('../config/db');
 const experiencesService = require('./experiences.service');
 const newsService = require('./news.service');
 const rules = require('./chat-catalog-rules');
+const {previewFor,imageFor}=require('./chat-card-preview');
 const firstName = name => String(name || '').trim().split(/\s+/)[0] || '';
 function greetingFor(user) {
   const name=firstName(user?.name);
@@ -25,7 +26,7 @@ function experienceItem(row, now) {
   const memberBenefit=rawBenefit.length<=160?rawBenefit:'';
   const expiry=row.coupon_ends_at&&new Date(row.coupon_ends_at)<now;
   const disabled=row.benefit_action==='qr'&&(row.coupon_active===false||(row.coupon_inventory_mode==='limited'&&Number(row.coupon_total)-Number(row.coupon_redeemed||0)-Number(row.coupon_reserved||0)<=0));
-  return {kind:'experience',id:row.id,title:row.title,category:row.category,tags:row.tags||[],description:row.description||'',location:row.location||'',locations:row.locations||[],region:row.region,access:row.access,section:row.section,memberBenefit,memberBenefitDetails:'',hasConditions:!!(row.member_benefit_details||row.benefit_instructions),hasBenefit:row.access==='premium'&&!!rawBenefit&&!expiry&&!disabled,date:row.date_label,endsAt:row.ends_at,isPaidEvent:!!row.is_paid_event,image:row.image,source:row.access==='premium'?'club':'app'};
+  return {kind:'experience',id:row.id,title:row.title,category:row.category,tags:row.tags||[],description:row.description||'',location:row.location||'',locations:row.locations||[],region:row.region,access:row.access,section:row.section,memberBenefit,memberBenefitDetails:'',hasConditions:!!(row.member_benefit_details||row.benefit_instructions),hasBenefit:row.access==='premium'&&!!rawBenefit&&!expiry&&!disabled,date:row.date_label,endsAt:row.ends_at,isPaidEvent:!!row.is_paid_event,image:imageFor(row.image_url||row.image),source:row.access==='premium'?'club':'app'};
 }
 // Same two editorial feeds exposed by /api/news, not an internet search tool.
 const editorialCache=new Map();
@@ -121,6 +122,6 @@ async function respond({ user={}, history=[], now=new Date() }) {
   const intro=copy[source==='ny-al-dia'?'news':source==='que-hacer'?'guides':'intro'];
   // Only catalog strings supply names and offers; the model cannot invent facts.
   const reply=[intro,f.when?copy.date:''].filter(Boolean).join(' ');
-  return {reply,appItems:found,places:[],showMembership,source,filters:f,context:saved};
+  return {reply,appItems:found.map(item=>({...item,preview:previewFor(item),image:imageFor(item.image)})),places:[],showMembership,source,filters:f,context:saved};
 }
 module.exports={getHistory,saveMessage,respond,greetingFor,welcomeFor,relevantItems,withoutLinks,experienceItem,clearCatalogCache:()=>editorialCache.clear()};

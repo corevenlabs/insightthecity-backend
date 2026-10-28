@@ -194,3 +194,28 @@ test('un beneficio sin resumen corto remite al detalle en lugar de cortar condic
  experiences.list=async()=>({rows:[{...rows[1],card_benefit:null,member_benefit:'Texto largo '.repeat(60)}]});
  const r=await ask('Comida en NY');assert.equal(r.appItems[0].memberBenefit,'');assert.equal(r.appItems[0].hasBenefit,true);
 });
+
+test('las tarjetas incluyen foto real y una vista previa corta del texto publicado',async()=>{
+ const description='Ubicado en el West Village, Nuyores combina la cocina de inspiración peruana con la energía urbana de Nueva York. El menú ofrece platos para compartir.';
+ const row={...rows[1],image_url:'https://storage.googleapis.com/public/nuyores.jpg',description};
+ experiences.list=async()=>({rows:[row]});
+ const r=await ask('Comida en NY');const card=r.appItems[0];
+ assert.equal(card.image,row.image_url);
+ assert.equal(card.preview,'Combina la cocina de inspiración peruana con la energía urbana de Nueva York.');
+ assert.equal(row.description,description);assert.equal(card.memberBenefitDetails,'');
+});
+test('preview sin datos o imagen inválida no inventa contenido',async()=>{
+ experiences.list=async()=>({rows:[{...rows[1],description:null,image_url:'javascript:alert(1)'}]});
+ const r=await ask('Comida en NY');assert.equal(r.appItems[0].preview,'');assert.equal(r.appItems[0].image,null);
+});
+test('una descripción extensa queda como extracto con palabras completas y sin HTML',()=>{
+ const {previewFor}=require('../services/chat-card-preview');
+ const text=previewFor({title:'Lugar',description:'<p>Una propuesta de cocina peruana para compartir. </p>'+('Más contenido. '.repeat(100))});
+ assert.equal(text,'Una propuesta de cocina peruana para compartir.');
+ const longer=previewFor({description:'Sabores de Caracas con arepas, empanadas y perros calientes '+('para compartir '.repeat(100))});
+ assert.ok(Array.from(longer).length<=146);assert.ok(longer.endsWith('…'));assert.ok(!longer.includes('<'));
+});
+test('las publicaciones editoriales usan la imagen y el resumen de la misma fuente',async()=>{
+ feeds['ny-al-dia']=[{id:95,title:'Festival de comida en New York',excerpt:'<p>Sabores para descubrir en Manhattan.</p>',image:'https://example.org/festival.jpg',date:now.toISOString()}];
+ const r=await ask('Noticias de NY al día');assert.equal(r.appItems[0].preview,'Sabores para descubrir en Manhattan.');assert.equal(r.appItems[0].image,'https://example.org/festival.jpg');
+});
