@@ -100,12 +100,18 @@ async function fields(record,language,names,translator=translateText) {
 }
 async function experience(record,language,translator=translateText) {
  // Venue names, canonical categories/tags, addresses, prices and eligibility flags stay intact.
- return fields({...record,originalDate:record.date},language,['description','date','includes','recommendation','cardBenefit','memberBenefit','memberBenefitDetails','benefitCta','benefitInstructions','ticketCta'],translator);
+ const result=await fields({...record,originalDate:record.date},language,['description','date','includes','recommendation','cardBenefit','memberBenefit','memberBenefitDetails','benefitCta','benefitInstructions','ticketCta'],translator);
+ if(languageOf(language)!=='es'&&typeof record.title==='string') {
+  const separator=record.title.indexOf(':');
+  if(separator>0)result.title=record.title.slice(0,separator+1)+' '+await translator(record.title.slice(separator+1).trim(),language);
+  else if(record.access==='free'&&!record.partnerOffer)result.title=await translator(record.title,language);
+ }
+ return result;
 }
 function article(record,language,translator=translateText) {return fields({...record,originalTitle:record.title,originalExcerpt:record.excerpt},language,['title','excerpt','contentHtml'],translator);}
 function guide(record,language,translator=translateText) {return fields(record,language,['title','description'],translator);}
 async function chatItem(item,language) {
- const localized=await fields(item,language,item.kind==='news'?['title','description']:['description','memberBenefit']);
+ const localized=item.kind==='news'?await fields(item,language,['title','description']):await experience(item,language);
  return localized;
 }
 module.exports={languageOf,requestLanguage,createTranslator,translateText,experience,article,guide,chatItem,chunks};
