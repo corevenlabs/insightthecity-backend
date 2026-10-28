@@ -43,13 +43,20 @@ async function uploadImage(file, prefix = 'experiences') {
   return `${base}/uploads/${prefix}/${filename}`;
 }
 
+// Los PDFs de pago van a un bucket sin acceso público; nunca se usa GCS_BUCKET como respaldo.
+function privateBucket() {
+  const name = process.env.GCS_PRIVATE_BUCKET;
+  if (!name) throw new Error('GCS_PRIVATE_BUCKET no configurado');
+  if (name === process.env.GCS_BUCKET) throw new Error('GCS_PRIVATE_BUCKET no puede ser el bucket público');
+  return name;
+}
+
 async function uploadPrivatePdf(file) {
   if (!file?.buffer || file.mimetype !== 'application/pdf' || file.buffer.toString('ascii',0,5)!=='%PDF-') throw new Error('Archivo PDF inválido');
   const key = buildKey(file.originalname || 'guia.pdf', 'guides');
   if (DRIVER === 'gcs') {
     const storage = require('../config/storage');
-    const bucketName = process.env.GCS_BUCKET;
-    if (!bucketName) throw new Error('GCS_BUCKET no configurado');
+    const bucketName = privateBucket();
     await storage.bucket(bucketName).file(key).save(file.buffer, { contentType: 'application/pdf', resumable: false, metadata: { cacheControl: 'private, no-store' } });
     return { key, name: file.originalname, size: file.size };
   }
@@ -63,9 +70,7 @@ function streamPrivatePdf(key, response) {
   let stream;
   if (DRIVER === 'gcs') {
     const storage = require('../config/storage');
-    const bucketName = process.env.GCS_BUCKET;
-    if (!bucketName) throw new Error('GCS_BUCKET no configurado');
-    stream = storage.bucket(bucketName).file(key).createReadStream();
+    stream = storage.bucket(privateBucket()).file(key).createReadStream();
   } else {
     stream = fs.createReadStream(path.join(__dirname, '..', 'uploads', 'guides', path.basename(key)));
   }
