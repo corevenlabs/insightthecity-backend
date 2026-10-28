@@ -116,10 +116,10 @@ function resolveCategory(section) {
   return catId;
 }
 
-async function listNews({ section, page = 1, perPage = DEFAULT_PER_PAGE }) {
+async function listNews({ section, page = 1, perPage = DEFAULT_PER_PAGE, catalog = false }) {
   const catId = resolveCategory(section);
   const p = Math.max(1, Number(page) || 1);
-  const pp = Math.min(MAX_PER_PAGE, Math.max(1, Number(perPage) || DEFAULT_PER_PAGE));
+  const pp = Math.min(catalog === true ? 100 : MAX_PER_PAGE, Math.max(1, Number(perPage) || DEFAULT_PER_PAGE));
 
   const key = `list:${catId}:${p}:${pp}`;
   const { fresh, stale } = cacheGet(key, LIST_TTL_MS);

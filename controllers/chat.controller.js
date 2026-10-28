@@ -55,12 +55,14 @@ async function sendMessage(req, res, next) {
         lng: typeof req.body?.lng === "number" && Number.isFinite(req.body.lng) ? req.body.lng : undefined,
       },
     });
-    const saved = await saveMessage(user.id, "assistant", result.reply);
+    const saved = await saveMessage(user.id, "assistant", result.reply, result.context);
     res.json({
       success: true,
       reply: result.reply,
       appItems: result.appItems,
       places: result.places,
+      showMembership: result.showMembership || false,
+      source: result.source,
       messageId: saved.id,
     });
   } catch (error) { next(error); }
