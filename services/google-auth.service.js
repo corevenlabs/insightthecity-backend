@@ -41,7 +41,7 @@ async function authenticate(body) {
     }
     if(!user.is_active) throw fail(403,'Esta cuenta está desactivada');
     await c.query('COMMIT');
-    return {token:users.signToken(user),user:users.publicUser(user)};
+    return {token:users.signToken(user,null,claims.sub),user:users.publicUser(user)};
   } catch(error) {
     await c.query('ROLLBACK');
     if(error.code==='23505') throw fail(409,'La cuenta ya existe o ya está vinculada. Usa tu método de inicio habitual.');

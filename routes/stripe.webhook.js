@@ -43,7 +43,7 @@ router.post("/", async (req, res) => {
             event.type === "customer.subscription.updated" ||
             event.type === "customer.subscription.deleted"
         ) {
-            await subscriptions.applyFromWebhook(event.data.object);
+            await subscriptions.applyFromWebhook(event.data.object, campaignSignature?require('../services/membership-campaign-stripe.service'):stripeService);
         }
     } catch (err) {
         // 500 hace que Stripe reintente el evento.

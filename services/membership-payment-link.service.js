@@ -2,6 +2,8 @@
 const crypto=require('crypto'),db=require('../config/db'),stripe=require('./membership-campaign-stripe.service'),mode=require('./membership-mode.service'),launch=require('./membership-launch.service');
 const URL='https://buy.stripe.com/00w14n4bs1yPdFjgUl8Vi05',LINK_ID='plink_1USQAsI4w6DUYfoWkQ1TzQBT',PRICE_ID='price_1USQAsI4w6DUYfoWzFKl09ib';
 const fail=(message,status=409)=>{throw Object.assign(Error(message),{status});};
+// Rechazo de una prueba ya creada en Stripe que no se puede ligar a ninguna cuenta: hay que cancelarla.
+const refuse=(message,status=409)=>{throw Object.assign(Error(message),{status,unlinkable:true});};
 const ident=value=>typeof value==='string'?value:value?.id;
 function enabled(){return mode.live()&&process.env.MEMBERSHIP_CAMPAIGN_CHECKOUT==='payment_link';}
 function isSession(session){return enabled()&&ident(session.payment_link)===LINK_ID;}
@@ -42,18 +44,25 @@ async function confirmSession(sessionId){
  const c=await db.connect();let user,invite,duplicate=false;
  try{
   await c.query('BEGIN');invite=(await c.query('SELECT * FROM membership_launch_invitations WHERE id=$1 FOR UPDATE',[match[1]])).rows[0];
-  if(!invite||!invite.livemode||!validReference(session.client_reference_id,invite))fail('Invitación inválida.',403);
+  if(!invite||!invite.livemode||!validReference(session.client_reference_id,invite))refuse('Invitación inválida.',403);
   user=(await c.query('SELECT * FROM users WHERE id=$1 FOR UPDATE',[invite.user_id])).rows[0];
-  if(!user?.is_active||invite.email_hash!==launch.emailHash(user.email)||launch.emailHash(session.customer_details?.email||'')!==invite.email_hash)fail('El correo no corresponde a la invitación.',403);
+  if(!user?.is_active||invite.email_hash!==launch.emailHash(user.email)||launch.emailHash(session.customer_details?.email||'')!==invite.email_hash)refuse('El correo no corresponde a la invitación.',403);
   if(invite.subscription_id&&invite.subscription_id!==sub.id)duplicate=true;
   else{
-   if(!invite.subscription_id&&new Date(invite.expires_at)<=new Date())fail('La invitación venció.');
-   if(user.stripe_subscription_id&&user.stripe_subscription_id!==sub.id)fail('La cuenta ya tiene otra suscripción.');
+   if(!invite.subscription_id&&new Date(invite.expires_at)<=new Date())refuse('La invitación venció.');
+   if(user.stripe_subscription_id&&user.stripe_subscription_id!==sub.id)refuse('La cuenta ya tiene otra suscripción.');
    await c.query('UPDATE membership_launch_invitations SET subscription_id=$2,checkout_id=$3 WHERE id=$1',[invite.id,sub.id,session.id]);
    await c.query("UPDATE users SET stripe_customer_id=$2,stripe_billing_source='campaign' WHERE id=$1",[user.id,ident(session.customer)]);
   }
   await c.query('COMMIT');
- }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ }catch(e){
+  await c.query('ROLLBACK');
+  // Sin cancelar, Stripe cobraría US$4.99 al terminar los 30 días sin dar membresía.
+  if(e.unlinkable&&!(await db.query('SELECT 1 FROM users WHERE stripe_subscription_id=$1 UNION ALL SELECT 1 FROM membership_launch_invitations WHERE subscription_id=$1',[sub.id])).rowCount){
+   await stripe.cancelDuplicateTrial(sub.id);console.error('[membership payment link] UNLINKABLE_TRIAL_CANCELED');
+  }
+  throw e;
+ }finally{c.release();}
  if(duplicate){await stripe.cancelDuplicateTrial(sub.id);return user;}
  // Persist linkage on Stripe so renewal/failure/cancellation events can identify this account.
  sub=await stripe.linkLaunchSubscription(sub.id,{...sub.metadata,user_id:String(user.id),launch_invitation_id:invite.id});

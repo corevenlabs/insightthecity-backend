@@ -160,14 +160,20 @@ async function syncIfStale(userId) {
 }
 
 // Webhook: localiza al usuario por metadata o por el id de la suscripción.
-async function applyFromWebhook(subscription) {
-  let userId = Number(subscription.metadata?.user_id) || null;
+// Los eventos pueden llegar tarde, reintentados o desordenados: se aplica el estado actual de la
+// suscripción en Stripe, y nunca el de otra suscripción mientras la del usuario siga activa.
+async function applyFromWebhook(subscription, billing = stripeService) {
+  const current = await billing.retrieveSubscription(subscription.id);
+  let userId = Number(current.metadata?.user_id) || null;
   if (!userId) {
-    const { rows } = await db.query('SELECT id FROM users WHERE stripe_subscription_id = $1', [subscription.id]);
+    const { rows } = await db.query('SELECT id FROM users WHERE stripe_subscription_id = $1', [current.id]);
     userId = rows[0]?.id ?? null;
   }
   if (!userId) return null;
-  const user = await applySubscription(userId, subscription);
+  const { rows: [existing] } = await db.query('SELECT stripe_subscription_id, subscription_status FROM users WHERE id = $1', [userId]);
+  if (existing?.stripe_subscription_id && existing.stripe_subscription_id !== current.id
+    && PREMIUM_STATUSES.has(existing.subscription_status)) return null;
+  const user = await applySubscription(userId, current);
   await sendConfirmationOnce(user);
   return user;
 }
