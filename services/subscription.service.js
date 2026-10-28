@@ -122,10 +122,15 @@ async function retryPendingConfirmations() {
 // Verifica una sesión de Checkout recién completada y activa la membresía.
 async function confirmCheckout(userId, sessionId, billing = stripeService) {
   const session = await billing.retrieveCheckoutSession(sessionId, { expand: ['subscription'] });
+  // client_reference_id se puede fijar desde la URL de un Payment Link; la metadata solo la
+  // escribe nuestro servidor al crear la sesión, así que es la que prueba a quién pertenece.
   const belongsToUser = session.mode === 'subscription'
+    && session.status === 'complete'
     && String(session.client_reference_id) === String(userId)
-    && session.status === 'complete';
+    && session.metadata?.purchase_type === 'subscription'
+    && String(session.metadata?.user_id) === String(userId);
   if (!belongsToUser || !session.subscription || typeof session.subscription === 'string') return null;
+  if (String(session.subscription.metadata?.user_id) !== String(userId)) return null;
   const user = await applySubscription(userId, session.subscription);
   await sendConfirmationOnce(user);
   return user;
