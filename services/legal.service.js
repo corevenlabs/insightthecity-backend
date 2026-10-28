@@ -33,7 +33,22 @@ async function getCurrent(slug, language = "es") {
      LIMIT 1`,
     [slug, [language, "es"], language]
   );
-  return serialize(rows[0]);
+  const document = serialize(rows[0]);
+  if (!document || document.language === language || !['en', 'pt'].includes(language)) return document;
+  // A reading translation of the current published source, never a rewrite or a new legal version.
+  // The same object is used by recordAcceptance, so the evidence snapshot matches the displayed text.
+  const translation = require('./content-language.service');
+  return {
+    ...document,
+    language,
+    sourceLanguage: document.language,
+    sourceDocumentId: document.id,
+    sourceVersion: document.version,
+    sourceContentHash: require('node:crypto').createHash('sha256').update(document.content).digest('hex'),
+    isTranslated: true,
+    title: await translation.translateText(document.title, language),
+    content: await translation.translateText(document.content, language),
+  };
 }
 
 async function listAll() {

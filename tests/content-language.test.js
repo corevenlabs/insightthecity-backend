@@ -13,3 +13,13 @@ test('Venue name remains intact while its editorial subtitle is localized',async
 
 test('Dollar amounts and percentages are restored literally and currency conversion is rejected',async()=>{const protectedText=language.protectValues('15% OFF con mínimo $50',false);assert.equal(protectedText.source,'[[ITC_VALUE_0]] OFF con mínimo [[ITC_VALUE_1]]');assert.equal(protectedText.restore('[[ITC_VALUE_0]] OFF com mínimo [[ITC_VALUE_1]]'),'15% OFF com mínimo $50');assert.throws(()=>protectedText.restore('R$50'),/protected value/);const run=language.createTranslator({query:async()=>({rows:[]}),translate:async()=> 'Mínimo R$50'});await assert.rejects(run('Mínimo $50','pt'),/currency/);});
 test('Protection leaves article URLs and attributes untouched',()=>{const source='<a href="https://example.com/2026" class="x2">15% OFF $50</a>';const masked=language.protectValues(source,true);assert.ok(masked.source.includes('href="https://example.com/2026" class="x2"'));assert.equal(masked.restore(masked.source),source);});
+
+test('Legal reading translation retains published source and acceptance snapshot matches displayed content',async()=>{
+ const db=require('../config/db'),legal=require('../services/legal.service');const originalQuery=db.query,originalTranslate=language.translateText;
+ const source={id:44,slug:'privacy',language:'es',version:2,title:'Privacidad',content:'Datos del Club',published_at:'2026-10-01'};
+ try{
+  db.query=async()=>({rows:[source]});language.translateText=async text=>'pt: '+text;
+  const shown=await legal.getCurrent('privacy','pt');assert.equal(shown.id,44);assert.equal(shown.language,'pt');assert.equal(shown.sourceLanguage,'es');assert.equal(shown.sourceVersion,2);assert.equal(shown.content,'pt: Datos del Club');assert.equal(source.content,'Datos del Club');assert.match(shown.sourceContentHash,/^[a-f0-9]{64}$/);
+  let snapshot;await legal.recordAcceptance({query:async(sql,params)=>{snapshot=JSON.parse(params[6]);return {rows:[]};}},{userId:1,language:'pt',context:'register',slugs:['privacy']});assert.deepEqual(snapshot,shown);
+ }finally{db.query=originalQuery;language.translateText=originalTranslate;}
+});
