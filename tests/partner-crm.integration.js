@@ -702,6 +702,13 @@ test("complete CRM flow, authorization, consent, payment idempotency and private
       const response = await fetch(base + "/partners/payment/return?session_id=cs_test_linked", { redirect: "manual" });
       assert.equal(response.status, 303);
       assert.ok(response.headers.get("location").startsWith("http://localhost:5173/partner#"));
+      // Rotating the private link revokes the old payment return URL instead of re-minting it.
+      const version = (await db.query("SELECT link_version FROM partner_clients WHERE id=$1", [linked.id])).rows[0].link_version;
+      await db.query("UPDATE partner_clients SET link_version=gen_random_uuid() WHERE id=$1", [linked.id]);
+      const revoked = await fetch(base + "/partners/payment/return?session_id=cs_test_linked", { redirect: "manual" });
+      assert.equal(revoked.status, 403);
+      assert.equal(revoked.headers.get("location"), null);
+      await db.query("UPDATE partner_clients SET link_version=$2 WHERE id=$1", [linked.id, version]);
       // A second client discovers the completed link payment from Stripe when checking status.
       const other = await S.create({ business_name: "Sync cafe", contact_name: "Owner",
         email: "sync@example.com", category: "partner", offer: "founding", payment_method: "stripe" }, actors.admin);

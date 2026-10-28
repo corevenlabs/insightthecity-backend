@@ -77,12 +77,18 @@ test('premium solo se activa con una sesión de Stripe completa del mismo usuari
     items: { data: [{ current_period_end: 1893456000, price: { unit_amount: 499, currency: 'usd', recurring: { interval: 'month' } } }] },
   };
   stripeService.setClient({
-    checkout: { sessions: { retrieve: async (id) => ({
-      id, mode: 'subscription', status: 'complete', client_reference_id: id === 'cs_other' ? '99' : '7', subscription,
-    }) } },
+    checkout: { sessions: { retrieve: async (id) => {
+      const owner = id === 'cs_other' ? '99' : '7';
+      // Un Payment Link permite fijar client_reference_id en la URL, pero no la metadata.
+      if (id === 'cs_payment_link') return { id, mode: 'subscription', status: 'complete', client_reference_id: '7', metadata: {}, subscription: { ...subscription, metadata: {} } };
+      if (id === 'cs_foreign_sub') return { id, mode: 'subscription', status: 'complete', client_reference_id: '7', metadata: { purchase_type: 'subscription', user_id: '7' }, subscription: { ...subscription, metadata: { user_id: '99' } } };
+      return { id, mode: 'subscription', status: 'complete', client_reference_id: owner, metadata: { purchase_type: 'subscription', user_id: owner }, subscription: { ...subscription, metadata: { user_id: owner } } };
+    } } },
   });
   try {
     assert.equal(await subscriptions.confirmCheckout(7, 'cs_other'), null);
+    assert.equal(await subscriptions.confirmCheckout(7, 'cs_payment_link'), null);
+    assert.equal(await subscriptions.confirmCheckout(7, 'cs_foreign_sub'), null);
     assert.equal(updates.length, 0);
 
     const user = await subscriptions.confirmCheckout(7, 'cs_mine');

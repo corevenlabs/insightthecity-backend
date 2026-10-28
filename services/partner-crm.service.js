@@ -833,6 +833,10 @@ async function paymentLinkReturn(sessionId) {
   const session = await require("./stripe.service").retrievePartnerPaymentLinkSession(sessionId);
   if (!await confirmPaymentLink(session)) R.fail("El pago aún no se ha confirmado. Vuelve a tu invitación para consultar su estado.", 409);
   const row = await get(db, paymentLink.clientId(session.client_reference_id));
+  // La referencia firma link_version: si el staff rotó, bloqueó o dejó vencer el enlace,
+  // una URL de retorno vieja no debe generar uno nuevo.
+  if (session.client_reference_id !== paymentLink.reference(row) || row.blocked_at || new Date(row.link_expires_at) <= new Date())
+    R.fail("Este enlace ya no es válido. Usa el correo más reciente de ITC.", 403);
   return link(row);
 }
 async function confirmPayment(session) {
