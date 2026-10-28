@@ -22,7 +22,7 @@ function serialize(u) {
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, language = "es", acceptLegal } = req.body || {};
+    const { name, email, password, language = "es", acceptLegal, acceptMarketing } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "email y password requeridos" });
@@ -41,7 +41,7 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Idioma no válido" });
     }
 
-    const result = await usersService.register({ name, email, password, language });
+    const result = await usersService.register({ name, email, password, language, acceptMarketing });
     res.status(201).json({ success: true, ...result });
   } catch (err) {
     if (err.status === 409) {

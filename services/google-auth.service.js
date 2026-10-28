@@ -16,6 +16,7 @@ async function verify(identityToken) {
   return claims;
 }
 async function authenticate(body) {
+  require("./marketing-consent.service").validate(body.acceptMarketing);
   const claims = await verify(body.identityToken);
   const c = await db.connect();
   try {
@@ -35,6 +36,7 @@ async function authenticate(body) {
         const language=['es','en','pt'].includes(body.language)?body.language:'es';
         const name=typeof claims.name==='string'?claims.name.trim().slice(0,100):'';
         user=(await c.query('INSERT INTO users(name,email,password_hash,language) VALUES($1,$2,NULL,$3) RETURNING *',[name||'ITC Member',email,language])).rows[0];
+        await require("./marketing-consent.service").recordRegistration(c, { userId: user.id, accepted: body.acceptMarketing, language, source: "google-register" });
         await legal.recordAcceptance(c,{userId:user.id,language,context:'register',slugs:legal.REGISTER_SLUGS});
       }
       await c.query('INSERT INTO google_auth_identities(subject,user_id) VALUES($1,$2)',[claims.sub,user.id]);

@@ -66,7 +66,9 @@ async function findById(id) {
 
 // Crea una cuenta y registra la aceptación de Términos y Privacidad vigentes.
 // Devuelve { token, user } o lanza { status, message }.
-async function register({ name, email, password, language = "es" }) {
+async function register({ name, email, password, language = "es", acceptMarketing }) {
+  const marketing = require("./marketing-consent.service");
+  marketing.validate(acceptMarketing);
   const normalizedEmail = String(email).trim().toLowerCase();
   const password_hash = await bcrypt.hash(password, 10);
 
@@ -88,6 +90,7 @@ async function register({ name, email, password, language = "es" }) {
       [name ? String(name).trim() : null, normalizedEmail, password_hash, language]
     );
     user = rows[0];
+    await marketing.recordRegistration(client, { userId: user.id, accepted: acceptMarketing, language, source: "email-register" });
     await legal.recordAcceptance(client, {
       userId: user.id, language, context: "register", slugs: legal.REGISTER_SLUGS,
     });

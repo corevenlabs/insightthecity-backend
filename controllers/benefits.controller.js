@@ -26,8 +26,16 @@ function validationPage(record, token, currentState) {
   </style></head><body><main class="card"><div class="brand">INSIGHT THE CITY · ITC CLUB</div><div class="seal" aria-hidden="true">${copy.icon}</div><h1>${copy.title}</h1><p>${copy.message}</p>${record ? `<section class="benefit"><strong>${escapeHtml(record.member_benefit || record.title)}</strong><p>${escapeHtml(record.member_benefit_details || '')}</p><div class="meta">${escapeHtml(record.title)}${record.location ? ` · ${escapeHtml(record.location)}` : ''}</div>${valid ? `<p class="expires">Válido hasta ${new Date(record.expires_at).toLocaleString('es-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' })} (hora de NY)</p>` : ''}</section>` : ''}${valid ? `<form method="post" action="/api/benefits/${encodeURIComponent(token)}/redeem" onsubmit="return confirm('¿Confirmas que el beneficio se está entregando ahora? Esta acción no se puede deshacer.');"><button type="submit">CONFIRMAR CANJE</button></form>` : ''}<div class="note">Código único · Un solo uso · No contiene datos personales</div></main></body></html>`;
 }
 
+async function reservationStatus(req, res, next) {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await service.reservation(req.params.experienceId, req.user.id));
+  } catch (error) { next(error); }
+}
+
 async function issueCode(req, res, next) {
   try {
+    res.set('Cache-Control', 'private, no-store');
     const result = await service.issue(req.params.experienceId, req.user.id);
     if (result.error) return res.status(result.status).json({ success: false, message: result.error, code: result.code });
     const validationUrl = `${baseUrl(req)}/benefit/${encodeURIComponent(result.token)}`;
@@ -64,4 +72,4 @@ async function adminDashboard(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { issueCode, showCode, redeemCode, adminDashboard, validationPage };
+module.exports = { reservationStatus, issueCode, showCode, redeemCode, adminDashboard, validationPage };

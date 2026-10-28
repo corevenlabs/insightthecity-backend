@@ -22,12 +22,13 @@ test('Google fails closed when the backend client ID is missing',async()=>{const
 test('Google linking preserves member ID and subscription; new accounts require legal acceptance',async()=>{
  const originalConnect=db.connect,originalLegal=legal.recordAcceptance;
  const member={id:42,name:'Member',email:'member@example.test',password_hash:await bcrypt.hash('correct-password',4),is_active:true,is_premium:true,subscription_status:'active'};
- let linked=false,existing=member,legalCount=0,inserts=0;
+ let linked=false,existing=member,legalCount=0,inserts=0,marketingWrites=0;
  db.connect=async()=>({release(){},async query(sql,values){
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.startsWith('SELECT pg_advisory'))return {rows:[]};
   if(sql.startsWith('SELECT u.*'))return {rows:linked?[member]:[]};
   if(sql.startsWith('SELECT * FROM users'))return {rows:existing?[existing]:[]};
   if(sql.startsWith('INSERT INTO users')){inserts++;return {rows:[{...member,id:99,is_premium:false,password_hash:null,language:values[2]}]};}
+  if(sql.startsWith('UPDATE users SET marketing_opt_in')){marketingWrites++;assert.equal(values[2],'pt');assert.equal(values[4],'google-register');return {rows:[]};}
   if(sql.startsWith('INSERT INTO google_auth_identities')){linked=true;return {rows:[]};}
   throw new Error('Unexpected SQL: '+sql);
  }});
@@ -38,12 +39,12 @@ test('Google linking preserves member ID and subscription; new accounts require 
   await assert.rejects(google.authenticate({identityToken:token(),password:'incorrect'}),{status:401});
   const result=await google.authenticate({identityToken:token(),password:'correct-password'});
   assert.equal(result.user.id,42);assert.equal(result.user.is_premium,true);assert.equal(result.user.subscription_status,'active');assert.equal(inserts,0);
-  assert.equal((await google.authenticate({identityToken:token()})).user.id,42);
+  assert.equal((await google.authenticate({identityToken:token(),acceptMarketing:true})).user.id,42);assert.equal(marketingWrites,0,'login must not overwrite consent');
   member.is_active=false;await assert.rejects(google.authenticate({identityToken:token()}),{status:403});member.is_active=true;
   linked=false;existing=null;
   await assert.rejects(google.authenticate({identityToken:token()}),{code:'REGISTRATION_REQUIRED'});assert.equal(inserts,0);
-  const created=await google.authenticate({identityToken:token(),acceptLegal:true,language:'pt'});
-  assert.equal(created.user.id,99);assert.equal(created.user.is_premium,false);assert.equal(legalCount,1);
+  const created=await google.authenticate({identityToken:token(),acceptLegal:true,language:'pt',acceptMarketing:true});
+  assert.equal(created.user.id,99);assert.equal(created.user.is_premium,false);assert.equal(legalCount,1);assert.equal(marketingWrites,1);
  }finally{db.connect=originalConnect;legal.recordAcceptance=originalLegal;}
 });
 after(async()=>{OAuth2Client.prototype.getFederatedSignonCertsAsync=original;await db.end();});

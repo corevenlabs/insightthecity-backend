@@ -81,6 +81,20 @@ async function issue(experienceId, userId) {
   }
 }
 
+async function reservation(experienceId, userId) {
+  const { rows } = await db.query(`SELECT EXISTS (
+    SELECT 1 FROM benefit_redemptions r JOIN experiences e ON e.id = r.experience_id
+    JOIN users u ON u.id = r.user_id
+    WHERE r.experience_id = $1 AND r.user_id = $2
+      AND r.redeemed_at IS NULL AND r.revoked_at IS NULL AND r.expires_at > NOW()
+      AND u.is_active = TRUE AND u.is_premium = TRUE AND e.is_published = TRUE
+      AND e.access = 'premium' AND e.benefit_action = 'qr' AND e.coupon_active = TRUE
+      AND (e.coupon_starts_at IS NULL OR e.coupon_starts_at <= NOW())
+      AND (e.coupon_ends_at IS NULL OR e.coupon_ends_at > NOW())
+  ) AS reserved`, [experienceId, userId]);
+  return { reserved: rows[0]?.reserved === true };
+}
+
 async function adminDashboard({ region, state: stateFilter, q, from, to } = {}) {
   const values = [];
   const where = [`e.benefit_action = 'qr'`];
@@ -166,4 +180,4 @@ function state(record) {
   return 'valid';
 }
 
-module.exports = { VALIDITY_HOURS, hashToken, issue, find, redeem, state, adminDashboard };
+module.exports = { VALIDITY_HOURS, hashToken, issue, find, redeem, state, adminDashboard, reservation };

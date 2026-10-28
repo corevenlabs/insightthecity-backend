@@ -32,6 +32,7 @@ async function challenge() {
   return nonce;
 }
 async function authenticate(body, linkUserId) {
+  require("./marketing-consent.service").validate(body.acceptMarketing);
   const claims = await verify(body.identityToken, body.nonce);
   const client = await db.connect();
   try {
@@ -58,6 +59,7 @@ async function authenticate(body, linkUserId) {
       const name = typeof body.name === 'string' ? body.name.trim().slice(0,100) : '';
       user = (await client.query('INSERT INTO users(name,email,password_hash,language) VALUES($1,$2,NULL,$3) RETURNING *', [name || 'ITC Member',email,language])).rows[0];
       await client.query('INSERT INTO apple_auth_identities(subject,user_id) VALUES($1,$2)', [claims.sub,user.id]);
+      await require("./marketing-consent.service").recordRegistration(client, { userId: user.id, accepted: body.acceptMarketing, language, source: "apple-register" });
       await legal.recordAcceptance(client, { userId:user.id, language, context:'register', slugs:legal.REGISTER_SLUGS });
     }
     if (!user.is_active) throw fail(403, 'Esta cuenta está desactivada');
