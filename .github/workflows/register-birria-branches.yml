@@ -1,0 +1,48 @@
+name: Register verified Birria-Landia branches
+on:
+  workflow_dispatch:
+    inputs:
+      apply_branches:
+        description: 'Save the seven verified branches on the existing Birria-Landia record'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: node scripts/check-node-version.cjs
+      - run: node --check scripts/register-birria-branches.cjs
+      - run: npm ci --omit=dev
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Verify and save only the authorized Birria-Landia locations
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_USER: itc_app
+          DB_DATABASE: itc
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSL: 'false'
+          APPLY_BIRRIA_BRANCHES: ${{ inputs.apply_branches }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x /tmp/cloud-sql-proxy
+          /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres > /tmp/birria-branches-proxy.log 2>&1 &
+          for i in $(seq 1 30); do
+            nc -z 127.0.0.1 5432 && break
+            sleep 1
+          done
+          node scripts/register-birria-branches.cjs

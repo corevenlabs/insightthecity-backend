@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Birria-Landia - Bronx",
+    "address": "2501 Grand Concourse, Bronx, NY",
+    "placeId": "ChIJzRJaE_HzwokRhtu2-boKA9I",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Upper West Side",
+    "address": "Amsterdam Ave & W 70th St, Manhattan, NY",
+    "placeId": "ChIJEQTRMQBZwokRydt_xNjqODM",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Lower East Side",
+    "address": "East Houston St & Bowery, Manhattan, NY",
+    "placeId": "ChIJafErewZZwokR4G9MfA9CsbY",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Queens",
+    "address": "77-05 Roosevelt Ave, Queens, NY",
+    "placeId": "ChIJ0wbVyUhfwokRd2iTfd08w34",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Williamsburg",
+    "address": "491 Metropolitan Ave, Brooklyn, NY",
+    "placeId": "ChIJp7PBYnhZwokRLYesvIR8fg0",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Barclays Center",
+    "address": "Flatbush Ave & Pacific St, Brooklyn, NY 11217",
+    "placeId": "ChIJTaGAWQBbwokRKx-XLdQLnJ0",
+    "benefitApplies": true
+  },
+  {
+    "name": "Birria-Landia - Tangram Mall",
+    "address": "133-33 39th Ave, FH23, Flushing, NY 11354",
+    "placeId": "ChIJlf0qCQBhwokR3mBwecVH8c8",
+    "benefitApplies": true
+  }
+]
