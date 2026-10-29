@@ -69,6 +69,17 @@ app.get('/membership-invitation', (req,res)=>{
  res.set('Content-Security-Policy',"default-src 'none'; script-src 'self' https://js.stripe.com; style-src 'self'; img-src 'self' https://*.stripe.com; connect-src 'self' https://api.stripe.com https://*.stripe.com https://*.stripe.network; frame-src https://js.stripe.com https://hooks.stripe.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
  res.type('html').send(require('./services/membership-launch-page').page());
 });
+// Landing de marketing y página de soporte públicas (URLs para las tiendas de apps).
+// Son builds de Vite del repo Landing-Insight copiados en public/site.
+const site=path.join(__dirname,'public/site');
+const sitePage=(file)=>(req,res)=>{
+ res.set('Cache-Control','public, max-age=300').set('Referrer-Policy','strict-origin-when-cross-origin');
+ res.set('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+ res.sendFile(path.join(site,file));
+};
+app.use(['/assets','/videos'],(req,res,next)=>{req.url=req.baseUrl+req.url;next();},express.static(site,{index:false,maxAge:'7d'}));
+app.get('/',sitePage('index.html'));
+app.get(['/soporte','/support','/es/soporte','/en/support','/pt/suporte'],sitePage('soporte.html'));
 app.get("/health", (req, res) => res.json({ ok: true }))
 
 app.use("/api/chat", chatRouter)
