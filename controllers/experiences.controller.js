@@ -58,6 +58,7 @@ function serialize(row) {
     couponRedeemed,
     couponAvailable,
     couponStatus,
+    couponServerTime: row.benefit_action === 'qr' ? new Date(now).toISOString() : null,
     section: row.section,
     isFeatured: row.is_featured,
     sortOrder: row.sort_order,

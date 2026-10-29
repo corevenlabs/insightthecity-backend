@@ -154,7 +154,8 @@ async function adminDashboard({ region, state: stateFilter, q, from, to } = {}) 
 async function find(token) {
   const { rows } = await db.query(
     `SELECT r.id, r.created_at, r.expires_at, r.redeemed_at, r.revoked_at,
-            e.title, e.location, e.member_benefit, e.member_benefit_details, e.benefit_instructions
+            e.title, e.location, e.member_benefit, e.member_benefit_details, e.benefit_instructions,
+            e.is_published, e.access, e.benefit_action, e.coupon_active, e.coupon_starts_at, e.coupon_ends_at
        FROM benefit_redemptions r
        JOIN experiences e ON e.id = r.experience_id
       WHERE r.token_hash = $1`,
@@ -165,9 +166,15 @@ async function find(token) {
 
 async function redeem(token) {
   const { rows } = await db.query(
-    `UPDATE benefit_redemptions SET redeemed_at = NOW()
-      WHERE token_hash = $1 AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
-      RETURNING redeemed_at`,
+    `UPDATE benefit_redemptions r SET redeemed_at = NOW()
+      FROM experiences e
+      WHERE r.experience_id=e.id AND r.token_hash = $1
+        AND r.redeemed_at IS NULL AND r.revoked_at IS NULL AND r.expires_at > NOW()
+        AND e.is_published=TRUE AND e.access='premium' AND e.benefit_action='qr'
+        AND e.coupon_active=TRUE
+        AND (e.coupon_starts_at IS NULL OR e.coupon_starts_at<=NOW())
+        AND (e.coupon_ends_at IS NULL OR e.coupon_ends_at>NOW())
+      RETURNING r.redeemed_at`,
     [hashToken(token)]
   );
   return rows[0] || null;
@@ -177,6 +184,10 @@ function state(record) {
   if (!record) return 'invalid';
   if (record.redeemed_at) return 'redeemed';
   if (record.revoked_at || new Date(record.expires_at).getTime() <= Date.now()) return 'expired';
+  if (record.coupon_active === false || record.is_published === false
+    || (record.access && record.access !== 'premium') || (record.benefit_action && record.benefit_action !== 'qr')
+    || (record.coupon_starts_at && new Date(record.coupon_starts_at).getTime() > Date.now())
+    || (record.coupon_ends_at && new Date(record.coupon_ends_at).getTime() <= Date.now())) return 'paused';
   return 'valid';
 }
 

@@ -31,7 +31,14 @@ test('The final reserved QR remains available only to its owner after a localize
  await db.query('UPDATE experiences SET coupon_active=FALSE WHERE id=$1',[experienceId]);
  assert.equal((await benefits.reservation(experienceId,owner)).reserved,false);
  assert.equal((await benefits.issue(experienceId,owner)).code,'PAUSED');
- await db.query('UPDATE experiences SET coupon_active=TRUE WHERE id=$1',[experienceId]);
+ assert.equal(await benefits.redeem(replacement.token),null,'manual pause blocks previously issued QR');
+ await db.query(`UPDATE experiences SET coupon_active=TRUE,coupon_starts_at=NOW()+INTERVAL '1 day' WHERE id=$1`,[experienceId]);
+ assert.equal((await benefits.issue(experienceId,owner)).code,'PAUSED');
+ assert.equal(await benefits.redeem(replacement.token),null,'future start blocks redemption');
+ assert.equal(benefits.state(await benefits.find(replacement.token)),'paused');
+ await db.query(`UPDATE experiences SET coupon_starts_at=NULL,coupon_ends_at=NOW()-INTERVAL '1 second' WHERE id=$1`,[experienceId]);
+ assert.equal(await benefits.redeem(replacement.token),null,'end date blocks redemption');
+ await db.query('UPDATE experiences SET coupon_ends_at=NULL WHERE id=$1',[experienceId]);
  const results=await Promise.all([benefits.redeem(replacement.token),benefits.redeem(replacement.token)]);
  assert.equal(results.filter(Boolean).length,1);
  assert.equal((await benefits.reservation(experienceId,owner)).reserved,false);

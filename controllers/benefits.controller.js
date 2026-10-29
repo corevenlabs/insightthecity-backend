@@ -17,6 +17,7 @@ function validationPage(record, token, currentState) {
     redeemed: { icon: '✓', title: 'BENEFICIO CANJEADO', message: 'Canje confirmado. Este código ya no puede volver a usarse.' },
     used: { icon: '×', title: 'CÓDIGO YA UTILIZADO', message: 'Este código ya se canjeó antes y no puede volver a usarse.' },
     expired: { icon: '×', title: 'CÓDIGO VENCIDO', message: 'La validez de 24 horas terminó o se generó un código nuevo.' },
+    paused: { icon: '×', title: 'BENEFICIO NO DISPONIBLE', message: 'Este beneficio todavía no ha comenzado, está pausado o ya terminó. Consulta su disponibilidad en la app.' },
     invalid: { icon: '×', title: 'CÓDIGO NO VÁLIDO', message: 'No encontramos este beneficio.' },
   };
   const copy = states[currentState];
@@ -46,6 +47,7 @@ async function issueCode(req, res, next) {
 
 async function showCode(req, res, next) {
   try {
+    res.set('Cache-Control', 'private, no-store');
     const record = await service.find(req.params.token);
     // A no-referrer policy makes ordinary browser form POSTs send Origin: null.
     // Keep the same-site origin so confirmation passes CORS without allowing null origins.
@@ -57,6 +59,7 @@ async function showCode(req, res, next) {
 
 async function redeemCode(req, res, next) {
   try {
+    res.set('Cache-Control', 'private, no-store');
     // Solo la petición cuyo UPDATE canjeó el código ve el éxito; quien llega después ve "ya utilizado".
     const redeemedNow = await service.redeem(req.params.token);
     const record = await service.find(req.params.token);

@@ -48,3 +48,12 @@ test('la página escaneada no expone datos personales y solo permite canjear có
   assert.doesNotMatch(valid, /email|user_id/i);
   assert.doesNotMatch(validationPage(record, 'secret', 'redeemed'), /CONFIRMAR CANJE/);
 });
+
+test('scheduled, manually paused and ended campaigns cannot validate an existing QR',()=>{
+ const record={expires_at:new Date(Date.now()+86400000),coupon_active:true,is_published:true,access:'premium',benefit_action:'qr'};
+ for(const patch of [{coupon_active:false},{is_published:false},{coupon_starts_at:new Date(Date.now()+60000)},{coupon_ends_at:new Date(Date.now()-1)}]){
+  const blocked={...record,...patch};assert.equal(service.state(blocked),'paused');
+  assert.doesNotMatch(validationPage(blocked,'token','paused'),/CONFIRMAR CANJE/);
+ }
+ assert.equal(service.state({...record,coupon_starts_at:new Date(Date.now()-60000)}),'valid');
+});

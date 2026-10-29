@@ -1,9 +1,9 @@
-name: Audit QR benefits and activate Nuyores
+name: Audit QR benefits and restore scheduled start
 on:
   workflow_dispatch:
     inputs:
-      activate_nuyores:
-        description: 'Start only Nuyores now, preserving expiration, limits and redemption history'
+      restore_nuyores:
+        description: 'Restore only Nuyores original November 16 start, preserving expiration, limits and history'
         type: boolean
         default: false
 permissions:
@@ -20,7 +20,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
       - run: node scripts/check-node-version.cjs
-      - run: node --check scripts/activate-nuyores-qr.cjs
+      - run: node --check scripts/restore-nuyores-qr.cjs
       - run: npm ci --omit=dev
       - uses: google-github-actions/auth@v3
         with:
@@ -35,7 +35,7 @@ jobs:
           DB_DATABASE: itc
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_SSL: 'false'
-          ACTIVATE_NUYORES_NOW: ${{ inputs.activate_nuyores }}
+          RESTORE_NUYORES_SCHEDULE: ${{ inputs.restore_nuyores }}
         run: |
           set -euo pipefail
           curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
@@ -45,4 +45,4 @@ jobs:
             nc -z 127.0.0.1 5432 && break
             sleep 1
           done
-          node scripts/activate-nuyores-qr.cjs
+          node scripts/restore-nuyores-qr.cjs
