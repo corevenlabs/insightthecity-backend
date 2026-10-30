@@ -144,4 +144,4 @@ async function chatItem(item,language) {
  const localized=item.kind==='news'?await fields(item,language,['title','description']):await experience(item,language);
  return localized;
 }
-module.exports={languageOf,requestLanguage,createTranslator,translateText,experience,article,chatItem,chunks,protectValues,translatePublishedText};
+module.exports={hash,languageOf,requestLanguage,createTranslator,translateText,experience,article,chatItem,chunks,protectValues,translatePublishedText};

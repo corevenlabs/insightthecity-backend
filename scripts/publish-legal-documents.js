@@ -3,6 +3,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const db = require('../config/db');
 const legal = require('../services/legal.service');
+const { hash } = require('../services/content-language.service');
 
 // Publishes the approved documents in legal/published (English source and Spanish translation).
 // A slug + language only gets a new version when its text differs from the current published one.
@@ -13,6 +14,7 @@ function check(document) {
   assert.ok(legal.SLUGS.includes(document.slug), `slug ${document.slug}`);
   assert.ok(['en', 'es'].includes(document.language), `language ${document.language}`);
   assert.ok(document.title && document.content, `${document.slug}-${document.language} is empty`);
+  assert.ok(document.language === 'en' ? !document.titlePt : document.titlePt, `${document.slug}-${document.language} Portuguese title`);
   const source = documents.find(d => d.slug === document.slug && d.language === 'en');
   assert.ok(source, `${document.slug} has no English source`);
   // A translation keeps the source structure, contacts, links, amounts and periods.
@@ -38,6 +40,11 @@ async function main() {
         published = result.rows[0];
       }
       assert.equal(published.content, document.content);
+      if (document.titlePt) {
+        // Reviewed Portuguese title for the translation served from the Spanish row (the model may copy a title it reads as Portuguese).
+        await client.query(`INSERT INTO content_translations (source_hash, language, translated_text) VALUES ($1, 'pt', $2)
+          ON CONFLICT (source_hash, language) DO UPDATE SET translated_text = EXCLUDED.translated_text`, [hash(document.title, false), document.titlePt]);
+      }
       console.log(JSON.stringify({ id: published.id, slug: published.slug, language: published.language, version: published.version, publishedAt: published.published_at }));
     }
     await client.query('COMMIT');
