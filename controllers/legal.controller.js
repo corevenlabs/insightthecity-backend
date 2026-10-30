@@ -28,6 +28,8 @@ const page = async (req, res, next) => {
     if (!document) return res.status(404).send("Documento no publicado");
     const date = new Date(document.publishedAt).toISOString().slice(0, 10);
     const updated = { es: "Última actualización", en: "Last updated", pt: "Última atualização" }[document.language];
+    // Selector de idioma solo en la página web; la app lee los documentos desde /api/legal.
+    const languages = legal.LANGUAGES.map((code) => `<a href="/legal/${req.params.slug}?lang=${code}" lang="${code}"${code === document.language ? ' aria-current="page"' : ""}>${code.toUpperCase()}</a>`).join("");
     res.set("Cache-Control", "public, max-age=300");
     res.type("html").send(`<!DOCTYPE html>
 <html lang="${document.language}">
@@ -43,11 +45,16 @@ const page = async (req, res, next) => {
   h2 { font-size: 21px; margin: 32px 0 8px; }
   h3, h4 { font-size: 17px; margin: 24px 0 6px; }
   .meta { color: #555; font-size: 14px; margin-bottom: 28px; }
-  @media (prefers-color-scheme: dark) { body { background: #0a0a0a; color: #ececec; } .meta { color: #b3b3b3; } }
+  .languages { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 20px; }
+  .languages a { min-width: 44px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 999px; color: inherit; font-size: 14px; font-weight: 600; text-decoration: none; }
+  .languages a[aria-current] { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+  .languages a:focus-visible { outline: 3px solid #f5c400; outline-offset: 2px; }
+  @media (prefers-color-scheme: dark) { body { background: #0a0a0a; color: #ececec; } .meta { color: #b3b3b3; } .languages a { border-color: #555; } .languages a[aria-current] { background: #ececec; border-color: #ececec; color: #0a0a0a; } }
 </style>
 </head>
 <body>
 <main>
+<nav class="languages" aria-label="${{ es: "Idioma", en: "Language", pt: "Idioma" }[document.language]}">${languages}</nav>
 <h1>${escapeHtml(document.title)}</h1>
 <div class="meta">${updated}: ${date} · v${document.version}</div>
 ${toHtml(document.content)}
