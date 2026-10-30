@@ -61,6 +61,7 @@ function serialize(row) {
     couponServerTime: row.benefit_action === 'qr' ? new Date(now).toISOString() : null,
     section: row.section,
     isFeatured: row.is_featured,
+    isItcRecommended: row.is_itc_recommended === true,
     sortOrder: row.sort_order,
     isPublished: row.is_published,
     endsAt: row.ends_at,
@@ -110,6 +111,7 @@ function deserialize(body) {
     coupon_active: body.couponActive,
     section: body.section,
     is_featured: body.isFeatured ?? body.is_featured,
+    is_itc_recommended: body.isItcRecommended,
     sort_order: body.sortOrder ?? body.sort_order,
     is_published: body.isPublished ?? body.is_published,
     ends_at: body.endsAt ?? body.ends_at,
@@ -119,6 +121,11 @@ function deserialize(body) {
     is_age_restricted: body.isAgeRestricted,
     includes: body.includes,
   };
+}
+
+function validateEditorialFlags(body) {
+  return body.isItcRecommended !== undefined && typeof body.isItcRecommended !== 'boolean'
+    ? 'Mostrar en ITC recomienda debe ser verdadero o falso.' : null;
 }
 
 function validateLocation(body) {
@@ -241,6 +248,8 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    const editorialError = validateEditorialFlags(req.body);
+    if (editorialError) return res.status(400).json({ success: false, message: editorialError });
     const socialError = validateSocialLinks(req.body);
     if (socialError) return res.status(400).json({ success: false, message: socialError });
     const locationError = validateLocation(req.body);
@@ -269,6 +278,8 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    const editorialError = validateEditorialFlags(req.body);
+    if (editorialError) return res.status(400).json({ success: false, message: editorialError });
     const socialError = validateSocialLinks(req.body);
     if (socialError) return res.status(400).json({ success: false, message: socialError });
     const locationError = validateLocation(req.body);
@@ -308,6 +319,7 @@ module.exports = {
   serialize,
   deserialize,
   validateMemberBenefit,
+  validateEditorialFlags,
   validateGallery,
   validateLocation,
   validateSocialLinks,

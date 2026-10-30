@@ -13,6 +13,8 @@ const wrap=fn=>async(req,res,next)=>{try{await fn(req,res);}catch(e){next(e);}};
 const payload=body=>{
  if(!body || typeof body.title!=='string' || !body.title.trim() || body.title.length>200)fail(400,'Agrega un título de hasta 200 caracteres');
  if(body.isPublished===true || body.is_published===true)fail(403,'La publicación requiere aprobación del administrador');
+ const editorialError=controller.validateEditorialFlags(body);
+ if(editorialError)fail(400,editorialError);
  const socialError=controller.validateSocialLinks(body);
  if(socialError)fail(400,socialError);
  return {...body,isPublished:false,is_published:false};

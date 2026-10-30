@@ -33,6 +33,9 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  if (data.is_itc_recommended !== undefined) {
+    await client.query('UPDATE experiences SET is_itc_recommended=$2 WHERE id=$1', [id, data.is_itc_recommended]);
+  }
   for (const column of ['instagram_url', 'tiktok_url', 'facebook_url']) {
     if (data[column] !== undefined) await client.query(`UPDATE experiences SET ${column}=$2 WHERE id=$1`, [id, data[column]]);
   }
