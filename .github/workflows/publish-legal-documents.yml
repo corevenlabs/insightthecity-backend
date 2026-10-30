@@ -1,4 +1,4 @@
-name: Publish approved English app terms
+name: Publish approved legal documents
 on:
   workflow_dispatch:
 permissions:
@@ -17,7 +17,7 @@ jobs:
         with:
           workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
-      - name: Publish approved document
+      - name: Publish approved documents
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: '5432'
@@ -36,4 +36,4 @@ jobs:
             sleep 1
           done
           npm ci --omit=dev
-          node scripts/publish-app-terms.js
+          node scripts/publish-legal-documents.js
