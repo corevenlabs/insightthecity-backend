@@ -48,5 +48,5 @@ jobs:
           if [ "$APPLY_LINKS" = true ]; then
             node scripts/link-client-publications.cjs --apply
           else
-            node scripts/link-client-publications.cjs
+            node scripts/link-client-publications.cjs --audit
           fi

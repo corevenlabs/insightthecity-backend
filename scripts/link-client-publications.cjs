@@ -8,6 +8,13 @@ const protectedFields=['owner_id','form_status','activated_at','expires_at','lin
  const apply=process.argv.includes('--apply'),c=await db.connect(),results=[];
  try{
   await c.query(apply?'BEGIN':'BEGIN READ ONLY');
+  if(process.argv.includes('--audit')) {
+   assert(!apply,'Audit cannot apply changes');
+   const clients=(await c.query(`SELECT p.id,p.business_name,p.form_status,p.experience_id,e.title,e.is_published FROM partner_clients p LEFT JOIN experiences e ON e.id=p.experience_id WHERE p.deleted_at IS NULL ORDER BY p.business_name`)).rows;
+   const drafts=(await c.query(`SELECT id,client_id,experience_id,status,payload->>'title' AS title FROM experience_drafts ORDER BY updated_at DESC`)).rows;
+   const experiences=(await c.query('SELECT id,title,is_published FROM experiences ORDER BY title')).rows;
+   await c.query('COMMIT');console.log(JSON.stringify({apply:false,clients,drafts,experiences},null,2));return;
+  }
   for(const target of mapping){
    const client=(await c.query('SELECT * FROM partner_clients WHERE id=$1'+(apply?' FOR UPDATE':''),[target.client_id])).rows[0];
    assert(client && !client.deleted_at && !client.blocked_at,'Client unavailable: '+target.business_name);
@@ -26,4 +33,4 @@ const protectedFields=['owner_id','form_status','activated_at','expires_at','lin
   const states=(await c.query(`SELECT p.business_name,p.form_status,p.experience_id,p.activated_at,p.expires_at,e.title AS experience_title,e.is_published FROM partner_clients p LEFT JOIN experiences e ON e.id=p.experience_id WHERE p.deleted_at IS NULL ORDER BY p.business_name`)).rows;
   await c.query('COMMIT');console.log(JSON.stringify({apply,results,states},null,2));
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();await db.end();}
-})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;});
+})().catch(e=>{console.error(e.message);process.exitCode=1;});
