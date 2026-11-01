@@ -254,37 +254,7 @@ const experiences = [
     includes: ["Resumen actualizado", "Alertas prácticas", "Contexto para moverte mejor"],
     recommendation: "Revísalo antes de salir, especialmente si vas a Manhattan o cruzas entre NYC y NJ.",
   },
-  {
-    id: "liberty-state-park-sunset",
-    title: "Atardecer en Liberty State Park",
-    category: "EVENTO",
-    image_url: "https://images.unsplash.com/photo-1522083165195-3424ed129620",
-    date_label: "Hoy · 6:30 PM",
-    location: "Liberty State Park, Jersey City",
-    region: "NJ",
-    access: "free",
-    section: "top_today",
-    is_featured: true,
-    sort_order: 8,
-    description: "Un plan al aire libre con vistas directas al skyline de Manhattan, la Estatua de la Libertad y el río Hudson.",
-    includes: ["Vista al skyline de Manhattan", "Acceso gratuito al parque", "Zona ideal para fotografías"],
-    recommendation: "Llega antes del atardecer y revisa el regreso hacia Nueva York antes de salir.",
-  },
-  {
-    id: "hoboken-food-discount",
-    title: "Sabores de Hoboken",
-    category: "CITY DROP",
-    image_url: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5",
-    date_label: "Disponible esta semana",
-    location: "Washington Street, Hoboken",
-    region: "NJ",
-    access: "premium",
-    section: "drops",
-    sort_order: 8,
-    description: "Una selección de restaurantes y cafeterías de Hoboken con descuentos especiales para miembros de ITC Club.",
-    includes: ["Descuentos en establecimientos seleccionados", "Ruta gastronómica caminable", "Recomendaciones cerca del PATH"],
-    recommendation: "Cruza en PATH y combina varias paradas caminando por Washington Street.",
-  },
+
 ];
 
 (async () => {
