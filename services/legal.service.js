@@ -26,6 +26,17 @@ function serialize(row) {
 
 // Versión vigente en el idioma pedido; si no existe, cae al español.
 async function getCurrent(slug, language = "es", { cacheOnly = false } = {}) {
+  if (slug === 'privacy') {
+    // All three languages must refer to the same current privacy source, not
+    // older per-language records. The bundle only matches the exact reviewed
+    // October 31 document; later administrative publications remain authoritative.
+    const latest = await db.query(
+      `SELECT * FROM legal_documents WHERE slug = $1 AND published_at IS NOT NULL
+       ORDER BY published_at DESC, id DESC LIMIT 1`, [slug]
+    );
+    const localized = require('./privacy-reading-translations').localizePrivacy(serialize(latest.rows[0]), language);
+    if (localized) return localized;
+  }
   const { rows } = await db.query(
     `SELECT * FROM legal_documents
      WHERE slug = $1 AND language = ANY($2::text[]) AND published_at IS NOT NULL
