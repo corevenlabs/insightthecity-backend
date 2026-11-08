@@ -6,13 +6,13 @@ Insight The City e ITC Club
 
 # 1. Quem Somos e o Escopo Desta Política
 
-Eventland LLC, com sede em Nova Jersey, Estados Unidos, opera o aplicativo Insight The City, os serviços de associação do ITC Club e o site insightthecity.com (https://insightthecity.com) website. Nesta política, "ITC", "nós", "nos" e "nossos serviços" referem-se a esses serviços e sua entidade operacional.
+Eventland LLC, com sede em Nova Jersey, Estados Unidos, opera o aplicativo Insight The City, os serviços de associação do ITC Club e o site insightthecity.com (https://insightthecity.com) Nesta política, «ITC», «nós» e «nossos serviços» referem-se a esses serviços e à sua entidade operadora.
 
 Esta política explica quais dados pessoais processamos, como os obtemos, por que os usamos, com quem os compartilhamos, por quanto tempo os mantemos e como você pode exercer seus direitos. Ela se aplica aos usuários do aplicativo e do site, membros do ITC Club, assinantes de nossas comunicações e representantes de empresas que trabalham conosco.
 
-Para questões ou solicitações de privacidade, entre em contato **info@insightthecity.com**.
+Para dúvidas ou solicitações de privacidade, entre em contato pelo e-mail **info@insightthecity.com**.
 
-Esta política fornece informações sobre nossas práticas. Publicar ou ler isso não substitui quaisquer permissões específicas que devemos solicitar para atividades de processamento particulares.
+Esta política fornece informações sobre nossas práticas. Sua publicação ou leitura não substitui as permissões específicas que devemos solicitar para determinadas atividades de tratamento.
 
 # 2. Quais Informações Processamos e Por Que
 
@@ -30,13 +30,13 @@ Esses dados nos permitem gerenciar o acesso ao ITC Club, lidar com cobranças e 
 
 Os detalhes completos do cartão de pagamento são inseridos através dos serviços da Stripe. Nossa integração retém referências de pagamento e status em vez do número completo do cartão ou código de segurança. Recibos fornecidos pela Stripe podem conter detalhes de cobrança e informações parciais sobre o método de pagamento.
 
-**Checkout de Link opcional.** Link é o serviço da Stripe para salvar e reutilizar informações de pagamento. Quando você usa o Link, os dados de contato e faturamento podem incluir seu endereço de e-mail, número de telefone e endereço de cobrança. A Stripe ou Link podem disponibilizar esses detalhes, juntamente com informações parciais sobre o método de pagamento, ao ITC através de registros de pagamento. Podemos usar as informações disponibilizadas para nós para gerenciar ou verificar pagamentos de associação e assinaturas, resolver problemas de pagamento, prevenir abusos e cumprir obrigações contábeis e legais.
+**Pagamento opcional com Link.** Link é o serviço da Stripe para salvar e reutilizar informações de pagamento. Quando você usa o Link, os dados de contato e faturamento podem incluir seu endereço de e-mail, número de telefone e endereço de cobrança. A Stripe ou Link podem disponibilizar esses detalhes, juntamente com informações parciais sobre o método de pagamento, ao ITC através de registros de pagamento. Podemos usar as informações disponibilizadas para nós para gerenciar ou verificar pagamentos de associação e assinaturas, resolver problemas de pagamento, prevenir abusos e cumprir obrigações contábeis e legais.
 
 Usar o Link é opcional. Seus termos aplicáveis e aviso de privacidade são apresentados no fluxo de pagamento. Escolher o Link é separado da autorização da assinatura do ITC Club e suas cobranças recorrentes. Você pode usar outra opção de pagamento oferecida no checkout sem se registrar para o Link.
 
 **Benefícios e resgates.** Processamos o benefício e negócio selecionados, o código ou token de resgate, e registros de sua emissão, expiração, status e uso. Usamos essas informações para validar benefícios, prevenir abusos e preparar estatísticas de atividade interna. Códigos QR estão vinculados à sua conta em nossos sistemas, conforme explicado na Seção 6.
 
-A expiração de um código QR, incluindo seu 24-período de uso de horas, não determina quando o registro associado é excluído.
+A expiração de um código QR, incluindo seu período de uso de 24 horas, não determina quando o registro associado é excluído.
 
 **Conversas com Yorki.** Processamos suas mensagens, respostas geradas e o contexto necessário para responder e manter a continuidade da conversa. A Seção 4 explica como as informações são compartilhadas com a OpenAI.
 
@@ -83,7 +83,7 @@ Para gerar respostas, nossa integração compartilha o seguinte com a OpenAI:
 - Seu nome de perfil.
 - Seu idioma configurado.
 - Seu status de associação.
-- A mensagem que você envia e o contexto de até as últimas 50 mensagens disponíveis dentro da janela de conversa de 90dias.
+- A mensagem que você envia e o contexto de até as últimas 50 mensagens disponíveis dentro da janela de conversa de 90 dias.
 - Informações sobre lugares relevantes para a busca, onde aplicável.
 
 Coordenadas obtidas do serviço de localização do seu dispositivo não são enviadas para a OpenAI. Se você incluir dados pessoais, endereços, detalhes de viagem ou outras informações em suas mensagens, esse conteúdo também pode ser incluído no que é enviado para a OpenAI.
@@ -104,7 +104,7 @@ A retirada se aplica ao processamento futuro com base nesse consentimento. Você
 
 # Histórico e Retenção
 
-O ITC retém conversas para manter a continuidade do serviço, com uma janela de histórico acessível de 90dias e processos periódicos para remover mensagens mais antigas.
+O ITC retém conversas para manter a continuidade do serviço, com uma janela de histórico acessível de 90 dias e processos periódicos para remover mensagens mais antigas.
 
 Abrir uma conversa vazia, sair ou desinstalar o aplicativo não exclui por si só o histórico armazenado em nossos servidores.
 
@@ -119,7 +119,7 @@ Nós usamos provedores para hospedar e proteger nossos serviços, processar paga
 - **Provedor ou serviço:** Google Cloud. **Função:** Hospedagem de aplicativos, banco de dados e arquivos. **Informações relacionadas:** Conta, perfil, conversas, associação, resgates e dados técnicos.
 - **Provedor ou serviço:** OpenAI. **Função:** Geração de respostas do Yorki. **Informações relacionadas:** Mensagens e contexto descritos na Seção 4.
 - **Serviço externo:** Google Maps. **Função:** Abrir o endereço de um negócio quando você opta por seguir um link. **Informações relacionadas:** O endereço do negócio incluído no link. O ITC não envia as coordenadas do seu dispositivo por meio desses links ou para o Google Maps ou Google Places. O Google Maps opera sob suas próprias permissões e política de privacidade.
-- **Provedor ou serviço:** Stripe, incluindo Link se você optar por usá-lo. **Função:** Cobranças, assinaturas e salvamento e reutilização opcionais de informações de pagamento através do Link. **Informações relacionadas:** Informações inseridas para pagamento, detalhes de contato e cobrança conforme descrito na Seção 2, identificadores, referências, statuses e recibos.
+- **Provedor ou serviço:** Stripe, incluindo Link se você optar por usá-lo. **Função:** Cobranças, assinaturas e salvamento e reutilização opcionais de informações de pagamento através do Link. **Informações relacionadas:** Informações inseridas para pagamento, detalhes de contato e cobrança conforme descrito na Seção 2, identificadores, referências, estados e recibos.
 - **Provedor ou serviço:** SiteGround. **Função:** Hospedagem de sites e serviços de e-mail. **Informações relacionadas:** Formulários, dados técnicos, destinatários e conteúdo de e-mail.
 - **Provedor ou serviço:** Mailchimp. **Função:** Comunicações promocionais. **Informações relacionadas:** Endereço de e-mail, status de assinatura e dados de entrega e interação dependendo da configuração.
 - **Provedor ou serviço:** Google Analytics. **Função:** Medição de sites. **Informações relacionadas:** Identificadores, navegação, interações e dados de dispositivos ou localização geral dependendo da configuração.
@@ -145,7 +145,7 @@ Apple, Google Play e outras plataformas que você utiliza processam informaçõe
 
 # 6. Negócios Parceiros, Reservas e Links de Afiliados
 
-**A ITC não fornece empresas ou anunciantes listas de associados, nomes, endereços de e-mail ou relatórios que identifiquem seus usuários.**
+**A ITC não fornece a empresas ou anunciantes listas de associados, nomes, endereços de e-mail ou relatórios que identifiquem seus usuários.**
 
 Para usar certos benefícios, você pode abrir um link para a plataforma de reservas ou compra do negócio. Lá, você fornece as informações necessárias para reservar, comprar ou gerenciar seus ingressos diretamente. O negócio ou plataforma determina como essas informações são processadas de acordo com seus avisos e obrigações de privacidade.
 
@@ -191,7 +191,7 @@ Dependendo das configurações da campanha e das permissões aplicáveis, o Mail
 
 Você pode cancelar a inscrição das comunicações promocionais usando o link em cada e-mail ou entrando em contato com **info@insightthecity.com**.
 
-Cancelar a inscrição do marketing não cancela uma associação paga nem impede mensagens operacionais necessárias. Cancelar uma associação também não exclui automaticamente sua conta ou o inscreve da comunicação promocional.
+Cancelar a inscrição do marketing não cancela uma associação paga nem impede mensagens operacionais necessárias. Cancelar uma associação também não exclui, por si só, sua conta nem cancela sua inscrição nas comunicações promocionais.
 
 # 9. Quanto Tempo Retemos Informações
 
@@ -201,7 +201,7 @@ Retemos dados pelo tempo necessário para fornecer o serviço, cumprir os propó
 
 - **Conta e perfil:** Enquanto a conta existir. A inatividade não, por si só, ativa a exclusão automática.
 - **Coordenadas de localização do dispositivo:** Nunca retidas. Elas são processadas apenas em seu dispositivo, não são salvas e não são transmitidas para os servidores da ITC ou terceiros.
-- **Conversas com Yorki:** Histórico acessível dentro de uma janela de 90dias, com remoção periódica e progressiva de mensagens mais antigas.
+- **Conversas com Yorki:** Histórico acessível dentro de uma janela de 90 dias, com remoção periódica e progressiva de mensagens mais antigas.
 - **Associação, transações e resgates:** Enquanto necessário para administrar a conta e o serviço; registros vinculados estão incluídos no processo de exclusão, exceto onde a retenção é legalmente exigida ou justificada.
 - **Dados de negócios e representantes:** Enquanto necessário para gerenciar o relacionamento comercial e, em seguida, para obrigações legais ou contábeis ou reivindicações justificadas.
 - **Comunicações promocionais:** Enquanto a assinatura estiver ativa. Após cancelar a inscrição, informações mínimas podem ser retidas para honrar solicitações de supressão, documentar permissões ou lidar com reclamações.
@@ -212,7 +212,7 @@ Retemos dados pelo tempo necessário para fornecer o serviço, cumprir os propó
 - **Google Analytics:** Configurado para dois meses para dados de evento e 14 meses para dados de usuário. O período do identificador do usuário é redefinido com nova atividade. Essas configurações não determinam por si mesmas a retenção de relatórios agregados.
 - **Provas legais, cobrança e contabilidade:** Pelo tempo que for exigido por lei ou necessário e proporcional para estabelecer termos, prevenir fraudes ou resolver reivindicações.
 
-Os registros armazenados nos dados do WordPress e Mailchimp são gerenciados separadamente. Você pode solicitar a exclusão deles através do nosso endereço de e-mail de privacidade; cancelar a inscrição em um mailing não purga automaticamente todos os sistemas.
+Os registros armazenados no WordPress e os dados do Mailchimp são gerenciados separadamente. Você pode solicitar a exclusão deles através do nosso endereço de e-mail de privacidade; cancelar a inscrição em um mailing não purga automaticamente todos os sistemas.
 
 **Backups e recuperação.** O banco de dados do aplicativo é configurado para reter até oito backups automáticos e logs de recuperação por até sete dias. Oito backups não significam necessariamente um máximo de oito dias. Backups manuais de manutenção também podem existir.
 
@@ -230,7 +230,7 @@ Quando um pedido de exclusão estiver sujeito a uma exceção, explicaremos as c
 
 **Excluindo sua conta.** Você pode iniciar o processo usando o recurso de exclusão de conta no aplicativo ou nossa página de exclusão de conta (https://itc-backend-1031252664334.us-east1.run.app/delete-account?lang=es), sem ter o aplicativo instalado. A página verifica seu endereço de e-mail e pede que você confirme a exclusão.
 
-Você também pode enviar um e-mail para **info@insightthecity.com** com o assunto **“Delete my account”** e fornecer o endereço de e-mail associado. Não envie sua senha.
+Você também pode enviar um e-mail para **info@insightthecity.com** com o assunto **“Excluir minha conta”** e fornecer o endereço de e-mail associado. Não envie sua senha.
 
 O processo:
 
@@ -256,8 +256,8 @@ Dependendo da sua residência, da lei aplicável e do processamento envolvido, v
 - Solicitar exclusão de dados.
 - Obter certos dados em um formato portátil.
 - Retirar consentimento para o processamento futuro.
-- Opor-se a certos processamento ou solicitar restrições.
-- Exercitar direitos de exclusão relacionados à venda de dados, publicidade direcionada, ou certas decisões automatizadas, onde reconhecido por lei.
+- Opor-se a determinados tratamentos ou solicitar restrições.
+- Exercer direitos de recusa relacionados à venda de dados, à publicidade direcionada ou a determinadas decisões automatizadas, quando reconhecidos por lei.
 - Solicitar revisão de uma resposta e atuar através de um representante autorizado quando aplicável.
 
 Para exercer esses direitos, envie um e-mail para **info@insightthecity.com**, descreva sua solicitação e forneça o endereço de e-mail associado ao serviço. Você não precisa criar uma nova conta para nos contatar.
@@ -288,9 +288,9 @@ A localização de um servidor não determina todos os países de onde as inform
 
 # 14. Idade do Usuário
 
-Criar uma conta e adquirir uma associação ao ITC Club são restritas a indivíduos **18 anos de idade ou mais**.
+A criação de uma conta e a aquisição de uma associação ao ITC Club são restritas a pessoas com **18 anos de idade ou mais**.
 
-Recursos de conta e associação não são direcionados a crianças menores de 13, e não buscamos coletar conscientemente seus dados pessoais.
+Recursos de conta e associação não são direcionados a crianças menores de 13 anos, e não buscamos coletar conscientemente seus dados pessoais.
 
 Se você acredita que recebemos informações de um menor em circunstâncias que exigem autorização, intervenção ou exclusão, envie um e-mail para **info@insightthecity.com** para que possamos revisar a situação e tomar as medidas apropriadas.
 
@@ -308,6 +308,6 @@ Operador do Insight The City e do ITC Club
 
 Nova Jersey, Estados Unidos
 
-**Email de Privacidade:** info@insightthecity.com
+**E-mail de privacidade:** info@insightthecity.com
 
 Você pode usar este endereço de e-mail para perguntas, solicitações de direitos, retirada de consentimento, exclusão de dados ou revisão de uma resposta.
