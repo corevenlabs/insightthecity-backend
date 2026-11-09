@@ -79,7 +79,9 @@ const sitePage=(file)=>(req,res)=>{
 };
 app.use(['/assets','/videos'],(req,res,next)=>{req.url=req.baseUrl+req.url;next();},express.static(site,{index:false,maxAge:'7d'}));
 app.get('/',sitePage('index.html'));
-app.get(['/soporte','/support','/es/soporte','/en/support','/pt/suporte'],sitePage('soporte.html'));
+app.get(['/soporte','/es/soporte'],sitePage('soporte.html'));
+app.get(['/support','/en/support'],sitePage('soporte-en.html'));
+app.get('/pt/suporte',sitePage('soporte-pt.html'));
 app.get("/health", (req, res) => res.json({ ok: true }))
 
 app.use("/api/chat", chatRouter)
