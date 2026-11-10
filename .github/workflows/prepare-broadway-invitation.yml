@@ -37,6 +37,9 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_SSL: 'false'
           APPLY_INVITATION: ${{ inputs.apply }}
+          PARTNER_SERVER_CHECKOUT_ENABLED: 'true'
+          FOUNDING_PARTNER_PAYMENT_LINK_MANUAL: 'false'
+          PARTNER_PAYMENT_LINK_TEST_MODE: 'false'
         run: |
           set -euo pipefail
           curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
@@ -46,6 +49,12 @@ jobs:
             nc -z 127.0.0.1 5432 && break
             sleep 1
           done
+          PRICING_SECRET="$(gcloud secrets versions access latest --secret STRIPE_SECRET_KEY --project itc-developer-502721)"
+          echo "::add-mask::$PRICING_SECRET"
+          export STRIPE_SECRET_KEY="$PRICING_SECRET"
+          STRATEGIC_LINK_ID="$(gcloud secrets versions access latest --secret STRATEGIC_PARTNER_PAYMENT_LINK_ID --project itc-developer-502721)"
+          echo "::add-mask::$STRATEGIC_LINK_ID"
+          export STRATEGIC_PARTNER_PAYMENT_LINK_ID="$STRATEGIC_LINK_ID"
           if [ "$APPLY_INVITATION" = true ]; then
             INVITATION_SECRET="$(gcloud secrets versions access latest --secret JWT_SECRET --project itc-developer-502721)"
             echo "::add-mask::$INVITATION_SECRET"

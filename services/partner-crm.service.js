@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const R = require("./partner-rules");
 const mail = require("./partner-email.service");
 const paymentLink = require("./partner-payment-link.service");
+const externalAgreement = require("./partner-external-agreement");
 async function transaction(fn) {
   const c = await db.connect();
   try {
@@ -160,6 +161,7 @@ async function detail(id, actor) {
     ...row,
     ...publication,
     ...paymentLink.presentation(row),
+    ...externalAgreement.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     files,
     owner: who,
@@ -589,9 +591,10 @@ async function publicView(token) {
     payment_method: row.payment_method,
     payment_status: row.payment_status,
     ...paymentLink.presentation(row),
+    ...externalAgreement.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     form_status: row.form_status,
-    terms: row.terms_snapshot,
+    terms: externalAgreement.agreement(row) ? {} : row.terms_snapshot,
     owner: await owner(db, row),
     content:
       (row.payment_status === "pending" || paymentLink.strategicCheckout(row))
@@ -622,7 +625,7 @@ async function save(token, input, submit = false) {
     if (submit) {
       if (input.authorize !== true)
         R.fail("Autoriza el uso de la información, logo y fotografías");
-      if (!row.terms_snapshot.en)
+      if (!externalAgreement.agreement(row) && !row.terms_snapshot.en)
         R.fail("Faltan los términos aprobados", 409);
       const files = (
         await c.query(
@@ -645,12 +648,8 @@ async function save(token, input, submit = false) {
           "en",
           priorSigner || data.contactName || row.contact_name || row.business_name,
           row.email,
-          JSON.stringify({
-            ...row.terms_snapshot.en,
-            materialAuthorizationLanguage: lang,
-            materialAuthorization: require("./partner-public-copy")
-              .authorization[lang],
-          }),
+          JSON.stringify(externalAgreement.submissionDocument(row, lang,
+            require("./partner-public-copy").authorization[lang])),
           row.submission_version + 1,
         ],
       );
@@ -700,6 +699,12 @@ async function save(token, input, submit = false) {
 async function acceptCommercial(c, row, input, extra = {}) {
   const lang = R.language(input.language),
     name = R.clean(input.signerName, 150);
+  if (externalAgreement.agreement(row)) {
+    if (!name) R.fail("Indica tu nombre para confirmar la participación");
+    await externalAgreement.confirm(c, row, name, extra.paymentLinkReference || paymentLink.reference(row));
+    await c.query("UPDATE partner_clients SET language=$2 WHERE id=$1", [row.id, lang]);
+    return; // No online acceptance, terms PDF or accepted-terms email is created.
+  }
   if (input.accept !== true || !name || !row.terms_snapshot.en)
     R.fail("Acepta el acuerdo e indica tu nombre");
   const document = { ...row.terms_snapshot.en, ...extra, invitationVersion: row.link_version, acceptedBusinessName: row.business_name };
@@ -811,7 +816,7 @@ async function confirmPaymentLink(session) {
       "SELECT id FROM partner_acceptances WHERE client_id=$1 AND stage='commercial' AND document->>'paymentLinkReference'=$2 LIMIT 1",
       [id, session.client_reference_id],
     )).rows[0];
-    if (!consent) return false;
+    if (!consent && !await externalAgreement.confirmation(c, row, session.client_reference_id)) return false;
     const receiptData = await require('./stripe.service').retrievePartnerReceiptData(session);
     if (receiptData.session.id !== session.id || receiptData.session.client_reference_id !== session.client_reference_id ||
         receiptData.session.livemode !== session.livemode || receiptData.session.amount_total !== session.amount_total)

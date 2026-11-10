@@ -157,6 +157,7 @@ function render(
   { client = {}, owner = {}, url, note = "", preview, language = "en" },
 ) {
   owner = partnerContact(owner);
+  const external = Boolean(require("./partner-external-agreement").agreement(client));
   const strategic = client.offer === "strategic";
   const partnership = strategic ? "Strategic Founding Partner" : "Founding Partner";
   const foundingInvitation = kind === "payment" && ["founding", "strategic"].includes(client.offer);
@@ -200,8 +201,8 @@ function render(
     currency: "USD",
   }).format((client.amount_cents || 0) / 100);
   const taxNotice = client.offer === "founding" && !require("./partner-payment-link.service").testMode() && require("./partner-payment-link.service").configured() ? " Applicable taxes are calculated by Stripe and added at checkout. You’ll see the final total before confirming payment." : "";
-  const investment = `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.${taxNotice}`;
-  const covered = "Your participation is fully covered for six months, starting when your profile is activated. No payment is required.";
+  const investment = external ? `Total investment: ${amount.replace(/\.00$/, "")}. Participation period as agreed separately.${taxNotice}` : `Total investment: ${amount.replace(/\.00$/, "")} for six months, starting when your profile is activated.${taxNotice}`;
+  const covered = external ? "Your participation is fully covered. Participation period as agreed separately. No payment is required." : "Your participation is fully covered for six months, starting when your profile is activated. No payment is required.";
   const strategicInvestment = "Regular participation fee: $1,800\nYour invitation includes 100% OFF\nYour total: $0\n" + covered;
   const invitationPricing = strategic
     ? `Regular participation fee: <s style="color:#aaa">$1,800</s><br>Your invitation includes <strong style="color:#FDDD56">100% OFF</strong><br>Your total: <strong>$0</strong><br>${escape(covered)}`

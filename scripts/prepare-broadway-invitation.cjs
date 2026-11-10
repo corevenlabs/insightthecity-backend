@@ -20,6 +20,13 @@ async function run() {
     assert.equal(accepted.count, 0, 'Commercial acceptance already exists; stop');
     const othersBefore = (await c.query('SELECT COUNT(*)::int AS count FROM partner_clients WHERE id=$1 AND deleted_at IS NULL', [row.id])).rows[0];
     assert.equal(othersBefore.count, 1);
+    assert.ok(process.env.STRIPE_SECRET_KEY, 'Stripe verification unavailable');
+    assert.ok(process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') || process.env.STRIPE_SECRET_KEY.startsWith('rk_live_'), 'Expected live Stripe configuration');
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const configured = await require('../services/partner-server-checkout').configuration(stripe, row);
+    assert.equal(configured.coupon.percent_off, 100);
+    assert.equal(configured.price.unit_amount, 180000);
+    const verifiedPricing = {currency: 'usd', subtotal:180000, discountPercent:100, totalBeforeTax:0};
     const alreadyPrepared = row.link_version === spec.invitationVersion;
     let current = row;
     if (apply && !alreadyPrepared) {
@@ -36,7 +43,7 @@ async function run() {
       fs.writeFileSync('/tmp/broadway-private-invitation.json', JSON.stringify({business:current.business_name,link:`https://itc-panel-1031252664334.us-east1.run.app/partner#${token}`},null,2), {mode:0o600});
     }
     await c.query('COMMIT');
-    console.log(JSON.stringify({apply, alreadyPrepared, business:row.business_name, noCheckoutStarted:true, onlineAcceptances:accepted.count, changes:apply && !alreadyPrepared ? ['link_version','link_expires_at','updated_at','activity'] : [], emailsSent:0}));
+    console.log(JSON.stringify({apply, alreadyPrepared, business:row.business_name, verifiedPricing, noCheckoutStarted:true, onlineAcceptances:accepted.count, changes:apply && !alreadyPrepared ? ['link_version','link_expires_at','updated_at','activity'] : [], emailsSent:0}));
   } catch (e) { await c.query('ROLLBACK'); throw e; }
   finally { c.release(); await db.end(); }
 }
