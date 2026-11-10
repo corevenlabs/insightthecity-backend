@@ -1,0 +1,53 @@
+name: Audit partner terms (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      business_name:
+        description: Business name to inspect
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - run: node scripts/check-node-version.cjs
+      - run: npm ci --omit=dev
+      - name: Inspect client terms acceptance without changes
+        env:
+          AUDIT_BUSINESS_NAME: ${{ inputs.business_name }}
+          AUDIT_RESULT_PATH: /tmp/partner-terms-audit.json
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_USER: itc_app
+          DB_DATABASE: itc
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSL: 'false'
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x /tmp/cloud-sql-proxy
+          /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres > /tmp/staff-audit-proxy.log 2>&1 &
+          for i in $(seq 1 30); do
+            nc -z 127.0.0.1 5432 && break
+            sleep 1
+          done
+          node --check scripts/audit-partner-terms.cjs
+          node scripts/audit-partner-terms.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: partner-terms-audit
+          path: /tmp/partner-terms-audit.json
+          retention-days: 3
+          if-no-files-found: error
