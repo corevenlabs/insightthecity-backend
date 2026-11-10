@@ -49,10 +49,11 @@ jobs:
             nc -z 127.0.0.1 5432 && break
             sleep 1
           done
-          PRICING_SECRET="$(gcloud secrets versions access latest --secret STRIPE_SECRET_KEY --project itc-developer-502721)"
+          PRICING_SECRET="$(gcloud secrets versions access latest --secret PARTNER_STRIPE_SECRET_KEY --project itc-developer-502721)"
           echo "::add-mask::$PRICING_SECRET"
           export STRIPE_SECRET_KEY="$PRICING_SECRET"
-          STRATEGIC_LINK_ID="$(gcloud secrets versions access latest --secret STRATEGIC_PARTNER_PAYMENT_LINK_ID --project itc-developer-502721)"
+          gcloud run services describe itc-backend --region us-east1 --project itc-developer-502721 --format=json > /tmp/broadway-service-config.json
+          STRATEGIC_LINK_ID="$(python3 -c 'import json; d=json.load(open("/tmp/broadway-service-config.json")); print(next(x["value"] for x in d["spec"]["template"]["spec"]["containers"][0]["env"] if x["name"]=="STRATEGIC_PARTNER_PAYMENT_LINK_ID"))')"
           echo "::add-mask::$STRATEGIC_LINK_ID"
           export STRATEGIC_PARTNER_PAYMENT_LINK_ID="$STRATEGIC_LINK_ID"
           if [ "$APPLY_INVITATION" = true ]; then
