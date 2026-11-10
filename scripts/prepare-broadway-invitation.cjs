@@ -7,7 +7,7 @@ const apply = process.argv.includes('--apply');
 async function run() {
   const c = await db.connect();
   try {
-    await c.query(apply ? 'BEGIN' : 'BEGIN READ ONLY');
+    await c.query(apply ? 'BEGIN ISOLATION LEVEL REPEATABLE READ' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const row = (await c.query(`SELECT * FROM partner_clients WHERE id=$1${apply ? ' FOR UPDATE' : ''}`, [spec.clientId])).rows[0];
     assert.ok(row && !row.deleted_at && !row.blocked_at, 'Client unavailable');
     assert.equal(row.business_name, spec.businessName);
@@ -27,6 +27,8 @@ async function run() {
     assert.equal(configured.coupon.percent_off, 100);
     assert.equal(configured.price.unit_amount, 180000);
     const verifiedPricing = {currency: 'usd', subtotal:180000, discountPercent:100, totalBeforeTax:0};
+    const otherClientsHash = async () => (await c.query("SELECT md5(COALESCE(jsonb_agg(to_jsonb(p) ORDER BY p.id)::text,'[]')) AS hash FROM partner_clients p WHERE p.id<>$1", [row.id])).rows[0].hash;
+    const othersHash = await otherClientsHash();
     const alreadyPrepared = row.link_version === spec.invitationVersion;
     let current = row;
     if (apply && !alreadyPrepared) {
@@ -37,13 +39,14 @@ async function run() {
       }
       await c.query("INSERT INTO partner_activity(client_id,actor_id,kind,note) VALUES($1,NULL,'external-agreement-invitation',$2)", [row.id, JSON.stringify({reference: spec.reference, basis: spec.basis, invitationVersion: spec.invitationVersion})]);
     }
+    assert.equal(await otherClientsHash(), othersHash, 'Other client rows changed');
     if (apply) {
       assert.ok(process.env.JWT_SECRET, 'Signing secret unavailable');
       const token = jwt.sign({type:'partner',id:current.id,v:current.link_version,exp:Math.floor(new Date(current.link_expires_at).getTime()/1000)}, process.env.JWT_SECRET);
       fs.writeFileSync('/tmp/broadway-private-invitation.json', JSON.stringify({business:current.business_name,link:`https://itc-panel-1031252664334.us-east1.run.app/partner#${token}`},null,2), {mode:0o600});
     }
     await c.query('COMMIT');
-    console.log(JSON.stringify({apply, alreadyPrepared, business:row.business_name, verifiedPricing, noCheckoutStarted:true, onlineAcceptances:accepted.count, changes:apply && !alreadyPrepared ? ['link_version','link_expires_at','updated_at','activity'] : [], emailsSent:0}));
+    console.log(JSON.stringify({apply, alreadyPrepared, business:row.business_name, verifiedPricing, otherClientsUnchanged:true, noCheckoutStarted:true, onlineAcceptances:accepted.count, changes:apply && !alreadyPrepared ? ['link_version','link_expires_at','updated_at','activity'] : [], emailsSent:0}));
   } catch (e) { await c.query('ROLLBACK'); throw e; }
   finally { c.release(); await db.end(); }
 }
