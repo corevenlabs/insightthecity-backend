@@ -14,6 +14,7 @@ const labels = {
   ticketUrl:'enlace de entradas',ticket_url:'enlace de entradas',
   instagramUrl:'enlace de Instagram',tiktokUrl:'enlace de TikTok',facebookUrl:'enlace de Facebook',
   instagram_url:'enlace de Instagram',tiktok_url:'enlace de TikTok',facebook_url:'enlace de Facebook',
+  externalBenefitStartsAt:'fecha de inicio del enlace',externalBenefitEndsAt:'fecha de fin del enlace',
   endsAt:'fecha de finalización',ends_at:'fecha de finalización',
   couponStartsAt:'fecha de inicio del beneficio',couponEndsAt:'fecha de fin del beneficio',
 };

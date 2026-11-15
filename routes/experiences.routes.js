@@ -17,7 +17,7 @@ router.get("/tags", require('../middleware/staff').requireStaff('admin','editor'
   try { res.json(await require("../services/experiences.service").listTags()); }
   catch (err) { next(err); }
 });
-router.get("/:id", async (req,res,next)=> { try { const row=await require("../services/experiences.service").getById(req.params.id); if(row && !row.is_published) return requireAuth(req,res,next); next(); } catch(e){next(e);} }, getExperience);
+router.get("/:id", async (req,res,next)=> { try { if(req.query.view === "admin") return requireAuth(req,res,next); const row=await require("../services/experiences.service").getById(req.params.id); if(row && !row.is_published) return requireAuth(req,res,next); next(); } catch(e){next(e);} }, getExperience);
 
 // Linked partner drafts cannot bypass the final administrator review through generic endpoints.
 const protectPartnerDraft = async (req,res,next) => {

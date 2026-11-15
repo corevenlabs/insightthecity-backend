@@ -1,3 +1,4 @@
+const externalLinks = require("../services/external-benefit-link");
 const { normalizeExperienceText } = require("../utils/experienceText");
 const contentLanguage = require('../services/content-language.service');
 const { normalizeSocialUrl, validateSocialLinks } = require('../utils/socialLinks');
@@ -46,6 +47,7 @@ function serialize(row) {
     memberBenefitDetails: row.member_benefit_details ?? null,
     benefitAction: row.benefit_action || 'none',
     benefitUrl: row.benefit_url ?? null,
+    ...(row.benefit_action === "external" ? { externalBenefitStartsAt: row.external_benefit_starts_at ?? null, externalBenefitEndsAt: row.external_benefit_ends_at ?? null } : {}),
     benefitCta: row.benefit_cta ?? null,
     benefitInstructions: row.benefit_instructions ?? null,
     couponInventoryMode: row.coupon_inventory_mode || 'unlimited',
@@ -99,6 +101,8 @@ function deserialize(body) {
     card_benefit: body.cardBenefit === undefined ? undefined : body.cardBenefit?.trim() || null,
     member_benefit: body.memberBenefit === undefined ? undefined : body.memberBenefit?.trim() || null,
     member_benefit_details: body.memberBenefitDetails === undefined ? undefined : body.memberBenefitDetails?.trim() || null,
+    external_benefit_starts_at: body.externalBenefitStartsAt,
+    external_benefit_ends_at: body.externalBenefitEndsAt,
     benefit_action: body.benefitAction,
     benefit_url: body.benefitUrl === undefined ? undefined : body.benefitUrl?.trim() || null,
     benefit_cta: body.benefitCta === undefined ? undefined : body.benefitCta?.trim() || null,
@@ -164,6 +168,9 @@ function validateLocation(body) {
 }
 
 function validateMemberBenefit(body, requireBenefit) {
+  const externalDatesError = externalLinks.validation(body);
+  if (externalDatesError) return externalDatesError;
+  if ([body.benefitUrl,body.ticketUrl].some(value => value && externalLinks.managed(value))) return "Usa el enlace original del negocio, no el enlace de disponibilidad de ITC Club. Actualiza el panel para editarlo.";
   for (const [field, limit] of [['memberBenefit', 200], ['memberBenefitDetails', 2000], ['cardBenefit', 60]]) {
     if (body[field] != null && (typeof body[field] !== 'string' || body[field].length > limit)) return `${field} debe ser texto de hasta ${limit} caracteres.`;
   }
@@ -231,7 +238,9 @@ const listExperiences = async (req, res, next) => {
 
     // Header que react-admin (ra-data-simple-rest) necesita para la paginación.
     res.set("Content-Range", `experiences ${start || 0}-${Math.max((start || 0), (end || rows.length) - 1)}/${total}`);
-    res.json(await Promise.all(rows.map(row => contentLanguage.experience(serialize(row), contentLanguage.requestLanguage(req)))));
+    const lang = contentLanguage.requestLanguage(req);
+    const records = await Promise.all(rows.map(row => contentLanguage.experience(serialize(row), lang)));
+    res.json(req.admin ? records : records.map(record => externalLinks.publicView(record, lang)));
   } catch (err) {
     next(err);
   }
@@ -241,7 +250,9 @@ const getExperience = async (req, res, next) => {
   try {
     const row = await service.getById(req.params.id);
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
-    res.json(await contentLanguage.experience(serialize(row), contentLanguage.requestLanguage(req)));
+    const lang = contentLanguage.requestLanguage(req);
+    const record = await contentLanguage.experience(serialize(row), lang);
+    res.json(req.admin ? record : externalLinks.publicView(record,lang));
   } catch (err) {
     next(err);
   }

@@ -33,6 +33,7 @@ const BASE_SELECT = `
 `;
 
 async function saveMemberBenefit(client, id, data) {
+  await require("./external-benefit-link").saveSchedule(client,id,data);
   if (data.is_itc_recommended !== undefined) {
     await client.query('UPDATE experiences SET is_itc_recommended=$2 WHERE id=$1', [id, data.is_itc_recommended]);
   }
