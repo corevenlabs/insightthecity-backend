@@ -1,3 +1,4 @@
+const {normalizeExperienceText}=require("../utils/experienceText");
 const router=require('express').Router();
 const db=require('../config/db');
 const controller=require('../controllers/experiences.controller');
@@ -11,6 +12,7 @@ router.use((req,res,next)=>{res.set('Cache-Control','no-store');next();});
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const wrap=fn=>async(req,res,next)=>{try{await fn(req,res);}catch(e){next(e);}};
 const payload=body=>{
+ body=normalizeExperienceText(body);
  if(!body || typeof body.title!=='string' || !body.title.trim() || body.title.length>200)fail(400,'Agrega un título de hasta 200 caracteres');
  if(body.isPublished===true || body.is_published===true)fail(403,'La publicación requiere aprobación del administrador');
  const editorialError=controller.validateEditorialFlags(body);

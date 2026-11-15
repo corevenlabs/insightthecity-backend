@@ -1,3 +1,4 @@
+const { normalizeExperienceText } = require("../utils/experienceText");
 const contentLanguage = require('../services/content-language.service');
 const { normalizeSocialUrl, validateSocialLinks } = require('../utils/socialLinks');
 const { normalizeTags, tagsForRecord } = require("../utils/experienceTags");
@@ -248,6 +249,7 @@ const getExperience = async (req, res, next) => {
 
 const createExperience = async (req, res, next) => {
   try {
+    req.body = normalizeExperienceText(req.body);
     const editorialError = validateEditorialFlags(req.body);
     if (editorialError) return res.status(400).json({ success: false, message: editorialError });
     const socialError = validateSocialLinks(req.body);
@@ -278,6 +280,7 @@ const createExperience = async (req, res, next) => {
 
 const updateExperience = async (req, res, next) => {
   try {
+    req.body = normalizeExperienceText(req.body);
     const editorialError = validateEditorialFlags(req.body);
     if (editorialError) return res.status(400).json({ success: false, message: editorialError });
     const socialError = validateSocialLinks(req.body);
