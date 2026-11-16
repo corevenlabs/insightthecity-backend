@@ -27,3 +27,15 @@ test('signed links have a five-minute limit and a separate purpose, with no code
 test('codes containing regular-expression characters are redacted literally',()=>{ const coded={...row,private_benefit_code:'A+B.123'}; const result=P.publicRecord(coded,{description:'Use A+B.123 now'}); assert.ok(!result.description.includes('A+B.123')); });
 
 test('historic bold codes in conditions remain private even with a descriptive public label',()=>{ const r={...row,private_benefit_code:null,member_benefit_details:'Usa el código **'+code+'** en el sitio.'}; assert.equal(P.codeFor(r),code); assert.doesNotMatch(JSON.stringify(P.publicRecord(r,{memberBenefitDetails:r.member_benefit_details})),new RegExp(code)); });
+
+test('percentage-prefixed legacy labels keep the discount public and hide the code everywhere',()=>{
+ for(const label of ['15% COD: '+code,' 15 % Código: '+code,'15.5% CODE: '+code]) {
+  const r={...row,private_benefit_code:null,member_benefit:label,member_benefit_details:'Usando el Código '+code};
+  assert.equal(P.codeFor(r),code);
+  const record={memberBenefit:label,memberBenefitDetails:r.member_benefit_details,benefitUrl:'https://partner.example/?coupon='+code};
+  const result=P.publicRecord(r,record);assert.match(result.memberBenefit,/de descuento$/);assert.doesNotMatch(JSON.stringify(result),new RegExp(code));assert.equal(result.benefitUrl,null);assert.equal(result.privateBenefitRequired,true);
+  assert.doesNotMatch(JSON.stringify(P.catalogRow(r)),new RegExp(code));
+  assert.match(P.validation({benefitAction:'external',memberBenefit:label}),/Código de descuento/);
+  assert.equal(P.publicRecord({...r,benefit_action:'qr'},record),record);
+ }
+});

@@ -2,12 +2,16 @@ const jwt=require('jsonwebtoken');
 const db=require('../config/db');
 const PUBLIC_LABEL='Beneficio exclusivo para miembros ITC Club';
 const PUBLIC_REPLACEMENT='código exclusivo para miembros ITC Club';
-const legacy=value=>typeof value==='string'?/^\s*(?:COD|CÓDIGO|CODIGO|CODE)\s*:\s*([A-Za-z0-9_-]{3,80})\s*$/i.exec(value)?.[1]:undefined;
+const legacy=value=>typeof value==='string'?/^\s*(?:\d{1,3}(?:[.,]\d+)?\s*%\s+)?(?:COD|CÓDIGO|CODIGO|CODE)\s*:\s*([A-Za-z0-9_-]{3,80})\s*$/i.exec(value)?.[1]:undefined;
 function codeFor(row){
  if(!row || row.access!=='premium' || row.benefit_action!=='external')return null;
  return (typeof row.private_benefit_code==='string'&&row.private_benefit_code.trim())||legacy(row.member_benefit)||detailedCode(row.member_benefit_details)||null;
 }
 const detailedCode=value=>typeof value==='string'?/(?:código|codigo|code)\s+\*\*([A-Za-z0-9_-]{3,80})\*\*/i.exec(value)?.[1]:undefined;
+function publicLabel(row){
+ const percent=/^\s*(\d{1,3}(?:[.,]\d+)?\s*%)\s+(?:COD|CÓDIGO|CODIGO|CODE)\s*:/i.exec(row.member_benefit||'')?.[1];
+ return percent?percent+' de descuento':PUBLIC_LABEL;
+}
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function redact(value,code){
  if(typeof value==='string')return value.replace(new RegExp(escape(code),'gi'),PUBLIC_REPLACEMENT);
@@ -19,7 +23,7 @@ function publicRecord(row,record,staff=false){
  const code=codeFor(row);if(!code)return record;
  const result={...record,privateBenefitRequired:true};
  for(const key of camelFields)if(result[key]!=null)result[key]=redact(result[key],code);
- if(legacy(row.member_benefit))result.memberBenefit=PUBLIC_LABEL;
+ if(legacy(row.member_benefit))result.memberBenefit=publicLabel(row);
  delete result.privateBenefitCode;
  if(staff)return {...result,privateBenefitCode:code};
  return {...result,benefitUrl:null,ticketUrl:null};
@@ -28,7 +32,7 @@ function catalogRow(row){
  const code=codeFor(row);if(!code)return row;
  const result={...row};delete result.private_benefit_code;
  for(const key of ['title','description','recommendation','member_benefit','member_benefit_details','card_benefit','benefit_instructions','date_label','includes','benefit_cta','ticket_cta'])if(result[key]!=null)result[key]=redact(result[key],code);
- if(legacy(row.member_benefit))result.member_benefit=PUBLIC_LABEL;
+ if(legacy(row.member_benefit))result.member_benefit=publicLabel(row);
  result.benefit_url=null;result.ticket_url=null;return result;
 }
 async function member(id,sv){
