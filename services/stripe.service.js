@@ -48,9 +48,12 @@ async function createCheckoutSession({ user, customerId, baseUrl, appReturnUrl, 
         customer: customerId,
         client_reference_id: String(user.id),
         line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+        allow_promotion_codes: true,
+        // Retain a payment method for renewal even when a coupon makes today’s total zero.
+        payment_method_collection: 'always',
         metadata: { purchase_type: 'subscription', user_id: String(user.id) },
         subscription_data: { metadata: { user_id: String(user.id), ...(invitationId ? {launch_invitation_id:invitationId} : {}) }, ...(trialDays ? {trial_period_days:trialDays,trial_settings:{end_behavior:{missing_payment_method:'cancel'}}} : {}) },
-        ...(trialDays ? {payment_method_collection:'always',payment_method_types:['card']} : {}),
+        ...(trialDays ? {payment_method_types:['card']} : {}),
         // Recordatorio de renovación automática junto al botón de pago.
         custom_text: { submit: { message: renewalNotice } },
         success_url: successUrl || returnUrl(baseUrl, appReturnUrl, 'result=success&session_id={CHECKOUT_SESSION_ID}'),

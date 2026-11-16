@@ -8,6 +8,7 @@ test('normal checkout never acquires the invitation trial or campaign price',asy
   campaign.setClient({subscriptions:{create:async args=>{campaignArgs=args;return {id:'sub_campaign'};}}});
   await normal.createCheckoutSession({user:{id:1},customerId:'cus_normal',baseUrl:'https://example.test',appReturnUrl:'itcclub://login',renewalNotice:'Normal'});
   await campaign.createLaunchSubscription({customerId:'cus_campaign',userId:2,paymentMethod:'pm_verified',invitationId:'invite',key:'once'});
+  assert.equal(normalArgs.allow_promotion_codes,true);assert.equal(normalArgs.payment_method_collection,'always');assert.equal(normalArgs.discounts,undefined);
   assert.equal(normalArgs.line_items[0].price,'price_normal');assert.equal(normalArgs.subscription_data.trial_period_days,undefined);
   assert.equal(campaignArgs.items[0].price,'price_campaign');assert.equal(campaignArgs.trial_period_days,30);assert.equal(campaignArgs.collection_method,'charge_automatically');
   const billing=require('../services/membership-billing.service');
