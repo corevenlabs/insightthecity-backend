@@ -7,7 +7,7 @@ const textFields = new Set([
   'benefitInstructions','benefit_instructions','ticketCta','ticket_cta',
 ]);
 const labels = {
-  id:'identificador',client_id:'cliente vinculado',region:'región',section:'sección',
+  privateBenefitCode:'código privado del beneficio',id:'identificador',client_id:'cliente vinculado',region:'región',section:'sección',
   image:'imagen de portada',image_url:'imagen de portada',images:'imágenes',
   mapsUrl:'enlace de Google Maps',maps_url:'enlace de Google Maps',
   benefitUrl:'enlace del beneficio',benefit_url:'enlace del beneficio',

@@ -23,6 +23,7 @@ const words={
  pt:{intro:'Claro! Veja estas opções.',news:'Veja estas novidades de NY al día.',plans:'Encontrei estes passeios para você.',none:'Não encontrei opções com esses filtros. Vamos tentar outra região?',unavailable:'Não consegui verificar o catálogo. Vamos tentar de novo?',clarify:'Você prefere comida, museus ou outra experiência?',identity:'Sou YORKi, seu guia do ITC Club. Ajudo você a encontrar passeios e benefícios publicados no app.',thanks:'De nada! Estou aqui para ajudar com seu próximo passeio.',date:'Confira datas e disponibilidade nos detalhes.',join:'Conheça a assinatura ITC Club para acessar os benefícios indicados.',active:'Sua assinatura permite acessar os benefícios indicados; confira as condições.',price:'Não tenho preços verificados para esse orçamento. Confira os detalhes.',hours:'Não tenho horários em tempo real. Confira os detalhes.',scope:'Só posso recomendar publicações deste app. Que tipo de passeio você procura?',member:'A assinatura ITC Club dá acesso aos benefícios indicados nas publicações do Club. Confira as condições antes de assinar.'},
 };
 function experienceItem(row, now) {
+  row=require("./private-benefit.service").catalogRow(row);
   const rawBenefit=String(row.card_benefit||row.member_benefit||'').trim();
   const memberBenefit=rawBenefit.length<=160?rawBenefit:'';
   const expiry=row.coupon_ends_at&&new Date(row.coupon_ends_at)<now;

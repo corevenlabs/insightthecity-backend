@@ -11,6 +11,8 @@ const {
 
 const requireAuth = require('../middleware/staff').requireStaff('admin','editor');
 
+router.use((req,res,next)=>req.method === "GET" ? require("../services/private-benefit.service").optionalMember(req,res,next) : next());
+
 // Públicas (las consume la app)
 router.get("/", (req,res,next)=>req.query.published === "all" ? requireAuth(req,res,next) : next(), listExperiences);
 router.get("/tags", require('../middleware/staff').requireStaff('admin','editor','executive'), async (req, res, next) => {

@@ -9,9 +9,10 @@ async function show(req,res,next) {
   if(typeof req.params.id!=='string' || req.params.id.length>120 || !/^[a-z0-9_-]+$/.test(req.params.id))return render(404,'missing');
   try {
     const row=(await db.query(`SELECT id,title,access,is_published,benefit_action,benefit_url,is_paid_event,ticket_url,
-      external_benefit_starts_at,external_benefit_ends_at FROM experiences WHERE id=$1`,[req.params.id])).rows[0];
+      private_benefit_code,member_benefit,external_benefit_starts_at,external_benefit_ends_at FROM experiences WHERE id=$1`,[req.params.id])).rows[0];
     if(!row || !row.is_published || row.access!=='premium' || row.benefit_action!=='external')return render(404,'missing');
     if(req.query.target!==undefined && req.query.target!=='tickets')return render(404,'missing');
+    if(require('../services/private-benefit.service').codeFor(row) && !await require('../services/private-benefit.service').authorizeLink(req.query.grant,row,req.query.target==='tickets'?'tickets':'benefit'))return render(403,'premium',row);
     const target=req.query.target==='tickets' ? (row.is_paid_event ? row.ticket_url : null) : row.benefit_url;
     const url=links.destination(target);
     if(!url)return render(503,'unavailable',row);

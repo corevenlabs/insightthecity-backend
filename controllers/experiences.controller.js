@@ -1,3 +1,4 @@
+const privateBenefits = require("../services/private-benefit.service");
 const externalLinks = require("../services/external-benefit-link");
 const { normalizeExperienceText } = require("../utils/experienceText");
 const contentLanguage = require('../services/content-language.service');
@@ -6,7 +7,7 @@ const { normalizeTags, tagsForRecord } = require("../utils/experienceTags");
 const service = require("../services/experiences.service");
 
 // Fila DB -> forma de la API (coincide con el tipo Experience de la app Expo).
-function serialize(row) {
+function serialize(row, options = {}) {
   if (!row) return null;
   const couponRedeemed = Number(row.coupon_redeemed || 0);
   const couponReserved = Number(row.coupon_reserved || 0);
@@ -20,7 +21,7 @@ function serialize(row) {
     : !row.coupon_active || !couponInWindow ? 'paused'
     : couponAvailable === 0 ? 'sold_out'
     : couponAvailable !== null && couponAvailable <= Number(row.coupon_low_stock || 0) ? 'low_stock' : 'available';
-  return {
+  const record = {
     id: row.id,
     title: row.title,
     category: row.category,
@@ -74,6 +75,7 @@ function serialize(row) {
     isAgeRestricted: row.is_age_restricted === true,
     updatedAt: row.updated_at,
   };
+  return privateBenefits.publicRecord(row,record,options.staff === true);
 }
 
 // Forma de la API -> columnas del service.
@@ -103,6 +105,7 @@ function deserialize(body) {
     member_benefit_details: body.memberBenefitDetails === undefined ? undefined : body.memberBenefitDetails?.trim() || null,
     external_benefit_starts_at: body.externalBenefitStartsAt,
     external_benefit_ends_at: body.externalBenefitEndsAt,
+    private_benefit_code: body.privateBenefitCode === undefined ? undefined : body.privateBenefitCode?.trim() || null,
     benefit_action: body.benefitAction,
     benefit_url: body.benefitUrl === undefined ? undefined : body.benefitUrl?.trim() || null,
     benefit_cta: body.benefitCta === undefined ? undefined : body.benefitCta?.trim() || null,
@@ -168,6 +171,8 @@ function validateLocation(body) {
 }
 
 function validateMemberBenefit(body, requireBenefit) {
+  const privacyError = privateBenefits.validation(body);
+  if (privacyError) return privacyError;
   const externalDatesError = externalLinks.validation(body);
   if (externalDatesError) return externalDatesError;
   if ([body.benefitUrl,body.ticketUrl].some(value => value && externalLinks.managed(value))) return "Usa el enlace original del negocio, no el enlace de disponibilidad de ITC Club. Actualiza el panel para editarlo.";
@@ -217,6 +222,7 @@ function validateGallery(body, creating) {
 // - App:  ?section=drops  (solo publicados por defecto)
 // - Panel react-admin: ?_start=0&_end=9&_sort=title&_order=ASC&category=DROP
 const listExperiences = async (req, res, next) => {
+  res.vary("Authorization");
   try {
     const { _start, _end, _sort, _order, section, category, access, region, q, published } = req.query;
 
@@ -239,7 +245,7 @@ const listExperiences = async (req, res, next) => {
     // Header que react-admin (ra-data-simple-rest) necesita para la paginación.
     res.set("Content-Range", `experiences ${start || 0}-${Math.max((start || 0), (end || rows.length) - 1)}/${total}`);
     const lang = contentLanguage.requestLanguage(req);
-    const records = await Promise.all(rows.map(row => contentLanguage.experience(serialize(row), lang)));
+    const records = await Promise.all(rows.map(row => contentLanguage.experience(serialize(row,{staff:Boolean(req.admin)}), lang)));
     res.json(req.admin ? records : records.map(record => externalLinks.publicView(record, lang)));
   } catch (err) {
     next(err);
@@ -251,8 +257,9 @@ const getExperience = async (req, res, next) => {
     const row = await service.getById(req.params.id);
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
     const lang = contentLanguage.requestLanguage(req);
-    const record = await contentLanguage.experience(serialize(row), lang);
-    res.json(req.admin ? record : externalLinks.publicView(record,lang));
+    const record = await contentLanguage.experience(serialize(row,{staff:Boolean(req.admin)}), lang);
+    res.vary("Authorization");
+    res.json(req.admin ? record : privateBenefits.codeFor(row) ? privateBenefits.memberRecord(row,record,req.benefitMember,lang) : externalLinks.publicView(record,lang));
   } catch (err) {
     next(err);
   }
@@ -283,7 +290,7 @@ const createExperience = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "region debe ser NY o NJ" });
     }
     const row = await service.create(deserialize(req.body), req.experienceConnection);
-    res.status(201).json(serialize(row));
+    res.status(201).json(serialize(row,{staff:Boolean(req.admin)}));
   } catch (err) {
     next(err);
   }
@@ -312,7 +319,7 @@ const updateExperience = async (req, res, next) => {
     }
     const row = await service.update(req.params.id, deserialize(req.body), req.experienceConnection);
     if (!row) return res.status(404).json({ success: false, message: "No encontrado" });
-    res.json(serialize(row));
+    res.json(serialize(row,{staff:Boolean(req.admin)}));
   } catch (err) {
     next(err);
   }

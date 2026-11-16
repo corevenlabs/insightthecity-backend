@@ -13,7 +13,7 @@ async function draft(req,res,next) {
     const existing = row.experience_id ? await experiences.getById(row.experience_id,c) : null;
     if(req.method === 'GET') {
       await c.query('COMMIT');
-      return res.json(controller.serialize(existing));
+      return res.json(controller.serialize(existing,{staff:true}));
     }
     if(row.activated_at || existing?.is_published) throw fail(403,'Un perfil publicado solo se modifica desde la administración');
     if((await c.query("SELECT 1 FROM experience_drafts WHERE client_id=$1 AND status<>'approved'",[row.id])).rowCount)

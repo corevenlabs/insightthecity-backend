@@ -78,6 +78,7 @@ async function saveMemberBenefit(client, id, data) {
       data.benefit_cta !== undefined, data.benefit_cta ?? null,
       data.benefit_instructions !== undefined, data.benefit_instructions ?? null]);
   }
+  await require("./private-benefit.service").save(client,id,data);
   if (['coupon_inventory_mode', 'coupon_total', 'coupon_per_user', 'coupon_low_stock', 'coupon_starts_at', 'coupon_ends_at', 'coupon_active'].some((key) => data[key] !== undefined)) {
     await client.query(`UPDATE experiences SET
       coupon_inventory_mode = COALESCE($2, coupon_inventory_mode),
