@@ -25,3 +25,5 @@ test('signed links have a five-minute limit and a separate purpose, with no code
 });
 
 test('codes containing regular-expression characters are redacted literally',()=>{ const coded={...row,private_benefit_code:'A+B.123'}; const result=P.publicRecord(coded,{description:'Use A+B.123 now'}); assert.ok(!result.description.includes('A+B.123')); });
+
+test('historic bold codes in conditions remain private even with a descriptive public label',()=>{ const r={...row,private_benefit_code:null,member_benefit_details:'Usa el código **'+code+'** en el sitio.'}; assert.equal(P.codeFor(r),code); assert.doesNotMatch(JSON.stringify(P.publicRecord(r,{memberBenefitDetails:r.member_benefit_details})),new RegExp(code)); });

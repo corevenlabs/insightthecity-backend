@@ -17,6 +17,8 @@ test('guests/free/stale/inactive users cannot retrieve code or target; only curr
  // Emulate historic public fields and prove migration + runtime redaction protect them.
  await db.query('UPDATE experiences SET private_benefit_code=NULL,member_benefit=$2,member_benefit_details=$3 WHERE id=$1',[id,'COD: '+code,'Use '+code+' for eight tickets']);
  await db.query(fs.readFileSync('database/private-benefit-code.sql','utf8'));
+ await db.query('UPDATE experiences SET private_benefit_code=NULL,member_benefit=$2,member_benefit_details=$3 WHERE id=$1',[id,'Member offer','Usa el código **'+code+'** en el sitio.']);
+ await db.query(fs.readFileSync('database/private-benefit-code.sql','utf8'));
  assert.equal((await db.query('SELECT private_benefit_code FROM experiences WHERE id=$1',[id])).rows[0].private_benefit_code,code);
  for(const token of [null,bearer(users.free,{is_premium:true}),bearer(users.inactive),'invalid',jwt.sign({id:users.premium.id,type:'user',sv:0},process.env.JWT_SECRET,{expiresIn:-1})]){
   for(const lang of ['es','en','pt']){

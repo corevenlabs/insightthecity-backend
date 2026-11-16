@@ -5,8 +5,9 @@ const PUBLIC_REPLACEMENT='código exclusivo para miembros ITC Club';
 const legacy=value=>typeof value==='string'?/^\s*(?:COD|CÓDIGO|CODIGO|CODE)\s*:\s*([A-Za-z0-9_-]{3,80})\s*$/i.exec(value)?.[1]:undefined;
 function codeFor(row){
  if(!row || row.access!=='premium' || row.benefit_action!=='external')return null;
- return (typeof row.private_benefit_code==='string'&&row.private_benefit_code.trim())||legacy(row.member_benefit)||null;
+ return (typeof row.private_benefit_code==='string'&&row.private_benefit_code.trim())||legacy(row.member_benefit)||detailedCode(row.member_benefit_details)||null;
 }
+const detailedCode=value=>typeof value==='string'?/(?:código|codigo|code)\s+\*\*([A-Za-z0-9_-]{3,80})\*\*/i.exec(value)?.[1]:undefined;
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function redact(value,code){
  if(typeof value==='string')return value.replace(new RegExp(escape(code),'gi'),PUBLIC_REPLACEMENT);
