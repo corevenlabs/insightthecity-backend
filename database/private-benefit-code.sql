@@ -2,13 +2,18 @@ BEGIN;
 ALTER TABLE experiences ADD COLUMN IF NOT EXISTS private_benefit_code VARCHAR(120);
 -- Move legacy code-only benefit labels into the private field. Preserve actual URLs/coupons.
 UPDATE experiences SET
- private_benefit_code=COALESCE(NULLIF(BTRIM(private_benefit_code),''),(regexp_match(member_benefit,'^[[:space:]]*(?:[0-9]{1,3}(?:[.,][0-9]+)?[[:space:]]*%[[:space:]]+)?(?:COD|CÓDIGO|CODIGO|CODE)[[:space:]]*:[[:space:]]*([A-Za-z0-9_-]{3,80})[[:space:]]*$','i'))[1]),
+ private_benefit_code=COALESCE(NULLIF(BTRIM(private_benefit_code),''),(regexp_match(member_benefit,'(?:^|[[:space:]])(?:COD|CÓDIGO|CODIGO|CODE)[[:space:]]*:[[:space:]]*([A-Za-z0-9_-]{3,80})(?:$|[[:space:].,;!?])','i'))[1]),
  member_benefit=CASE WHEN member_benefit ~ '^[[:space:]]*[0-9]{1,3}(?:[.,][0-9]+)?[[:space:]]*%' THEN (regexp_match(member_benefit,'^[[:space:]]*([0-9]{1,3}(?:[.,][0-9]+)?[[:space:]]*%)'))[1] || ' de descuento' ELSE 'Beneficio exclusivo para miembros ITC Club' END
 WHERE access='premium' AND benefit_action='external'
- AND member_benefit ~* '^[[:space:]]*(?:[0-9]{1,3}(?:[.,][0-9]+)?[[:space:]]*%[[:space:]]+)?(?:COD|CÓDIGO|CODIGO|CODE)[[:space:]]*:[[:space:]]*[A-Za-z0-9_-]{3,80}[[:space:]]*$';
+ AND member_benefit ~* '(?:^|[[:space:]])(?:COD|CÓDIGO|CODIGO|CODE)[[:space:]]*:[[:space:]]*[A-Za-z0-9_-]{3,80}(?:$|[[:space:].,;!?])';
 -- Historic offers can also contain an explicitly marked code in their conditions.
 UPDATE experiences SET private_benefit_code=(regexp_match(member_benefit_details,'(?:código|codigo|code)[[:space:]]+\*\*([A-Za-z0-9_-]{3,80})\*\*','i'))[1]
 WHERE access='premium' AND benefit_action='external'
  AND NULLIF(BTRIM(private_benefit_code),'') IS NULL
  AND member_benefit_details ~* '(?:código|codigo|code)[[:space:]]+\*\*([A-Za-z0-9_-]{3,80})\*\*';
+-- Plain instructions with an alphanumeric code containing a digit (not "código promocional").
+UPDATE experiences SET private_benefit_code=(regexp_match(member_benefit_details,'(?:^|[[:space:]])(?:código|codigo|code)[[:space:]]+([A-Za-z0-9_-]{3,80})(?:$|[[:space:].,;!?])','i'))[1]
+WHERE access='premium' AND benefit_action='external'
+ AND NULLIF(BTRIM(private_benefit_code),'') IS NULL
+ AND (regexp_match(member_benefit_details,'(?:^|[[:space:]])(?:código|codigo|code)[[:space:]]+([A-Za-z0-9_-]{3,80})(?:$|[[:space:].,;!?])','i'))[1] ~ '[0-9]';
 COMMIT;

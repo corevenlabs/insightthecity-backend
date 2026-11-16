@@ -39,3 +39,19 @@ test('percentage-prefixed legacy labels keep the discount public and hide the co
   assert.equal(P.publicRecord({...r,benefit_action:'qr'},record),record);
  }
 });
+
+test('external codes are protected across offer wording and historical public fields',()=>{
+ for(const label of ['10% OFF CODE: '+code,'10% OFF Time Mission CODE: '+code,'Oferta especial COD: '+code,'2x1 Código: '+code+'.']) {
+  const r={...row,private_benefit_code:null,member_benefit:label,member_benefit_details:'Usa el código '+code+' antes del Checkout'};
+  assert.equal(P.codeFor(r),code);
+  const result=P.publicRecord(r,{memberBenefit:label,memberBenefitDetails:r.member_benefit_details,benefitUrl:'https://partner.example/?code='+code});
+  assert.doesNotMatch(JSON.stringify(result),new RegExp(code));assert.equal(result.benefitUrl,null);
+  assert.doesNotMatch(JSON.stringify(P.catalogRow(r)),new RegExp(code));
+  assert.match(P.validation({benefitAction:'external',memberBenefit:label}),/Código de descuento/);
+ }
+ for(const field of ['member_benefit_details','card_benefit','description','recommendation','benefit_instructions']){
+  const r={...row,private_benefit_code:null,member_benefit:'Member offer',member_benefit_details:'Aplica código promocional al reservar',[field]:'Usa el código '+code+' al pagar'};
+  assert.equal(P.codeFor(r),code);
+ }
+ assert.equal(P.codeFor({...row,private_benefit_code:null,member_benefit:'15% de descuento',member_benefit_details:'Es necesario introducir el código promocional.'}),null);
+});

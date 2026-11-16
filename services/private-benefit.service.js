@@ -2,14 +2,25 @@ const jwt=require('jsonwebtoken');
 const db=require('../config/db');
 const PUBLIC_LABEL='Beneficio exclusivo para miembros ITC Club';
 const PUBLIC_REPLACEMENT='código exclusivo para miembros ITC Club';
-const legacy=value=>typeof value==='string'?/^\s*(?:\d{1,3}(?:[.,]\d+)?\s*%\s+)?(?:COD|CÓDIGO|CODIGO|CODE)\s*:\s*([A-Za-z0-9_-]{3,80})\s*$/i.exec(value)?.[1]:undefined;
+// Historical public fields are input data, not an access-control boundary.
+// Recognize explicit markers regardless of the offer wording before them.
+const legacy=value=>typeof value==='string'?/(?:^|\s)(?:COD|CÓDIGO|CODIGO|CODE)\s*:\s*([A-Za-z0-9_-]{3,80})(?=$|[\s.,;!?])/i.exec(value)?.[1]:undefined;
+const detailedCode=value=>{
+ if(typeof value!=='string')return undefined;
+ const explicit=legacy(value)||/(?:código|codigo|code)\s+\*\*([A-Za-z0-9_-]{3,80})\*\*/i.exec(value)?.[1];
+ if(explicit)return explicit;
+ // A plain instruction must contain a digit, so phrases like "código promocional"
+ // are never mistaken for a coupon. Letter-only codes need an explicit marker.
+ const plain=/(?:^|\s)(?:código|codigo|code)\s+([A-Za-z0-9_-]{3,80})(?=$|[\s.,;!?])/i.exec(value)?.[1];
+ return plain&&/[0-9]/.test(plain)?plain:undefined;
+};
+const historicFields=['member_benefit','member_benefit_details','card_benefit','benefit_instructions','description','recommendation'];
 function codeFor(row){
  if(!row || row.access!=='premium' || row.benefit_action!=='external')return null;
- return (typeof row.private_benefit_code==='string'&&row.private_benefit_code.trim())||legacy(row.member_benefit)||detailedCode(row.member_benefit_details)||null;
+ return (typeof row.private_benefit_code==='string'&&row.private_benefit_code.trim())||historicFields.map(key=>detailedCode(row[key])).find(Boolean)||null;
 }
-const detailedCode=value=>typeof value==='string'?/(?:código|codigo|code)\s+\*\*([A-Za-z0-9_-]{3,80})\*\*/i.exec(value)?.[1]:undefined;
 function publicLabel(row){
- const percent=/^\s*(\d{1,3}(?:[.,]\d+)?\s*%)\s+(?:COD|CÓDIGO|CODIGO|CODE)\s*:/i.exec(row.member_benefit||'')?.[1];
+ const percent=/^\s*(\d{1,3}(?:[.,]\d+)?\s*%)/.exec(row.member_benefit||'')?.[1];
  return percent?percent+' de descuento':PUBLIC_LABEL;
 }
 const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -68,7 +79,7 @@ function validation(body){
  if(value!==undefined&&value!==null&&(typeof value!=='string'||value.trim().length>120))return 'El código privado debe ser texto de hasta 120 caracteres.';
  const code=typeof value==='string'?value.trim():null;
  if(code&&((body.benefitAction!==undefined&&body.benefitAction!=='external')||(body.access!==undefined&&body.access!=='premium')))return 'El código privado solo se usa en beneficios Premium con enlace externo.';
- if(body.benefitAction==='external'&&legacy(body.memberBenefit))return 'Escribe el código en «Código de descuento (solo premium)» y deja una descripción pública del beneficio.';
+ if(body.benefitAction==='external'&&camelFields.some(key=>detailedCode(body[key])))return 'Escribe el código en «Código de descuento (solo premium)» y deja una descripción pública del beneficio.';
  if(code&&camelFields.some(key=>JSON.stringify(body[key]??'').toLowerCase().includes(code.toLowerCase())))return 'El código debe ir únicamente en «Código de descuento (solo premium)», no en los textos públicos.';
  return null;
 }

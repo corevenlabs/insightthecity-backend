@@ -4,7 +4,7 @@ module.exports = async (req, res, next) => {
   try {
     const original = (
       await db.query(
-        "SELECT title,image_url,description,location,member_benefit,access,benefit_action,private_benefit_code FROM experiences WHERE id=$1 AND is_published=TRUE",
+        "SELECT title,image_url,description,location,member_benefit,member_benefit_details,card_benefit,benefit_instructions,recommendation,access,benefit_action,private_benefit_code FROM experiences WHERE id=$1 AND is_published=TRUE",
         [req.params.id],
       )
     ).rows[0];
