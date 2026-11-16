@@ -2,13 +2,14 @@ const db = require("../config/db");
 const { escape } = require("../services/membership-email.service");
 module.exports = async (req, res, next) => {
   try {
-    const row = (
+    const original = (
       await db.query(
-        "SELECT title,image_url,description,location,member_benefit FROM experiences WHERE id=$1 AND is_published=TRUE",
+        "SELECT title,image_url,description,location,member_benefit,access,benefit_action,private_benefit_code FROM experiences WHERE id=$1 AND is_published=TRUE",
         [req.params.id],
       )
     ).rows[0];
-    if (!row) return res.status(404).send("Profile not available");
+    if (!original) return res.status(404).send("Profile not available");
+    const row = require("../services/private-benefit.service").catalogRow(original);
     res
       .set(
         "Content-Security-Policy",
