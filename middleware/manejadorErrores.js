@@ -1,11 +1,16 @@
+const { logRequestError } = require('../utils/errorLog');
+
 const manejadorErrors = (err, req, res, next) => {
-    if (!err.status || err.status >= 500) console.error(err.code || err.message);
+    const unexpected = !err.status || err.status >= 500;
+    const originalMessage = err.message;
     if (err.code === '23505') { err.status = 409; err.message = 'Este registro o pago ya está asociado a una ficha'; }
     if (['22021', '22P05'].includes(err.code)) { err.status = 400; err.message = 'Uno de los campos contiene un carácter no válido. Revisa el texto o enlace que pegaste y vuelve a intentarlo.'; }
     if (err.code === 'LIMIT_FILE_SIZE') { err.status = 400; err.message = 'El archivo supera el límite permitido'; }
     const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600
         ? err.status
         : 500
+    // Unexpected errors are logged, including database errors answered as 400 (e.g. pasted invalid characters).
+    if (unexpected) logRequestError(err, req, status, originalMessage);
     return res.status(status).json({
         success: false,
         message: status >= 500 ? 'No se pudo completar la operación' : err.message
