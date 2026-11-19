@@ -23,6 +23,22 @@ const db=require('../config/db');
   }
   const active=await chat.respond({user:{...user,is_premium:true},history:[{role:'user',message:'Comida en NY'}]});
   assert.equal(active.showMembership,false);
-  console.log(JSON.stringify({readOnly:true,passed:true,results},null,2));
+  const ask=async(message,prior=[])=>chat.respond({user,history:[...prior,{role:'user',message,created_at:new Date().toISOString()}]});
+  const saved=result=>({role:'assistant',message:result.reply,catalog_context:result.context,created_at:new Date().toISOString()});
+  const question='Que restaurantes hay con beneficios en Nueva York?';
+  const clean=await ask(question);
+  assert.ok(clean.appItems.length>0);
+  const contextRecovery=[];
+  for(const previous of ['Sushi en NY con beneficios','Comida gratis en NY']){
+   const prior=await ask(previous);
+   const recovered=await ask(question,[saved(prior)]);
+   assert.deepEqual(recovered.appItems.map(item=>item.id),clean.appItems.map(item=>item.id));
+   assert.deepEqual(recovered.filters.keywords,[]);assert.equal(recovered.filters.free,false);assert.equal(recovered.filters.region,'NY');
+   contextRecovery.push({previous,query:question,reply:recovered.reply,titles:recovered.appItems.map(item=>item.title)});
+  }
+  const sushi=await ask('Sushi en NY con beneficios');
+  const continued=await ask('¿Y en Manhattan?',[saved(sushi)]);
+  assert.deepEqual(continued.filters.keywords,['sushi']);assert.equal(continued.filters.benefits,true);assert.equal(continued.filters.area,'Manhattan');
+  console.log(JSON.stringify({readOnly:true,passed:true,results,contextRecovery,continuationFilters:continued.filters},null,2));
  }finally{db.query=original;await client.query('ROLLBACK');client.release();await db.end();}
 })().catch(e=>{console.error(e.message);process.exitCode=1});

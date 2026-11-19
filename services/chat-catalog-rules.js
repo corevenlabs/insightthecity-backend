@@ -50,8 +50,19 @@ function namedItems(message, items) {
     return base.length>=4 && (phrase(text,base) || (alias.length>=5 && phrase(text,alias)));
   });
 }
+const emptyFilters = () => ({topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false});
+function independentSearch(text, topics, named) {
+  // A complete request supplies its own constraints. Short refinements and
+  // explicit continuations keep the conversation's existing constraints.
+  const start=text.replace(/^[^a-z0-9]+/,'');
+  if (/^(?:y|e|and|tambien|tambem|ademas)\b|^(?:what about|how about|e quanto a)\b/.test(start)) return false;
+  if (REJECT.test(text) || /\b(que mas|what else|esos|esas|estos|estas|aquellos|aquellas|those|these|desses|dessas|esses|essas|estes|otros restaurantes|other restaurants|me dijiste|me mostraste|you mentioned|you showed)\b/.test(text)) return false;
+  if (!topics.length && !named.length && !GENERIC.test(text)) return false;
+  return /\b(que|q|cuales|donde|what|which|where|onde|quais)\b/.test(text)
+    || /\b(quiero|quisiera|me gustaria|busco|necesito|recomiendame|recomienda|recomiendas|muestrame|dame|recommend|show me|find|i want|i would like|im looking for|quero|gostaria|procuro|recomende|mostre|encontre)\b/.test(text);
+}
 function filtersFor(history, items) {
-  let state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false};
+  let state=emptyFilters();
   const latest=history.at(-1)||{};
   const saved=[...history].reverse().find(row=>row.role==='assistant' && row.catalog_context?.version===1);
   const fresh=saved && (!saved.created_at || !latest.created_at || new Date(latest.created_at)-new Date(saved.created_at)<2*3600000);
@@ -61,8 +72,8 @@ function filtersFor(history, items) {
   for (const row of messages) {
     const text=normalize(row.message);
     const {yes,no}=mentionedTopics(text);
-    if(RESET.test(text)) state={topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false};
     const named=namedItems(text,items);
+    if(RESET.test(text) || independentSearch(text,yes,named)) state=emptyFilters();
     const changedTopics=yes.length>0&&(yes.some(t=>!state.topics.includes(t))||state.topics.some(t=>!yes.includes(t)));
     const newTopic=changedTopics || named.length>0 || /\b(cambie|ahora quiero|cambiar|changed my mind|instead|mudei)\b/.test(text);
     if(newTopic){state.topics=yes;state.names=[];state.keywords=[];state.source=null;state.needsPrice=false;state.needsHours=false;state.dietary=false;}
@@ -78,8 +89,8 @@ function filtersFor(history, items) {
     const area=Object.keys(AREAS).find(a=>phrase(text,normalize(a)));
     if(local||area){state.area=local||area;state.region=['Hoboken','Jersey City','Newark'].includes(area)?'NJ':'NY';}
     if(/\b(cualquier zona|toda la ciudad|anywhere|any area|sin importar la zona)\b/.test(text))state.area=null;
-    if(/\b(beneficios?|descuentos?|discounts?|offers?|ofertas?)\b/.test(text))state.benefits=!/\b(sin|no necesito|without)\b.{0,20}\b(beneficios?|descuentos?|discounts?)\b/.test(text);
-    if(/\b(gratis|gratuit[oa]s?|free|gratuitos?)\b/.test(text)){state.free=!/\b(no|not|sin)\b.{0,8}\b(gratis|free)\b/.test(text);if(state.free&&!/\b(beneficios?|descuentos?|discounts?)\b/.test(text))state.benefits=false;}
+    if(/\b(beneficios?|benefits?|descuentos?|descontos?|discounts?|offers?|ofertas?)\b/.test(text))state.benefits=!/\b(sin|no necesito|without)\b.{0,20}\b(beneficios?|benefits?|descuentos?|descontos?|discounts?)\b/.test(text);
+    if(/\b(gratis|gratuit[oa]s?|free|gratuitos?)\b/.test(text)){state.free=!/\b(no|not|sin)\b.{0,8}\b(gratis|free)\b/.test(text);if(state.free&&!/\b(beneficios?|benefits?|descuentos?|descontos?|discounts?)\b/.test(text))state.benefits=false;}
     if(/\b(no importa el precio|no tiene que ser gratis|puede ser de pago|paid is fine)\b/.test(text))state.free=false;
     if(/\b(hoy|today|hoje)\b/.test(text))state.when='today';
     if(/\b(manana|tomorrow|amanha)\b/.test(text))state.when='tomorrow';
@@ -100,7 +111,7 @@ function filtersFor(history, items) {
   }
   const text=normalize(latest.message);
   const reject=REJECT.test(text);
-  if(reject&&!/\b(beneficios?|descuentos?|discounts?)\b/.test(text))state.benefits=false;
+  if(reject&&!/\b(beneficios?|benefits?|descuentos?|descontos?|discounts?)\b/.test(text))state.benefits=false;
   let excluded=[];
   if(reject&&fresh){excluded=[...(saved.catalog_context.excluded||[]),...(saved.catalog_context.shown||[])];}
   if(reject&&!fresh){excluded=items.filter(item=>history.filter(x=>x.role==='assistant').some(x=>normalize(x.message).includes(normalize(item.title)))).map(i=>`${i.kind}:${i.id}`);}
