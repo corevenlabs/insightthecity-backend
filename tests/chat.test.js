@@ -221,3 +221,56 @@ test('las publicaciones editoriales usan la imagen y el resumen de la misma fuen
  feeds['ny-al-dia']=[{id:95,title:'Festival de comida en New York',excerpt:'<p>Sabores para descubrir en Manhattan.</p>',image:'https://example.org/festival.jpg',date:now.toISOString()}];
  const r=await ask('Noticias de NY al día');assert.equal(r.appItems[0].preview,'Sabores para descubrir en Manhattan.');assert.equal(r.appItems[0].image,'https://example.org/festival.jpg');
 });
+
+test('una pregunta completa de restaurantes no hereda filtros invisibles de otra búsqueda',async()=>{
+ const question='Que restaurantes hay con beneficios en Nueva York?';
+ for(const previous of ['Sushi en NY con beneficios','Comida gratis en NY','Comida por menos de 20 dólares en NJ','Restaurantes sin gluten en NY','Noticias de comida en NY','No quiero comida, museos en NY']){
+  const prior=await ask(previous);
+  const result=await ask(question,[assistant(prior)]);
+  assert.deepEqual(result.appItems.map(item=>item.id),['food1','food2'],previous);
+  assert.deepEqual(result.filters.keywords,[]);assert.equal(result.filters.free,false);assert.equal(result.filters.source,null);
+  assert.equal(result.filters.region,'NY');assert.equal(result.filters.area,null);assert.deepEqual(result.filters.excludedTopics,[]);
+ }
+});
+test('las búsquedas completas en español, inglés y portugués renuevan el contexto de cada cuenta',async()=>{
+ const questions=[['es','¿Dónde me recomiendas comer en NY con beneficios?'],['es','Recomiéndame restaurantes con beneficios en NY'],['en','Which restaurants have benefits in New York?'],['en','I want restaurants with benefits in NY'],['pt','Quais restaurantes têm benefícios em NY?'],['pt','Quero restaurantes com descontos em NY']];
+ for(const [language,question]of questions){
+  const prior=await ask('Sushi gratis en NJ');
+  const result=await ask(question,[assistant(prior)],{language});
+  assert.deepEqual(result.appItems.map(item=>item.id),['food1','food2'],question);
+  assert.equal(result.showMembership,true);assert.equal(result.filters.benefits,true);
+ }
+});
+test('las continuaciones de zona conservan el subtipo, gratuidad y beneficio solicitados',async()=>{
+ for(const followup of ['¿Y en Manhattan?','¿Y qué restaurantes hay en Manhattan?','And in Manhattan?','E em Manhattan?']){
+  const sushi=await ask('Sushi en NY con beneficios');
+  const result=await ask(followup,[assistant(sushi)]);
+  assert.deepEqual(result.appItems,[],followup);assert.deepEqual(result.filters.keywords,['sushi']);assert.equal(result.filters.benefits,true);assert.equal(result.filters.area,'Manhattan');
+ }
+ const free=await ask('Comida gratis en NY');const result=await ask('¿Y en Manhattan?',[assistant(free)]);
+ assert.equal(result.filters.free,true);assert.deepEqual(result.appItems,[]);
+});
+test('las referencias a los resultados anteriores conservan contexto sin confundirse con una búsqueda completa',async()=>{
+ for(const question of ['¿Dónde están esos restaurantes?','Which of those restaurants do you recommend?','Onde ficam esses restaurantes?']){
+  const prior=await ask('Sushi en NY con beneficios');
+  const result=await ask(question,[assistant(prior)]);
+  assert.deepEqual(result.filters.keywords,['sushi'],question);assert.equal(result.filters.benefits,true);assert.equal(result.filters.region,'NY');
+ }
+});
+test('una pregunta completa de planes renueva una búsqueda anterior de comida gratis',async()=>{
+ const prior=await ask('Comida gratis en NJ');
+ const result=await ask('¿Qué puedo hacer hoy en NY?',[assistant(prior)]);
+ assert.equal(result.filters.free,false);assert.equal(result.filters.region,'NY');assert.equal(result.filters.when,'today');assert.deepEqual(result.filters.topics,[]);
+ assert.ok(result.appItems.some(item=>!rules.classify(item).includes('food')));
+});
+test('una nueva pregunta completa retira fecha y zona anteriores; una continuación mantiene la fecha',async()=>{
+ const prior=await ask('Museos mañana en Brooklyn');
+ const continued=await ask('¿Y en Manhattan?',[assistant(prior)]);assert.equal(continued.filters.when,'tomorrow');
+ const result=await ask('¿Qué restaurantes hay con beneficios en Nueva York?',[assistant(prior)]);
+ assert.equal(result.filters.when,null);assert.equal(result.filters.area,null);assert.deepEqual(result.appItems.map(x=>x.id),['food1','food2']);
+});
+test('una búsqueda completa también renueva historial sin contexto guardado y no consulta fuera de la app',async()=>{
+ const history=[{role:'user',message:'Sushi gratis en NJ',created_at:now.toISOString()},{role:'assistant',message:'Sin resultados',created_at:now.toISOString()}];
+ const result=await ask('Qué restaurantes hay con beneficios en Nueva York?',history);
+ assert.deepEqual(result.appItems.map(x=>x.id),['food1','food2']);assert.equal(externalCalls,0);assert.equal(modelCalls,0);
+});
