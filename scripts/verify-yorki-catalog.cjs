@@ -39,6 +39,20 @@ const db=require('../config/db');
   const sushi=await ask('Sushi en NY con beneficios');
   const continued=await ask('¿Y en Manhattan?',[saved(sushi)]);
   assert.deepEqual(continued.filters.keywords,['sushi']);assert.equal(continued.filters.benefits,true);assert.equal(continued.filters.area,'Manhattan');
-  console.log(JSON.stringify({readOnly:true,passed:true,results,contextRecovery,continuationFilters:continued.filters},null,2));
+  // Exercise the family rails directly in the same production READ ONLY transaction.
+  // No chat history is saved and no translation/model call is needed for these checks.
+  const familyCatalog=(await require('../services/experiences.service').list({publishedOnly:true})).rows.map(row=>chat.experienceItem(row,new Date()));
+  const familyResults=[];
+  for(const query of ['Quiero hacer cosas con niños','Things to do with kids','O que fazer com crianças?']){
+   const {filters}=rules.filtersFor([{role:'user',message:query}],familyCatalog);
+   const matches=rules.matching(familyCatalog,filters);
+   assert.equal(filters.audience,'family');assert.deepEqual(filters.keywords,[]);
+   assert.ok(matches.length>0,'Expected explicitly documented family publications');
+   assert.ok(matches.every(item=>item.familyFriendly===true));
+   familyResults.push({query,titles:matches.map(item=>item.title)});
+  }
+  assert.deepEqual(familyResults[0].titles,familyResults[1].titles);
+  assert.deepEqual(familyResults[0].titles,familyResults[2].titles);
+  console.log(JSON.stringify({readOnly:true,passed:true,results,contextRecovery,familyResults,continuationFilters:continued.filters},null,2));
  }finally{db.query=original;await client.query('ROLLBACK');client.release();await db.end();}
 })().catch(e=>{console.error(e.message);process.exitCode=1});

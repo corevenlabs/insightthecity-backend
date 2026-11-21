@@ -1,5 +1,6 @@
 // YORKi's search rails. No model output can select a business or change a filter.
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[’']/g, '');
+const family=require('./chat-family-rules');
 const TOPICS = {
   food: /\b(comida|comer|restaurantes?|restaurant|restaurants|food|eat|eating|dining|gastronomia|gastronomy|cafeterias?|cafes?|cafe|almorzar|almuerzo|cenar|cena|desayuno|lunch|dinner|breakfast|pizza|sushi|empanadas?|arepas?|hamburguesas?|vegetarian[oa]?|vegan[oa]?)\b/,
   museums: /\b(museos?|muses|museums?|museus?)\b/,
@@ -50,14 +51,15 @@ function namedItems(message, items) {
     return base.length>=4 && (phrase(text,base) || (alias.length>=5 && phrase(text,alias)));
   });
 }
-const emptyFilters = () => ({topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false});
-function independentSearch(text, topics, named) {
+const emptyFilters = () => ({topics:[],excludedTopics:[],region:null,area:null,keywords:[],names:[],benefits:false,free:false,when:null,source:null,needsPrice:false,needsHours:false,dietary:false,audience:null});
+function independentSearch(text, topics, named, familyRequest) {
   // A complete request supplies its own constraints. Short refinements and
   // explicit continuations keep the conversation's existing constraints.
   const start=text.replace(/^[^a-z0-9]+/,'');
   if (/^(?:y|e|and|tambien|tambem|ademas)\b|^(?:what about|how about|e quanto a)\b/.test(start)) return false;
   if (REJECT.test(text) || /\b(que mas|what else|esos|esas|estos|estas|aquellos|aquellas|those|these|desses|dessas|esses|essas|estes|otros restaurantes|other restaurants|me dijiste|me mostraste|you mentioned|you showed)\b/.test(text)) return false;
-  if (!topics.length && !named.length && !GENERIC.test(text)) return false;
+  if (!topics.length && !named.length && !GENERIC.test(text) && familyRequest!=='family') return false;
+  if(familyRequest==='family' && GENERIC.test(text))return true;
   return /\b(que|q|cuales|donde|what|which|where|onde|quais)\b/.test(text)
     || /\b(quiero|quisiera|me gustaria|busco|necesito|recomiendame|recomienda|recomiendas|muestrame|dame|recommend|show me|find|i want|i would like|im looking for|quero|gostaria|procuro|recomende|mostre|encontre)\b/.test(text);
 }
@@ -71,9 +73,11 @@ function filtersFor(history, items) {
   else if(latest.created_at) messages=messages.filter(row=>!row.created_at||new Date(latest.created_at)-new Date(row.created_at)<2*3600000);
   for (const row of messages) {
     const text=normalize(row.message);
+    const audience=family.audienceRequest(text);
     const {yes,no}=mentionedTopics(text);
     const named=namedItems(text,items);
-    if(RESET.test(text) || independentSearch(text,yes,named)) state=emptyFilters();
+    if(RESET.test(text) || independentSearch(text,yes,named,audience)) state=emptyFilters();
+    if(audience)state.audience=audience==='family'?'family':null;
     const changedTopics=yes.length>0&&(yes.some(t=>!state.topics.includes(t))||state.topics.some(t=>!yes.includes(t)));
     const newTopic=changedTopics || named.length>0 || /\b(cambie|ahora quiero|cambiar|changed my mind|instead|mudei)\b/.test(text);
     if(newTopic){state.topics=yes;state.names=[];state.keywords=[];state.source=null;state.needsPrice=false;state.needsHours=false;state.dietary=false;}
@@ -104,7 +108,7 @@ function filtersFor(history, items) {
     if(/\b(sin importar el horario|any opening hours)\b/.test(text))state.needsHours=false;
     const subtype=text.match(/\b(pizza|sushi|empanadas?|arepas?|festival(?:es)?|conciertos?|hamburguesa|hamburguesas|vegetarian[oa]|vegan[oa]|peruan[oa]|venezolan[oa]|argentin[oa]|mexican[oa]|italian[oa]|japones[a]?|chino|china)\b/g);
     if(subtype)state.keywords=subtype.map(t=>t.replace(/festivales/,'festival').replace(/s$/,''));
-    if(!yes.length&&!no.length&&!named.length&&!area&&!local&&!REJECT.test(text)&&!RESET.test(text)&&! /\b(no importa el precio|sin presupuesto|any price|no budget|sin restricciones alimentarias|no tengo alergias|no dietary restrictions|sin importar el horario)\b/.test(text)){
+    if(!audience&&!yes.length&&!no.length&&!named.length&&!area&&!local&&!REJECT.test(text)&&!RESET.test(text)&&! /\b(no importa el precio|sin presupuesto|any price|no budget|sin restricciones alimentarias|no tengo alergias|no dietary restrictions|sin importar el horario)\b/.test(text)){
       const residual=tokens(text).filter(t=>!['cambie','opinion','tenga','puedo','restaurante','museu','museum','hacer','saludo','noticias','news','novedades','dia','al','seccion','publicaciones','articulos','guias','hola','hoy','manana','fin','semana','weekend'].includes(t));
       if(residual.length && !GENERIC.test(text))state.keywords=residual;
     }
@@ -140,6 +144,7 @@ function matching(items, filters, excluded=[], now=new Date()) {
     if(excluded.includes(key))return false;
     if(item.endsAt&&new Date(item.endsAt)<now)return false;
     if(filters.names.length&&!filters.names.includes(key))return false;
+    if(filters.audience==='family' && !(item.familyFriendly===true || (item.familyFriendly===undefined && family.evidence(item))))return false;
     if(filters.topics.length&&!filters.topics.some(t=>types.includes(t)))return false;
     if(filters.excludedTopics.some(t=>types.includes(t)))return false;
     if(filters.region&&itemRegion(item)!==filters.region)return false;

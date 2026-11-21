@@ -274,3 +274,59 @@ test('una búsqueda completa también renueva historial sin contexto guardado y 
  const result=await ask('Qué restaurantes hay con beneficios en Nueva York?',history);
  assert.deepEqual(result.appItems.map(x=>x.id),['food1','food2']);assert.equal(externalCalls,0);assert.equal(modelCalls,0);
 });
+
+function familyCatalog(){
+ return [
+  {id:'family-museum',title:'Museo para explorar',category:'Museo',tags:['NY'],region:'NY',access:'premium',card_benefit:'15% OFF',description:'Interactive galleries and a family-friendly visit.',is_published:true},
+  {id:'family-show',title:'Teatro visual',category:'Show',tags:['NY'],region:'NY',access:'premium',card_benefit:'Entradas con descuento',description:'Una función musical.',recommendation:'Plan familiar recomendado para todas las edades.',is_published:true},
+  {id:'family-food',title:'Almuerzo en familia',category:'FOOD',tags:['Familiar','NY'],region:'NY',access:'premium',card_benefit:'10% OFF',description:'Cocina para compartir.',is_published:true},
+  {id:'family-includes',title:'Paseo de luces',category:'Tour',region:'NY',access:'premium',card_benefit:'20% OFF',description:'Un recorrido por la ciudad.',includes:['Activities for children.'],is_published:true},
+  {id:'unknown-museum',title:'Otro museo',category:'Museo',region:'NY',description:'Un museo sin información de edades.',is_published:true},
+  {id:'family-owned',title:'Café de la esquina',category:'FOOD',region:'NY',description:'A family-owned business serving coffee.',is_published:true},
+  {id:'adults-only',title:'Show nocturno',category:'Show',tags:['Familiar'],region:'NY',description:'Family-friendly branding. Adults only, ages 21 and over.',is_published:true},
+  {id:'adults-flag',title:'Fiesta con etiqueta familiar',category:'EVENTO',tags:['Familiar'],region:'NY',is_age_restricted:true,is_published:true},
+  {id:'hidden-family',title:'Plan familiar no publicado',category:'Museo',tags:['Familiar'],is_published:false},
+  {id:'expired-family',title:'Plan familiar vencido',category:'Museo',tags:['Familiar'],ends_at:'2025-10-28T00:00:00Z',is_published:true},
+ ];
+}
+test('preguntas naturales sobre niños y familia encuentran publicaciones confirmadas en los tres idiomas',async()=>{
+ experiences.list=async()=>({rows:familyCatalog()});
+ for(const [language,message] of [['es','Quiero hacer cosas con niños'],['es','Quiero hacer cosas con ninos'],['es','Planes en familia'],['es','Qué puedo hacer con mis hijos'],['es','Algo para los peques'],['en','Things to do with kids'],['en','Family-friendly activities'],['en','What can I do with children?'],['pt','O que fazer com crianças?'],['pt','Quero passeios em família']]){
+  const r=await ask(message,[],{language});
+  assert.deepEqual(r.appItems.map(i=>i.id),['family-museum','family-show','family-food','family-includes'],message);
+  assert.equal(r.filters.audience,'family');assert.deepEqual(r.filters.keywords,[]);assert.equal(r.showMembership,true);
+  assert.equal(externalCalls,0);assert.equal(modelCalls,0);
+ }
+});
+test('los planes familiares conservan categoría, región y beneficio sin inventar aptitud infantil',async()=>{
+ experiences.list=async()=>({rows:familyCatalog()});
+ assert.deepEqual((await ask('Restaurantes para niños en NY con beneficios')).appItems.map(i=>i.id),['family-food']);
+ assert.deepEqual((await ask('Museos para niños en NY')).appItems.map(i=>i.id),['family-museum']);
+ assert.deepEqual((await ask('Planes con niños en NJ')).appItems,[]);
+ const member=await ask('Planes en familia',[],{is_premium:true});assert.equal(member.showMembership,false);
+ const no=await ask('Planes con niños en NJ');assert.doesNotMatch(no.reply,/otra zona/);assert.match(no.reply,/familiares confirmados/);
+});
+test('una nueva búsqueda familiar limpia filtros antiguos y una continuación conserva la categoría',async()=>{
+ experiences.list=async()=>({rows:familyCatalog()});
+ const old=await ask('Sushi gratis en NJ');
+ const r=await ask('Quiero hacer cosas con niños',[assistant(old)]);
+ assert.equal(r.filters.free,false);assert.equal(r.filters.region,null);assert.deepEqual(r.filters.keywords,[]);assert.equal(r.appItems.length,4);
+ const food=await ask('Restaurantes en NY');
+ const familyFood=await ask('Y con niños',[assistant(food)]);assert.deepEqual(familyFood.appItems.map(i=>i.id),['family-food']);assert.deepEqual(familyFood.filters.topics,['food']);
+ const zone=await ask('¿Y en Manhattan?',[assistant(r)]);assert.equal(zone.filters.audience,'family');
+ const museums=await ask('Ahora quiero museos en NY',[assistant(r)]);assert.equal(museums.filters.audience,null);
+ const cleared=await ask('Sin niños',[assistant(r)]);assert.equal(cleared.filters.audience,null);assert.deepEqual(cleared.filters.keywords,[]);
+});
+test('si no hay planes familiares del Club busca en los contenidos editoriales de la app por orden',async()=>{
+ experiences.list=async()=>({rows:familyCatalog().filter(i=>i.id==='unknown-museum')});
+ feeds['ny-al-dia']=[{id:990,title:'Museo para niños en New York',excerpt:'Un plan para toda la familia.',date:now.toISOString()}];
+ const a=await ask('Museos con niños en NY');assert.deepEqual(a.appItems.map(i=>i.id),[990]);assert.deepEqual(calls,['ny-al-dia']);assert.equal(a.source,'ny-al-dia');
+ feeds['ny-al-dia']=[];feeds['que-hacer']=[{id:991,title:'Museo familiar en New York',excerpt:'Una visita para niños y familias.',date:now.toISOString()}];calls=[];chat.clearCatalogCache();
+ const b=await ask('Museos con niños en NY');assert.deepEqual(b.appItems.map(i=>i.id),[991]);assert.equal(b.source,'que-hacer');assert.match(b.reply,/planes/);assert.doesNotMatch(b.reply,/undefined/);assert.deepEqual(calls,['ny-al-dia','que-hacer']);
+});
+test('restricciones explícitas prevalecen sobre palabras familiares y un negocio familiar no prueba admisión infantil',()=>{
+ const {evidence}=require('../services/chat-family-rules');
+ for(const description of ['Family-friendly show. 21+ only.','Plan familiar. Solo para adultos.','No recomendado para niños.','Not family-friendly.','No apto para niños.','No es un plan familiar.','Não é um passeio familiar.','A family-owned bar.','An attraction with no age information.'])assert.equal(evidence({description}),false,description);
+ for(const description of ['Un plan para toda la familia.','Ideal para niños y familias.','A family-friendly experience.','Fun for kids.','Um passeio para crianças.'])assert.equal(evidence({description}),true,description);
+ assert.equal(evidence({tags:['Familiar'],is_age_restricted:true}),false);
+});
