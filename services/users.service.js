@@ -10,7 +10,7 @@ const stripeService = require("./stripe.service");
 const PUBLIC_FIELDS = `id, name, email, is_premium, is_active, language, created_at, avatar_url, home_area, interests,
   subscription_status, subscription_current_period_end, subscription_cancel_at_period_end,
   subscription_amount_cents, subscription_currency, subscription_interval,
-  (password_hash IS NOT NULL) AS has_password, (stripe_customer_id IS NOT NULL) AS has_billing_account, ai_consent_version, ai_consent_at, push_account_notices, push_promotions`;
+  (password_hash IS NOT NULL) AS has_password, (stripe_customer_id IS NOT NULL) AS has_billing_account, ai_consent_version, ai_consent_at, push_account_notices, push_promotions, push_saved_reminders`;
 
 // Fila completa -> datos que puede ver el propio usuario (sin hashes ni ids de Stripe).
 function publicUser(row) {
@@ -35,7 +35,7 @@ function publicUser(row) {
     subscription_interval: row.subscription_interval ?? null,
     has_billing_account: row.has_billing_account ?? Boolean(row.stripe_customer_id),
     ai_chat_consent: require("./ai-consent.service").hasConsent(row),
-    notification_preferences: { account: row.push_account_notices !== false, promotions: row.push_promotions === true },
+    notification_preferences: { account: row.push_account_notices !== false, promotions: row.push_promotions === true, saved: row.push_saved_reminders !== false },
   };
 }
 
