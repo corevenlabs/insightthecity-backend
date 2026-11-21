@@ -80,9 +80,18 @@ async function removeToken(userId, token) {
   await db.query('DELETE FROM push_tokens WHERE token=$1 AND user_id=$2', [token, userId]);
 }
 
+// account: membership notices (on by default). promotions: panel campaigns (separate opt-in, off by default).
 async function setPreferences(userId, body = {}) {
-  if (typeof body.account !== 'boolean') throw fail('La preferencia debe ser verdadera o falsa');
-  await db.query('UPDATE users SET push_account_notices=$2 WHERE id=$1', [userId, body.account]);
+  const sets = [], values = [userId];
+  for (const key of ['account', 'promotions']) {
+    if (!(key in body)) continue;
+    if (typeof body[key] !== 'boolean') throw fail('La preferencia debe ser verdadera o falsa');
+    values.push(body[key]);
+    sets.push(key === 'account' ? `push_account_notices=$${values.length}`
+      : `push_promotions=$${values.length}, push_promotions_changed_at=CASE WHEN push_promotions IS DISTINCT FROM $${values.length} THEN NOW() ELSE push_promotions_changed_at END`);
+  }
+  if (!sets.length) throw fail('La preferencia debe ser verdadera o falsa');
+  await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$1`, values);
 }
 
 function render(kind, language) {
@@ -108,6 +117,8 @@ async function notify(kind, userId, dedupeKey) {
   }
 }
 
+async function send(messages) { return transport(SEND_URL, messages); }
+
 async function finish(id, status, errorCode = null) {
   await db.query(`UPDATE push_messages SET status=$2, error_code=$3, locked_at=NULL,
     sent_at=CASE WHEN $2='sent' THEN NOW() ELSE sent_at END WHERE id=$1`, [id, status, errorCode]);
@@ -124,6 +135,7 @@ async function deliver(id) {
     AND status='pending' AND next_attempt_at<=NOW() AND (locked_at IS NULL OR locked_at<NOW()-INTERVAL '10 minutes')
     RETURNING *`, [id])).rows[0];
   if (!message) return false;
+  if (!KINDS[message.kind]) { await finish(id, 'skipped', 'unknown_kind'); return false; }
   try {
     if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_TTL_HOURS * 3600 * 1000) { await finish(id, 'skipped', 'expired'); return false; }
     const user = (await db.query(`SELECT id, language, is_active, is_premium, subscription_status, push_account_notices FROM users
@@ -186,11 +198,12 @@ async function checkReceipts() {
 }
 
 async function retry() {
-  const rows = (await db.query(`SELECT id FROM push_messages WHERE status='pending' AND next_attempt_at<=NOW()
+  // Campaign recipients are sent in batches by push-campaigns.service.
+  const rows = (await db.query(`SELECT id FROM push_messages WHERE status='pending' AND campaign_id IS NULL AND next_attempt_at<=NOW()
     AND (locked_at IS NULL OR locked_at<NOW()-INTERVAL '10 minutes') ORDER BY next_attempt_at LIMIT 50`)).rows;
   let sent = 0;
   for (const row of rows) if (await deliver(row.id)) sent++;
   return { checked: rows.length, sent, receipts: await checkReceipts() };
 }
 
-module.exports = { KINDS, validToken, registerToken, removeToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };
+module.exports = { KINDS, MAX_ATTEMPTS, MESSAGE_TTL_HOURS, send, finish, postpone, validToken, registerToken, removeToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };

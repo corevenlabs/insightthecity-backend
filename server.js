@@ -93,6 +93,7 @@ app.use("/api/experiences", experiencesRouter);
 app.use("/api/experience-drafts", require("./routes/experience-drafts.routes"));
 app.use("/api/auth", authRouter);
 app.use("/api/staff", require("./routes/staff.routes"));
+app.use("/api/push-campaigns", require("./routes/push-campaigns.routes"));
 app.use("/api/partners", require("./routes/partner.routes"));
 app.get("/business/:id", require("./controllers/partner-preview.controller"));
 app.use("/api/users", usersRouter);
