@@ -49,6 +49,16 @@ router.post('/me/avatar', requireUserAuth,security.limit('avatar',30,3600,securi
   });
 }, updateAvatar);
 
+// --- Notificaciones push del dispositivo con la sesión iniciada ---
+const push = require('../services/push-notifications.service');
+const pushResponse = (fn) => async (req,res,next) => {
+  try { await fn(req); res.json({ success:true }); }
+  catch(error) { if (error.status) return res.status(error.status).json({ success:false, message:error.message }); next(error); }
+};
+router.put('/me/push-token',requireUserAuth,security.limit('push-token',30,3600,security.user),pushResponse(req => push.registerToken(req.user.id,req.body || {})));
+router.delete('/me/push-token',requireUserAuth,security.limit('push-token-delete',30,3600,security.user),pushResponse(req => push.removeToken(req.user.id,req.body?.token)));
+router.patch('/me/notification-preferences',requireUserAuth,security.limit('push-preferences',30,3600,security.user),pushResponse(req => push.setPreferences(req.user.id,req.body || {})));
+
 // --- Administración de usuarios (panel, protegido con token de admin) ---
 router.get("/", requireAuth, list);
 router.get("/:id", requireAuth, getOne);

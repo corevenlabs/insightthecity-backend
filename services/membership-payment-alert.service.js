@@ -17,6 +17,7 @@ async function handle(event,source){
  const row=(await db.query(`INSERT INTO membership_payment_alerts(user_id,invoice_id,billing_source,kind) VALUES($1,$2,$3,$4)
  ON CONFLICT(invoice_id,billing_source) DO UPDATE SET kind=EXCLUDED.kind RETURNING id`,[user.id,invoice.id,source,kind])).rows[0];
  await deliver(row.id);
+ await require('./push-notifications.service').notify(kind==='action_required'?'payment_action_required':'payment_failed',user.id,`payment:${source}:${invoice.id}:${kind}`);
 }
 async function deliver(alertId){
  const alert=(await db.query(`UPDATE membership_payment_alerts SET claimed_at=NOW(),attempts=attempts+1 WHERE id=$1
