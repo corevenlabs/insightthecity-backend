@@ -119,6 +119,17 @@ async function retryPendingConfirmations() {
   return {checked:rows.length,sent};
 }
 
+// Aviso push de cambios de membresía (uno por suscripción y tipo; nunca interrumpe el flujo de pago).
+async function notifyMembership(user) {
+  if (!user?.id || !user.stripe_subscription_id) return;
+  const push = require('./push-notifications.service');
+  if (user.is_premium && PREMIUM_STATUSES.has(user.subscription_status)) {
+    await push.notify('membership_active', user.id, `membership_active:${user.stripe_subscription_id}`);
+  } else if (!user.is_premium && user.subscription_status === 'canceled') {
+    await push.notify('membership_ended', user.id, `membership_ended:${user.stripe_subscription_id}`);
+  }
+}
+
 // Verifica una sesión de Checkout recién completada y activa la membresía.
 async function confirmCheckout(userId, sessionId, billing = stripeService) {
   const session = await billing.retrieveCheckoutSession(sessionId, { expand: ['subscription'] });
@@ -133,6 +144,7 @@ async function confirmCheckout(userId, sessionId, billing = stripeService) {
   if (String(session.subscription.metadata?.user_id) !== String(userId)) return null;
   const user = await applySubscription(userId, session.subscription);
   await sendConfirmationOnce(user);
+  await notifyMembership(user);
   return user;
 }
 
@@ -175,6 +187,7 @@ async function applyFromWebhook(subscription, billing = stripeService) {
     && PREMIUM_STATUSES.has(existing.subscription_status)) return null;
   const user = await applySubscription(userId, current);
   await sendConfirmationOnce(user);
+  await notifyMembership(user);
   return user;
 }
 
@@ -188,4 +201,5 @@ module.exports = {
   applyFromWebhook,
   sendConfirmationOnce,
   retryPendingConfirmations,
+  notifyMembership,
 };
