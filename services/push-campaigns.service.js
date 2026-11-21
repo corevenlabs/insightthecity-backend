@@ -70,7 +70,7 @@ async function audience({ audience: segment = 'all', language = 'all' } = {}) {
   return { eligible: row.eligible, available: row.available, optedIn: totals.opted_in, withDevices: totals.with_devices, frequencyHours: FREQUENCY_HOURS };
 }
 
-const FIELDS = `c.id, c.name, c.copy, c.url, c.audience, c.language, c.status, c.scheduled_at, c.started_at, c.finished_at,
+const FIELDS = `c.id, c.name, c.automation, c.copy, c.url, c.audience, c.language, c.status, c.scheduled_at, c.started_at, c.finished_at,
   c.recipients, c.created_at, c.updated_at,
   (SELECT name FROM admins WHERE id=c.created_by) AS created_by_name,
   (SELECT name FROM admins WHERE id=c.scheduled_by) AS scheduled_by_name,

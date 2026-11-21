@@ -11,8 +11,63 @@ const MAX_ATTEMPTS = 6;
 const MESSAGE_TTL_HOURS = 48;
 const ACCOUNT_CHANNEL = 'account';
 const MEMBERSHIP = '/profile?membership=1';
+const SAVED_CHANNEL = 'saved';
+const ZONE = 'America/New_York';
+const LOCALES = { es: 'es-US', en: 'en-US', pt: 'pt-BR' };
+const short = (value, max) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value);
+const experienceUrl = (experience) => `/experience-detail?id=${experience.id}`;
+// "sáb, 22 nov, 6:00 p. m." in New York time.
+function when(date, language) {
+  return new Date(date).toLocaleString(LOCALES[language] || LOCALES.es, { timeZone: ZONE, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+}
+// End that matters to this person: the drop countdown, or the member benefit if they can use it.
+function savedEnd(experience, user) {
+  const benefitEnd = user.is_premium ? (experience.benefit_action === 'qr' ? experience.coupon_ends_at : experience.benefit_action === 'external' ? experience.external_benefit_ends_at : null) : null;
+  const ends = [experience.ends_at, benefitEnd].filter(Boolean).map((value) => new Date(value).getTime());
+  return ends.length ? Math.min(...ends) : null;
+}
+function benefitStart(experience) {
+  return experience.benefit_action === 'qr' ? experience.coupon_starts_at : experience.benefit_action === 'external' ? experience.external_benefit_starts_at : null;
+}
 
 const KINDS = {
+  // Reminders about an experience the person saved. They need the experience row.
+  saved_ending: {
+    preference: 'push_saved_reminders',
+    channel: SAVED_CHANNEL,
+    url: experienceUrl,
+    valid: (user, experience) => {
+      const end = experience && savedEnd(experience, user);
+      return Boolean(experience?.is_published && experience.saved && end && end > Date.now() + 30 * 60 * 1000);
+    },
+    copy: (experience, language, user) => {
+      const title = short(experience.title, 40);
+      const until = when(savedEnd(experience, user), language);
+      return {
+        es: [`Termina pronto: ${title}`, `Lo guardaste en ITC Club. Disponible hasta el ${until} (hora de NY).`],
+        en: [`Ending soon: ${title}`, `You saved it on ITC Club. Available until ${until} (NY time).`],
+        pt: [`Termina em breve: ${title}`, `Você salvou no ITC Club. Disponível até ${until} (horário de NY).`],
+      }[language];
+    },
+  },
+  saved_benefit_started: {
+    preference: 'push_saved_reminders',
+    channel: SAVED_CHANNEL,
+    url: experienceUrl,
+    valid: (user, experience) => {
+      const start = experience && benefitStart(experience);
+      const end = experience && savedEnd(experience, user);
+      return Boolean(user.is_premium && experience?.is_published && experience.saved && start && new Date(start).getTime() <= Date.now() && (!end || end > Date.now()));
+    },
+    copy: (experience, language) => {
+      const title = short(experience.title, 80);
+      return {
+        es: ['Ya puedes usar tu beneficio', `${title}: el beneficio que guardaste ya está disponible.`],
+        en: ['Your benefit is ready', `${title}: the benefit you saved is now available.`],
+        pt: ['Seu benefício já está disponível', `${title}: o benefício que você salvou já está disponível.`],
+      }[language];
+    },
+  },
   membership_active: {
     url: '/club',
     // The notice is stale if access was lost before it could be delivered.
@@ -83,10 +138,11 @@ async function removeToken(userId, token) {
 // account: membership notices (on by default). promotions: panel campaigns (separate opt-in, off by default).
 async function setPreferences(userId, body = {}) {
   const sets = [], values = [userId];
-  for (const key of ['account', 'promotions']) {
+  for (const key of ['account', 'promotions', 'saved']) {
     if (!(key in body)) continue;
     if (typeof body[key] !== 'boolean') throw fail('La preferencia debe ser verdadera o falsa');
     values.push(body[key]);
+    if (key === 'saved') { sets.push(`push_saved_reminders=$${values.length}`); continue; }
     sets.push(key === 'account' ? `push_account_notices=$${values.length}`
       : `push_promotions=$${values.length}, push_promotions_changed_at=CASE WHEN push_promotions IS DISTINCT FROM $${values.length} THEN NOW() ELSE push_promotions_changed_at END`);
   }
@@ -94,23 +150,26 @@ async function setPreferences(userId, body = {}) {
   await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$1`, values);
 }
 
-function render(kind, language) {
+function render(kind, language, experience = null, user = null) {
   const spec = KINDS[kind];
-  const [title, body] = spec.copy[language] || spec.copy.es;
-  return { title, body, data: { url: spec.url }, sound: 'default', channelId: ACCOUNT_CHANNEL, priority: 'high' };
+  const lang = ['es', 'en', 'pt'].includes(language) ? language : 'es';
+  const [title, body] = typeof spec.copy === 'function' ? spec.copy(experience, lang, user || {}) : spec.copy[lang];
+  const url = typeof spec.url === 'function' ? spec.url(experience) : spec.url;
+  const account = !spec.channel;
+  return { title, body, data: { url }, sound: 'default', channelId: spec.channel || ACCOUNT_CHANNEL, priority: account ? 'high' : 'default' };
 }
 
-async function enqueue(kind, userId, dedupeKey) {
+async function enqueue(kind, userId, dedupeKey, experienceId = null) {
   if (!KINDS[kind]) throw new Error(`Unknown push kind ${kind}`);
-  const row = (await db.query(`INSERT INTO push_messages(user_id,kind,dedupe_key) VALUES($1,$2,$3)
-    ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`, [userId, kind, dedupeKey])).rows[0];
+  const row = (await db.query(`INSERT INTO push_messages(user_id,kind,dedupe_key,experience_id) VALUES($1,$2,$3,$4)
+    ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`, [userId, kind, dedupeKey, experienceId])).rows[0];
   return row?.id ?? null;
 }
 
 // Best effort: a push problem must never break a payment webhook or a checkout confirmation.
-async function notify(kind, userId, dedupeKey) {
+async function notify(kind, userId, dedupeKey, experienceId = null) {
   try {
-    const id = await enqueue(kind, userId, dedupeKey);
+    const id = await enqueue(kind, userId, dedupeKey, experienceId);
     if (id) await deliver(id);
   } catch (error) {
     console.error('[push] Notice pending retry:', error?.code || 'PUSH_ENQUEUE_FAILED');
@@ -138,15 +197,18 @@ async function deliver(id) {
   if (!KINDS[message.kind]) { await finish(id, 'skipped', 'unknown_kind'); return false; }
   try {
     if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_TTL_HOURS * 3600 * 1000) { await finish(id, 'skipped', 'expired'); return false; }
-    const user = (await db.query(`SELECT id, language, is_active, is_premium, subscription_status, push_account_notices FROM users
+    const user = (await db.query(`SELECT id, language, is_active, is_premium, subscription_status, push_account_notices, push_saved_reminders FROM users
       WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM account_deletions WHERE user_id=$1 AND status='pending')`, [message.user_id])).rows[0];
     if (!user || !user.is_active) { await finish(id, 'skipped', 'account_unavailable'); return false; }
-    if (user.push_account_notices === false) { await finish(id, 'skipped', 'opted_out'); return false; }
-    if (!KINDS[message.kind].valid(user)) { await finish(id, 'skipped', 'stale'); return false; }
+    const spec = KINDS[message.kind];
+    if (user[spec.preference || 'push_account_notices'] === false) { await finish(id, 'skipped', 'opted_out'); return false; }
+    const experience = message.experience_id ? (await db.query(`SELECT e.*, EXISTS (SELECT 1 FROM saved_experiences s
+      WHERE s.experience_id=e.id AND s.user_id=$2) AS saved FROM experiences e WHERE e.id=$1`, [message.experience_id, user.id])).rows[0] : null;
+    if (!spec.valid(user, experience)) { await finish(id, 'skipped', 'stale'); return false; }
     const tokens = (await db.query('SELECT token FROM push_tokens WHERE user_id=$1', [user.id])).rows.map((row) => row.token);
     if (!tokens.length) { await finish(id, 'skipped', 'no_devices'); return false; }
 
-    const content = render(message.kind, user.language);
+    const content = render(message.kind, user.language, experience, user);
     const response = await transport(SEND_URL, tokens.map((to) => ({ to, ...content })));
     if (response.status === 429 || response.status >= 500 || !Array.isArray(response.data?.data)) {
       await postpone(message, `http_${response.status}`); return false;
@@ -198,12 +260,12 @@ async function checkReceipts() {
 }
 
 async function retry() {
-  // Campaign recipients are sent in batches by push-campaigns.service.
-  const rows = (await db.query(`SELECT id FROM push_messages WHERE status='pending' AND campaign_id IS NULL AND next_attempt_at<=NOW()
+  // Campaign recipients are sent in batches by push-campaigns.service; saved reminders by push-automations.service.
+  const rows = (await db.query(`SELECT id FROM push_messages WHERE status='pending' AND campaign_id IS NULL AND kind NOT IN ('saved_ending','saved_benefit_started') AND next_attempt_at<=NOW()
     AND (locked_at IS NULL OR locked_at<NOW()-INTERVAL '10 minutes') ORDER BY next_attempt_at LIMIT 50`)).rows;
   let sent = 0;
   for (const row of rows) if (await deliver(row.id)) sent++;
   return { checked: rows.length, sent, receipts: await checkReceipts() };
 }
 
-module.exports = { KINDS, MAX_ATTEMPTS, MESSAGE_TTL_HOURS, send, finish, postpone, validToken, registerToken, removeToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };
+module.exports = { KINDS, savedEnd, benefitStart, MAX_ATTEMPTS, MESSAGE_TTL_HOURS, send, finish, postpone, validToken, registerToken, removeToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };

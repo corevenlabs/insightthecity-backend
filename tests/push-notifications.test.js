@@ -49,12 +49,13 @@ test('only Expo push tokens and known platforms are accepted', async () => {
 });
 
 test('copy is localized, carries only an in-app route and falls back to Spanish', () => {
+  const experience = { id: 'jazz-night', title: 'Jazz en Harlem', ends_at: new Date(Date.now() + 86400000).toISOString(), benefit_action: 'none' };
   for (const kind of Object.keys(push.KINDS)) for (const language of ['es', 'en', 'pt']) {
-    const message = push.render(kind, language);
+    const message = push.render(kind, language, experience, { is_premium: true });
     assert.ok(message.title && message.body);
     assert.match(message.data.url, /^\/[a-z]/);
     assert.deepEqual(Object.keys(message.data), ['url']);
-    assert.equal(message.channelId, 'account');
+    assert.equal(message.channelId, push.KINDS[kind].channel || 'account');
   }
   assert.equal(push.render('payment_failed', 'fr').title, push.KINDS.payment_failed.copy.es[0]);
 });
@@ -101,7 +102,7 @@ test('Expo outages are retried later instead of failing the caller', async () =>
 test('membership changes enqueue one notice per subscription and never throw', async () => {
   const keys = [];
   const originalQuery = db.query;
-  db.query = async (sql, values) => { if (/INSERT INTO push_messages/.test(sql)) keys.push(values.slice(1)); return { rows: [] }; };
+  db.query = async (sql, values) => { if (/INSERT INTO push_messages/.test(sql)) keys.push(values.slice(1, 3)); return { rows: [] }; };
   try {
     await subscriptions.notifyMembership({ id: 7, stripe_subscription_id: 'sub_1', is_premium: true, subscription_status: 'trialing' });
     await subscriptions.notifyMembership({ id: 7, stripe_subscription_id: 'sub_1', is_premium: false, subscription_status: 'canceled' });
