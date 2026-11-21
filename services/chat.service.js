@@ -3,6 +3,7 @@ const db = require('../config/db');
 const experiencesService = require('./experiences.service');
 const newsService = require('./news.service');
 const rules = require('./chat-catalog-rules');
+const family=require('./chat-family-rules');
 const {previewFor,imageFor}=require('./chat-card-preview');
 const firstName = name => String(name || '').trim().split(/\s+/)[0] || '';
 function greetingFor(user) {
@@ -23,12 +24,13 @@ const words={
  pt:{intro:'Claro! Veja estas opções.',news:'Veja estas novidades de NY al día.',plans:'Encontrei estes passeios para você.',none:'Não encontrei opções com esses filtros. Vamos tentar outra região?',unavailable:'Não consegui verificar o catálogo. Vamos tentar de novo?',clarify:'Você prefere comida, museus ou outra experiência?',identity:'Sou YORKi, seu guia do ITC Club. Ajudo você a encontrar passeios e benefícios publicados no app.',thanks:'De nada! Estou aqui para ajudar com seu próximo passeio.',date:'Confira datas e disponibilidade nos detalhes.',join:'Conheça a assinatura ITC Club para acessar os benefícios indicados.',active:'Sua assinatura permite acessar os benefícios indicados; confira as condições.',price:'Não tenho preços verificados para esse orçamento. Confira os detalhes.',hours:'Não tenho horários em tempo real. Confira os detalhes.',scope:'Só posso recomendar publicações deste app. Que tipo de passeio você procura?',member:'A assinatura ITC Club dá acesso aos benefícios indicados nas publicações do Club. Confira as condições antes de assinar.'},
 };
 function experienceItem(row, now) {
+  const familyFriendly=family.evidence(row);
   row=require("./private-benefit.service").catalogRow(row);
   const rawBenefit=String(row.card_benefit||row.member_benefit||'').trim();
   const memberBenefit=rawBenefit.length<=160?rawBenefit:'';
   const expiry=row.coupon_ends_at&&new Date(row.coupon_ends_at)<now;
   const disabled=row.benefit_action==='qr'&&(row.coupon_active===false||(row.coupon_inventory_mode==='limited'&&Number(row.coupon_total)-Number(row.coupon_redeemed||0)-Number(row.coupon_reserved||0)<=0));
-  return {kind:'experience',id:row.id,title:row.title,category:row.category,tags:row.tags||[],description:row.description||'',location:row.location||'',locations:row.locations||[],region:row.region,access:row.access,section:row.section,memberBenefit,memberBenefitDetails:'',hasConditions:!!(row.member_benefit_details||row.benefit_instructions),hasBenefit:row.access==='premium'&&!!rawBenefit&&!expiry&&!disabled,date:row.date_label,endsAt:row.ends_at,isPaidEvent:!!row.is_paid_event,image:imageFor(row.image_url||row.image),source:row.access==='premium'?'club':'app'};
+  return {kind:'experience',familyFriendly,id:row.id,title:row.title,category:row.category,tags:row.tags||[],description:row.description||'',location:row.location||'',locations:row.locations||[],region:row.region,access:row.access,section:row.section,memberBenefit,memberBenefitDetails:'',hasConditions:!!(row.member_benefit_details||row.benefit_instructions),hasBenefit:row.access==='premium'&&!!rawBenefit&&!expiry&&!disabled,date:row.date_label,endsAt:row.ends_at,isPaidEvent:!!row.is_paid_event,image:imageFor(row.image_url||row.image),source:row.access==='premium'?'club':'app'};
 }
 // Same two editorial feeds exposed by /api/news, not an internet search tool.
 const editorialCache=new Map();
@@ -96,7 +98,7 @@ async function respond({ user={}, history=[], now=new Date() }) {
   const context=rules.filtersFor(history,club), f=context.filters;
   if(f.dietary)return {...empty(user.language==='en'?'The app does not verify dietary certifications or allergens. Please confirm those requirements directly with the business.':user.language==='pt'?'O app não verifica certificações alimentares ou alérgenos. Confirme esses requisitos diretamente com o estabelecimento.':'La app no verifica certificaciones alimentarias ni alérgenos. Confirma esos requisitos directamente con el negocio.'),context:{version:1,filters:f,shown:[],excluded:context.excluded}};
   if(/\b(cerca de mi|cerca|near me|nearby|perto de mim)\b/.test(text)&&!f.area)return empty(user.language==='en'?'Which area would you like? I can filter the places published in the app.':user.language==='pt'?'Em qual região você está procurando? Posso filtrar os lugares publicados no app.':'¿En qué zona buscas? Puedo filtrar los lugares publicados en la app.');
-  const meaningful=f.topics.length||f.excludedTopics.length||f.names.length||f.keywords.length||f.region||f.area||f.free||f.source||rules.GENERIC.test(text)||rules.REJECT.test(text);
+  const meaningful=f.audience||family.audienceRequest(text)||f.topics.length||f.excludedTopics.length||f.names.length||f.keywords.length||f.region||f.area||f.free||f.source||rules.GENERIC.test(text)||rules.REJECT.test(text);
   if(!meaningful)return empty(copy.clarify);
   if(f.needsPrice)return {...empty(copy.price),context:{version:1,filters:f,shown:[],excluded:context.excluded}};
   if(f.needsHours)return {...empty(copy.hours),context:{version:1,filters:f,shown:[],excluded:context.excluded}};
@@ -120,10 +122,15 @@ async function respond({ user={}, history=[], now=new Date() }) {
   found=[...new Map(found.map(item=>[`${item.kind}:${item.id}`,item])).values()];
   const showMembership=!user.is_premium&&found.some(item=>item.hasBenefit);
   const saved={version:1,filters:f,shown:found.slice(0,3).map(item=>`${item.kind}:${item.id}`),excluded:context.excluded};
-  if(!found.length)return {...empty(copy.none),context:saved,filters:f};
-  const intro=copy[source==='ny-al-dia'?'news':source==='que-hacer'?'guides':'intro'];
+  if(!found.length){
+    const familyNone=user.language==='en'?'I couldn’t find confirmed family-friendly plans with those filters. Shall we try another category?':user.language==='pt'?'Não encontrei passeios para crianças confirmados com esses filtros. Vamos tentar outra categoria?':'No encontré planes familiares confirmados con esos filtros. ¿Probamos otra categoría?';
+    return {...empty(f.audience==='family'?familyNone:copy.none),context:saved,filters:f};
+  }
+  const intro=copy[source==='ny-al-dia'?'news':source==='que-hacer'?'plans':'intro'];
+  const familyIntro=user.language==='en'?'Of course! Here are some family-friendly plans.':user.language==='pt'?'Claro! Veja estes passeios para curtir em família.':'¡Claro! Mira estos planes para disfrutar en familia.';
+  const familyNote=user.language==='en'?'Check ages and conditions in the details.':user.language==='pt'?'Confira as idades e condições nos detalhes.':'Revisa las edades y condiciones en el detalle.';
   // Only catalog strings supply names and offers; the model cannot invent facts.
-  const reply=[intro,f.when?copy.date:''].filter(Boolean).join(' ');
+  const reply=[f.audience==='family'&&source==='club'?familyIntro:intro,f.audience==='family'?familyNote:'',f.when?copy.date:''].filter(Boolean).join(' ');
   return {reply,appItems:await Promise.all(found.map(async item=>{const localized=await contentLanguage.chatItem(item,user.language);return {...localized,preview:previewFor(localized),image:imageFor(item.image)};})),places:[],showMembership,source,filters:f,context:saved};
 }
 module.exports={getHistory,saveMessage,respond,greetingFor,welcomeFor,relevantItems,withoutLinks,experienceItem,clearCatalogCache:()=>editorialCache.clear()};
