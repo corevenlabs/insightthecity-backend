@@ -20,7 +20,10 @@ router.post('/confirm',publicLimit,jsonOnly,wrap(async(req,res)=>{
 router.post('/process',require('../middleware/partner-rate-limit')(12),async(req,res,next)=>{
   const supplied=Buffer.from((req.headers.authorization||'').replace(/^Bearer /,''));
   const expected=Buffer.from(service.workerToken());
-  if(supplied.length!==expected.length || !crypto.timingSafeEqual(supplied,expected)) return res.sendStatus(401);
+  const trusted=supplied.length===expected.length
+    ? crypto.timingSafeEqual(supplied,expected)
+    : await require('../middleware/scheduler-auth').isScheduler(req,'/api/account-deletions/process');
+  if(!trusted) return res.sendStatus(401);
   try { await service.tick(); res.json({ok:true}); } catch(e){next(e);}
 });
 router.get('/',require('../middleware/staff').requireStaff('admin'),async(req,res,next)=>{
