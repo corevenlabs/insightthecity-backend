@@ -148,6 +148,8 @@ async function setPreferences(userId, body = {}) {
   }
   if (!sets.length) throw fail('La preferencia debe ser verdadera o falsa');
   await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$1`, values);
+  // Without reminders there is no reason to keep the server copy of what the person saved.
+  if (body.saved === false) await db.query('DELETE FROM saved_experiences WHERE user_id=$1', [userId]);
 }
 
 function render(kind, language, experience = null, user = null) {
