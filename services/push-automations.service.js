@@ -11,6 +11,8 @@ const MAX_SAVED = 300;
 const MAX_REMINDERS_PER_DAY = 2;
 const CANDIDATES_PER_RUN = 300;
 const KINDS = ['saved_reminders', 'new_experiences'];
+const SAVED_SYNC = `u.push_saved_reminders AND EXISTS (SELECT 1 FROM push_automations a WHERE a.kind='saved_reminders' AND a.enabled)
+  AND EXISTS (SELECT 1 FROM push_tokens t WHERE t.user_id=u.id)`;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
@@ -19,16 +21,25 @@ function newYorkHour(now = new Date()) {
 }
 
 // Replaces the server copy of the experiences this person saved. Unknown ids are ignored.
+// The copy only exists while it is needed: the automation is on, the person accepts reminders and has a device that can get them.
+// Otherwise (also for older app versions that still send it) nothing is stored.
 async function syncSaved(userId, body = {}) {
   const ids = body.ids;
   if (!Array.isArray(ids) || ids.length > MAX_SAVED || !ids.every((id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(id))) {
     throw fail('Lista de guardados no válida');
   }
   const unique = [...new Set(ids)];
+  const needed = (await db.query(`SELECT 1 FROM users u WHERE u.id=$1 AND ${SAVED_SYNC}`, [userId])).rows.length > 0;
+  if (!needed) {
+    await db.query('DELETE FROM saved_experiences WHERE user_id=$1', [userId]);
+    return { saved: 0 };
+  }
   await db.query('DELETE FROM saved_experiences WHERE user_id=$1 AND NOT (experience_id = ANY($2::varchar[]))', [userId, unique]);
   if (unique.length) {
-    await db.query(`INSERT INTO saved_experiences(user_id, experience_id)
-      SELECT $1, e.id FROM experiences e WHERE e.id = ANY($2::varchar[]) ON CONFLICT DO NOTHING`, [userId, unique]);
+    // FOR SHARE: if the person turns reminders off at the same time, their delete runs after this insert.
+    await db.query(`WITH u AS (SELECT u.id FROM users u WHERE u.id=$1 AND ${SAVED_SYNC} FOR SHARE OF u)
+      INSERT INTO saved_experiences(user_id, experience_id)
+      SELECT u.id, e.id FROM u CROSS JOIN experiences e WHERE e.id = ANY($2::varchar[]) ON CONFLICT DO NOTHING`, [userId, unique]);
   }
   return { saved: unique.length };
 }
@@ -156,4 +167,4 @@ async function run(now = new Date()) {
   return result;
 }
 
-module.exports = { KINDS, syncSaved, settings, setSetting, run, digestCopy, newYorkHour };
+module.exports = { KINDS, SAVED_SYNC, syncSaved, settings, setSetting, run, digestCopy, newYorkHour };

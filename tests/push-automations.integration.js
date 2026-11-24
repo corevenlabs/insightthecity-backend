@@ -4,6 +4,9 @@ if (process.env.DB_DATABASE !== 'itc_crm_test' || process.env.DB_HOST !== '127.0
 const db = require('../config/db');
 const push = require('../services/push-notifications.service');
 const automations = require('../services/push-automations.service');
+const campaigns = require('../services/push-campaigns.service');
+const retention = require('../services/push-retention.service');
+const users = require('../services/users.service');
 after(() => db.end());
 
 const token = (name) => `ExponentPushToken[${name.padEnd(22, 'x')}]`;
@@ -19,6 +22,7 @@ test('content automations remind saved experiences and summarize new ones', asyn
     return { status: 200, data: { data: body.map((_, i) => ({ status: 'ok', id: `auto-${sent.length}-${i}` })) } };
   });
   const ids = {};
+  const preferences = async (id) => users.publicUser(await users.findById(id)).notification_preferences;
   const hours = (n) => new Date(Date.now() + n * 3600_000).toISOString();
   try {
     await db.query("DELETE FROM push_campaigns WHERE automation IS NOT NULL");
@@ -45,6 +49,12 @@ test('content automations remind saved experiences and summarize new ones', asyn
     await t.test('saved list sync validates input and mirrors only known experiences', async () => {
       await assert.rejects(automations.syncSaved(ids.member, { ids: 'auto-drop' }), { status: 400 });
       await assert.rejects(automations.syncSaved(ids.member, { ids: ['../etc'] }), { status: 400 });
+      // Automation off: nothing is stored, and the app is told not to send anything.
+      assert.deepEqual(await automations.syncSaved(ids.member, { ids: ['auto-drop'] }), { saved: 0 });
+      assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM saved_experiences WHERE user_id=$1', [ids.member])).rows[0].n, 0);
+      assert.equal((await preferences(ids.member)).savedSync, false);
+      await automations.setSetting('saved_reminders', true, admin);
+      assert.equal((await preferences(ids.member)).savedSync, true);
       assert.deepEqual(await automations.syncSaved(ids.member, { ids: ['auto-drop', 'auto-benefit', 'auto-later', 'auto-hidden', 'auto-missing', 'auto-drop'] }), { saved: 5 });
       const saved = (await db.query('SELECT experience_id FROM saved_experiences WHERE user_id=$1 ORDER BY 1', [ids.member])).rows.map((r) => r.experience_id);
       assert.deepEqual(saved, ['auto-benefit', 'auto-drop', 'auto-hidden', 'auto-later']);
@@ -53,10 +63,13 @@ test('content automations remind saved experiences and summarize new ones', asyn
       // Saved before the benefit opened.
       await db.query("UPDATE saved_experiences SET saved_at=NOW()-INTERVAL '3 hours' WHERE user_id=$1", [ids.member]);
       await automations.syncSaved(ids.free, { ids: ['auto-drop', 'auto-benefit'] });
-      await automations.syncSaved(ids.quiet, { ids: ['auto-drop'] });
+      // Reminders turned off by the person: not stored either.
+      assert.deepEqual(await automations.syncSaved(ids.quiet, { ids: ['auto-drop'] }), { saved: 0 });
+      assert.equal((await preferences(ids.quiet)).savedSync, false);
     });
 
     await t.test('nothing runs while the automation is off or at night', async () => {
+      await automations.setSetting('saved_reminders', false, admin);
       assert.equal((await automations.run(DAYTIME)).savedQueued, 0);
       await automations.setSetting('saved_reminders', true, admin);
       assert.equal((await automations.run(NIGHT)).savedQueued, 0);
@@ -114,6 +127,52 @@ test('content automations remind saved experiences and summarize new ones', asyn
       assert.equal(sent.find((m) => m.to === token('free')).title, '2 new experiences on ITC Club');
       sent.length = 0;
       assert.equal((await automations.run(DAYTIME)).digest, null);
+    });
+
+    await t.test('turning reminders off, or losing every device, deletes the saved copy', async () => {
+      const count = async () => (await db.query('SELECT COUNT(*)::int AS n FROM saved_experiences WHERE user_id=$1', [ids.member])).rows[0].n;
+      await automations.setSetting('saved_reminders', true, admin);
+      await automations.syncSaved(ids.member, { ids: ['auto-drop'] });
+      await retention.sweep();
+      assert.equal(await count(), 1);
+      await push.setPreferences(ids.member, { saved: false });
+      assert.equal(await count(), 0);
+      await push.setPreferences(ids.member, { saved: true });
+      await automations.syncSaved(ids.member, { ids: ['auto-drop'] });
+      await push.removeToken(ids.member, token('member'));
+      await retention.sweep();
+      assert.equal(await count(), 0);
+      await push.registerToken(ids.member, { token: token('member'), platform: 'android' });
+      await automations.syncSaved(ids.member, { ids: ['auto-drop'] });
+      await automations.setSetting('saved_reminders', false, admin);
+      await retention.sweep();
+      assert.equal(await count(), 0);
+    });
+
+    await t.test('history is deleted after 90 days, keeping totals and the membership marker', async () => {
+      const campaign = (await db.query("SELECT id FROM push_campaigns WHERE automation='new_experiences'")).rows[0];
+      await campaigns.recordOpen(ids.member, campaign.id);
+      await db.query("UPDATE push_campaigns SET finished_at=NOW()-INTERVAL '89 days' WHERE id=$1", [campaign.id]);
+      await push.enqueue('payment_failed', ids.member, 'ret:payment');
+      await push.enqueue('membership_active', ids.member, 'ret:active');
+      await push.enqueue('payment_failed', ids.member, 'ret:recent');
+      await db.query("UPDATE push_messages SET status='sent', created_at=NOW()-INTERVAL '91 days' WHERE dedupe_key IN ('ret:payment','ret:active')");
+      await db.query("UPDATE push_messages SET status='sent' WHERE dedupe_key='ret:recent'");
+      await retention.sweep();
+      assert.deepEqual((await db.query("SELECT dedupe_key FROM push_messages WHERE dedupe_key LIKE 'ret:%' ORDER BY 1")).rows.map((r) => r.dedupe_key), ['ret:active', 'ret:recent']);
+      // A renewal webhook months later must not announce the same membership again.
+      assert.equal(await push.enqueue('membership_active', ids.member, 'ret:active'), null);
+      const before = await campaigns.get(campaign.id);
+      assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM push_messages WHERE campaign_id=$1', [campaign.id])).rows[0].n, 2);
+      await db.query("UPDATE push_campaigns SET finished_at=NOW()-INTERVAL '91 days' WHERE id=$1", [campaign.id]);
+      await retention.sweep();
+      const after = await campaigns.get(campaign.id);
+      assert.deepEqual([after.stats, after.opens], [before.stats, before.opens]);
+      assert.deepEqual([after.stats.sent, after.opens], [2, 1]);
+      for (const table of ['push_messages', 'push_campaign_opens']) {
+        assert.equal((await db.query(`SELECT COUNT(*)::int AS n FROM ${table} WHERE campaign_id=$1`, [campaign.id])).rows[0].n, 0);
+      }
+      assert.equal((await retention.sweep()).campaigns, 0);
     });
 
     await t.test('preferences and settings are exposed', async () => {

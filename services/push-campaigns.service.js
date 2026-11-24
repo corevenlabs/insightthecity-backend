@@ -74,13 +74,13 @@ const FIELDS = `c.id, c.name, c.automation, c.copy, c.url, c.audience, c.languag
   c.recipients, c.created_at, c.updated_at,
   (SELECT name FROM admins WHERE id=c.created_by) AS created_by_name,
   (SELECT name FROM admins WHERE id=c.scheduled_by) AS scheduled_by_name,
-  (SELECT json_build_object(
+  COALESCE(c.final_stats, (SELECT json_build_object(
      'sent', COUNT(*) FILTER (WHERE status='sent'),
      'pending', COUNT(*) FILTER (WHERE status='pending'),
      'skipped', COUNT(*) FILTER (WHERE status='skipped'),
      'failed', COUNT(*) FILTER (WHERE status='failed'))
-   FROM push_messages WHERE campaign_id=c.id) AS stats,
-  (SELECT COUNT(*)::int FROM push_campaign_opens WHERE campaign_id=c.id) AS opens`;
+   FROM push_messages WHERE campaign_id=c.id)::jsonb) AS stats,
+  COALESCE(c.final_opens, (SELECT COUNT(*)::int FROM push_campaign_opens WHERE campaign_id=c.id)) AS opens`;
 
 async function list() {
   return (await db.query(`SELECT ${FIELDS} FROM push_campaigns c ORDER BY COALESCE(c.scheduled_at, c.updated_at) DESC, c.id DESC LIMIT 200`)).rows;
