@@ -152,27 +152,77 @@ test('content automations remind saved experiences and summarize new ones', asyn
     await t.test('history is deleted after 90 days, keeping totals and the membership marker', async () => {
       const campaign = (await db.query("SELECT id FROM push_campaigns WHERE automation='new_experiences'")).rows[0];
       await campaigns.recordOpen(ids.member, campaign.id);
-      await db.query("UPDATE push_campaigns SET finished_at=NOW()-INTERVAL '89 days' WHERE id=$1", [campaign.id]);
+      await db.query("UPDATE push_campaigns SET started_at=NOW()-INTERVAL '89 days' WHERE id=$1", [campaign.id]);
       await push.enqueue('payment_failed', ids.member, 'ret:payment');
       await push.enqueue('membership_active', ids.member, 'ret:active');
       await push.enqueue('payment_failed', ids.member, 'ret:recent');
+      // Never delivered (for example, the automation was turned off): deleted all the same.
+      await push.enqueue('saved_ending', ids.member, 'ret:stuck', 'auto-drop');
+      await db.query("UPDATE push_messages SET created_at=NOW()-INTERVAL '91 days' WHERE dedupe_key='ret:stuck'");
       await db.query("UPDATE push_messages SET status='sent', created_at=NOW()-INTERVAL '91 days' WHERE dedupe_key IN ('ret:payment','ret:active')");
       await db.query("UPDATE push_messages SET status='sent' WHERE dedupe_key='ret:recent'");
       await retention.sweep();
-      assert.deepEqual((await db.query("SELECT dedupe_key FROM push_messages WHERE dedupe_key LIKE 'ret:%' ORDER BY 1")).rows.map((r) => r.dedupe_key), ['ret:active', 'ret:recent']);
+      assert.deepEqual((await db.query("SELECT dedupe_key FROM push_messages WHERE dedupe_key LIKE 'ret:%' ORDER BY 1")).rows.map((r) => r.dedupe_key), ['ret:recent']);
+      const markers = (await db.query('SELECT key_hash FROM push_notice_markers WHERE user_id=$1', [ids.member])).rows;
+      assert.equal(markers.length, 1);
+      assert.match(markers[0].key_hash, /^[0-9a-f]{64}$/);
       // A renewal webhook months later must not announce the same membership again.
       assert.equal(await push.enqueue('membership_active', ids.member, 'ret:active'), null);
+      assert.ok(await push.enqueue('membership_active', ids.member, 'ret:another'));
       const before = await campaigns.get(campaign.id);
       assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM push_messages WHERE campaign_id=$1', [campaign.id])).rows[0].n, 2);
-      await db.query("UPDATE push_campaigns SET finished_at=NOW()-INTERVAL '91 days' WHERE id=$1", [campaign.id]);
+      await db.query("UPDATE push_campaigns SET started_at=NOW()-INTERVAL '91 days', finished_at=NULL, status='sending' WHERE id=$1", [campaign.id]);
       await retention.sweep();
       const after = await campaigns.get(campaign.id);
       assert.deepEqual([after.stats, after.opens], [before.stats, before.opens]);
-      assert.deepEqual([after.stats.sent, after.opens], [2, 1]);
+      assert.deepEqual([after.stats.sent, after.opens, after.status], [2, 1, 'sent']);
       for (const table of ['push_messages', 'push_campaign_opens']) {
         assert.equal((await db.query(`SELECT COUNT(*)::int AS n FROM ${table} WHERE campaign_id=$1`, [campaign.id])).rows[0].n, 0);
       }
       assert.equal((await retention.sweep()).campaigns, 0);
+    });
+
+    await t.test('reminders are opt-in and every change is recorded', async () => {
+      const id = (await db.query("INSERT INTO users(email,name) VALUES('new@push-auto.test','New') RETURNING id")).rows[0].id;
+      assert.equal((await preferences(id)).saved, false);
+      await push.setPreferences(id, { saved: true, promotions: true, textVersion: 'push-1' });
+      await push.setPreferences(id, { saved: true });
+      await push.setPreferences(id, { promotions: false, textVersion: '<script>' });
+      await push.setPreferences(id, { account: false });
+      const events = (await db.query('SELECT preference, granted, text_version, language FROM push_consent_events WHERE user_id=$1 ORDER BY id', [id])).rows;
+      assert.deepEqual(events.map((e) => [e.preference, e.granted, e.text_version, e.language]).sort(), [
+        ['promotions', false, null, 'es'], ['promotions', true, 'push-1', 'es'], ['saved', true, 'push-1', 'es'],
+      ]);
+      assert.deepEqual(await preferences(id), { account: false, promotions: false, saved: true, savedSync: false });
+      // The migration runs on every deploy: it must not undo a choice.
+      const sql = require('node:fs').readFileSync(require('node:path').join(__dirname, '../database/push-privacy.sql'), 'utf8');
+      const untouched = (await db.query("INSERT INTO users(email,name,push_saved_reminders) VALUES('old@push-auto.test','Old',TRUE) RETURNING id")).rows[0].id;
+      const choices = async () => (await db.query('SELECT push_saved_reminders AS v FROM users WHERE id = ANY($1) ORDER BY id', [[id, untouched]])).rows.map((r) => r.v);
+      assert.deepEqual(await choices(), [true, true]);
+      await db.query(sql); await db.query(sql);
+      assert.deepEqual(await choices(), [true, false]);
+      assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM push_consent_events WHERE user_id=$1', [id])).rows[0].n, 3);
+    });
+
+    await t.test('a device can be released without a session, and idle devices are forgotten', async () => {
+      const devices = async () => (await db.query('SELECT COUNT(*)::int AS n FROM push_tokens WHERE user_id=$1', [ids.free])).rows[0].n;
+      await automations.setSetting('saved_reminders', true, admin);
+      await push.setPreferences(ids.free, { saved: true });
+      await automations.syncSaved(ids.free, { ids: ['auto-drop'] });
+      await assert.rejects(push.releaseToken('nope'), { status: 400 });
+      await push.releaseToken(token('unknown'));
+      assert.equal(await devices(), 1);
+      await push.releaseToken(token('free'));
+      assert.equal(await devices(), 0);
+      assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM saved_experiences WHERE user_id=$1', [ids.free])).rows[0].n, 0);
+      await push.registerToken(ids.free, { token: token('free'), platform: 'android' });
+      await db.query("UPDATE push_tokens SET last_seen_at=NOW()-INTERVAL '179 days' WHERE user_id=$1", [ids.free]);
+      await retention.sweep();
+      assert.equal(await devices(), 1);
+      await db.query("UPDATE push_tokens SET last_seen_at=NOW()-INTERVAL '181 days' WHERE user_id=$1", [ids.free]);
+      await retention.sweep();
+      assert.equal(await devices(), 0);
+      await automations.setSetting('saved_reminders', false, admin);
     });
 
     await t.test('preferences and settings are exposed', async () => {
