@@ -37,7 +37,7 @@ function publicUser(row) {
     subscription_interval: row.subscription_interval ?? null,
     has_billing_account: row.has_billing_account ?? Boolean(row.stripe_customer_id),
     ai_chat_consent: require("./ai-consent.service").hasConsent(row),
-    notification_preferences: { account: row.push_account_notices !== false, promotions: row.push_promotions === true, saved: row.push_saved_reminders !== false, savedSync: row.push_saved_sync === true },
+    notification_preferences: { account: row.push_account_notices !== false, promotions: row.push_promotions === true, saved: row.push_saved_reminders === true, savedSync: row.push_saved_sync === true },
   };
 }
 

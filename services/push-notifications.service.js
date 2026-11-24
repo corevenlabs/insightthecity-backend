@@ -1,7 +1,8 @@
 const db = require('../config/db');
 
 // Push notices through the Expo Push Service (it forwards to APNs and FCM).
-// Messages never carry personal data: only fixed copy and an in-app route.
+// Messages carry short copy and an in-app route: no names, e-mails or payment details.
+// Reminders may include the title and date of the saved experience.
 const SEND_URL = 'https://exp.host/--/api/v2/push/send';
 const RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 const TOKEN = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{8,120}\]$/;
@@ -12,6 +13,14 @@ const MESSAGE_TTL_HOURS = 48;
 const ACCOUNT_CHANNEL = 'account';
 const MEMBERSHIP = '/profile?membership=1';
 const SAVED_CHANNEL = 'saved';
+// Their key is what stops a later renewal webhook from announcing the same membership again.
+const MARKED_KINDS = ['membership_active', 'membership_ended'];
+// Lock screens are visible to others: payment notices only say there is something to see in the app.
+const DISCREET = {
+  es: ['ITC Club', 'Tienes una actualización sobre tu cuenta. Abre la app para verla.'],
+  en: ['ITC Club', 'There is an update about your account. Open the app to see it.'],
+  pt: ['ITC Club', 'Há uma atualização sobre sua conta. Abra o app para vê-la.'],
+};
 const ZONE = 'America/New_York';
 const LOCALES = { es: 'es-US', en: 'en-US', pt: 'pt-BR' };
 const short = (value, max) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value);
@@ -81,28 +90,20 @@ const KINDS = {
   payment_failed: {
     url: MEMBERSHIP,
     valid: (user) => !['active', 'trialing'].includes(user.subscription_status),
-    copy: {
-      es: ['No pudimos cobrar tu membresía', 'Actualiza tu método de pago para mantener tus beneficios.'],
-      en: ["We couldn't charge your membership", 'Update your payment method to keep your benefits.'],
-      pt: ['Não conseguimos cobrar sua assinatura', 'Atualize sua forma de pagamento para manter seus benefícios.'],
-    },
+    copy: DISCREET,
   },
   payment_action_required: {
     url: MEMBERSHIP,
     valid: (user) => !['active', 'trialing'].includes(user.subscription_status),
-    copy: {
-      es: ['Tu banco pide confirmar el pago', 'Confirma el pago de tu membresía para mantener tus beneficios.'],
-      en: ['Your bank needs you to confirm a payment', 'Confirm your membership payment to keep your benefits.'],
-      pt: ['Seu banco pede a confirmação do pagamento', 'Confirme o pagamento da sua assinatura para manter seus benefícios.'],
-    },
+    copy: DISCREET,
   },
   membership_ended: {
     url: MEMBERSHIP,
     valid: (user) => user.is_premium !== true,
     copy: {
-      es: ['Tu membresía ITC Club terminó', 'Puedes volver al Club cuando quieras desde la app.'],
-      en: ['Your ITC Club membership has ended', 'You can rejoin the Club anytime from the app.'],
-      pt: ['Sua assinatura ITC Club terminou', 'Você pode voltar ao Club quando quiser pelo app.'],
+      es: ['Tu membresía ITC Club terminó', 'Abre la app para ver los detalles.'],
+      en: ['Your ITC Club membership has ended', 'Open the app to see the details.'],
+      pt: ['Sua assinatura ITC Club terminou', 'Abra o app para ver os detalhes.'],
     },
   },
 };
@@ -133,21 +134,48 @@ async function registerToken(userId, { token, platform } = {}) {
 async function removeToken(userId, token) {
   if (!validToken(token)) throw fail('Token de notificaciones no válido');
   await db.query('DELETE FROM push_tokens WHERE token=$1 AND user_id=$2', [token, userId]);
+  await dropUnusedSaved(userId);
 }
 
-// account: membership notices (on by default). promotions: panel campaigns (separate opt-in, off by default).
+// The device asked to stop, possibly without a session any more.
+async function releaseToken(token) {
+  if (!validToken(token)) throw fail('Token de notificaciones no válido');
+  const row = (await db.query('DELETE FROM push_tokens WHERE token=$1 RETURNING user_id', [token])).rows[0];
+  if (row) await dropUnusedSaved(row.user_id);
+}
+
+// Without any device there is nobody to remind.
+async function dropUnusedSaved(userId) {
+  await db.query('DELETE FROM saved_experiences WHERE user_id=$1 AND NOT EXISTS (SELECT 1 FROM push_tokens WHERE user_id=$1)', [userId]);
+}
+
+// account: membership notices (on by default). promotions: panel campaigns, saved: reminders (both separate opt-ins,
+// off by default; every change is recorded with the version of the text the person saw).
 async function setPreferences(userId, body = {}) {
-  const sets = [], values = [userId];
+  const sets = [], values = [userId], consents = [];
+  const version = typeof body.textVersion === 'string' && /^[a-z0-9.-]{1,40}$/.test(body.textVersion) ? body.textVersion : null;
   for (const key of ['account', 'promotions', 'saved']) {
     if (!(key in body)) continue;
     if (typeof body[key] !== 'boolean') throw fail('La preferencia debe ser verdadera o falsa');
     values.push(body[key]);
-    if (key === 'saved') { sets.push(`push_saved_reminders=$${values.length}`); continue; }
-    sets.push(key === 'account' ? `push_account_notices=$${values.length}`
-      : `push_promotions=$${values.length}, push_promotions_changed_at=CASE WHEN push_promotions IS DISTINCT FROM $${values.length} THEN NOW() ELSE push_promotions_changed_at END`);
+    const value = `$${values.length}::boolean`;
+    if (key === 'account') { sets.push(`push_account_notices=${value}`); continue; }
+    const column = key === 'saved' ? 'push_saved_reminders' : 'push_promotions';
+    sets.push(`${column}=${value}`, `${column}_changed_at=${key === 'saved' ? 'NOW()'
+      : `CASE WHEN ${column} IS DISTINCT FROM ${value} THEN NOW() ELSE ${column}_changed_at END`}`);
+    consents.push(`SELECT id, '${key}', ${value}, language FROM previous WHERE ${column} IS DISTINCT FROM ${value}`);
   }
   if (!sets.length) throw fail('La preferencia debe ser verdadera o falsa');
-  await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id=$1`, values);
+  const update = `UPDATE users SET ${sets.join(', ')} WHERE id=$1`;
+  // One statement: a change and its record are saved together or not at all.
+  if (!consents.length) await db.query(update, values);
+  else {
+    await db.query(`WITH previous AS (SELECT id, language, push_promotions, push_saved_reminders FROM users WHERE id=$1 FOR UPDATE),
+      updated AS (${update} AND EXISTS (SELECT 1 FROM previous) RETURNING id)
+      INSERT INTO push_consent_events(user_id, preference, granted, language, text_version)
+      SELECT c.id, c.preference, c.granted, c.language, $${values.length + 1}::varchar
+      FROM (${consents.join(' UNION ALL ')}) AS c(id, preference, granted, language)`, [...values, version]);
+  }
   // Without reminders there is no reason to keep the server copy of what the person saved.
   if (body.saved === false) await db.query('DELETE FROM saved_experiences WHERE user_id=$1', [userId]);
 }
@@ -163,7 +191,9 @@ function render(kind, language, experience = null, user = null) {
 
 async function enqueue(kind, userId, dedupeKey, experienceId = null) {
   if (!KINDS[kind]) throw new Error(`Unknown push kind ${kind}`);
-  const row = (await db.query(`INSERT INTO push_messages(user_id,kind,dedupe_key,experience_id) VALUES($1,$2,$3,$4)
+  const row = (await db.query(`INSERT INTO push_messages(user_id,kind,dedupe_key,experience_id)
+    SELECT $1::int, $2::varchar, $3::text, $4::varchar
+    WHERE NOT EXISTS (SELECT 1 FROM push_notice_markers WHERE user_id=$1::int AND key_hash=encode(sha256(convert_to($3::text,'UTF8')),'hex'))
     ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`, [userId, kind, dedupeKey, experienceId])).rows[0];
   return row?.id ?? null;
 }
@@ -270,4 +300,4 @@ async function retry() {
   return { checked: rows.length, sent, receipts: await checkReceipts() };
 }
 
-module.exports = { KINDS, savedEnd, benefitStart, MAX_ATTEMPTS, MESSAGE_TTL_HOURS, send, finish, postpone, validToken, registerToken, removeToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };
+module.exports = { KINDS, MARKED_KINDS, savedEnd, benefitStart, MAX_ATTEMPTS, MESSAGE_TTL_HOURS, send, finish, postpone, validToken, registerToken, removeToken, releaseToken, setPreferences, render, enqueue, notify, deliver, checkReceipts, retry, setTransport };
