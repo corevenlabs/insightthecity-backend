@@ -1,4 +1,5 @@
 const axios = require("axios");
+const store = require("./news-store.service");
 
 // El contenido vive en el WordPress del cliente. La app NO duplica nada:
 // este servicio consume la REST API pública de WordPress, la limpia y la cachea.
@@ -15,6 +16,8 @@ const DEFAULT_PER_PAGE = 10;
 const MAX_PER_PAGE = 20;
 const LIST_TTL_MS = 5 * 60 * 1000; // 5 min
 const POST_TTL_MS = 10 * 60 * 1000; // 10 min
+// Tras un fallo se sirve la última copia sin volver a insistir durante este tiempo.
+const RETRY_AFTER_FAILURE_MS = 60 * 1000;
 
 // Caché en memoria simple. Guarda el valor y el momento en que se guardó,
 // para poder servir contenido "viejo" si WordPress se cae o va lento.
@@ -31,18 +34,62 @@ function cacheSet(key, value) {
   cache.set(key, { value, at: Date.now() });
 }
 
-async function wordpressGet(path, config) {
+const failures = new Map();
+
+function recordFailure(key, what, error) {
+  failures.set(key, Date.now());
+  if (failures.size > 500) failures.delete(failures.keys().next().value);
+  const upstream = error.upstream || (error.response ? describe(error.response) : {});
+  console.error(`[news] WordPress no disponible (${what}):`, JSON.stringify({ code: wordpressCode(error) || error.code || error.message, ...upstream }));
+}
+
+const failedRecently = (key) => Date.now() - (failures.get(key) || 0) < RETRY_AFTER_FAILURE_MS;
+
+// Solo metadatos de la respuesta: nunca se registra el cuerpo.
+function describe(response) {
+  const header = (name) => String(response.headers?.[name] || "").slice(0, 80) || undefined;
+  return { status: response.status, type: header("content-type"), captcha: header("sg-captcha"), ray: header("cf-ray"), body: typeof response.data };
+}
+
+// El hosting puede contestar con una página de verificación antibots y un código 2xx.
+// Eso no es contenido: cuenta como fallo.
+function isPost(post) {
+  return Boolean(post) && Number.isInteger(post.id) && !Number.isNaN(Date.parse(post.date)) && typeof post.title?.rendered === "string";
+}
+const isPostList = (data) => Array.isArray(data) && data.every(isPost);
+
+// Código propio de WordPress (distingue sus errores de los del hosting o Cloudflare).
+function wordpressCode(error) {
+  const code = error.response?.data?.code;
+  return typeof code === "string" ? code : null;
+}
+
+// La copia en base de datos nunca debe romper una respuesta que sí llegó de WordPress.
+async function best(work) {
+  try {
+    return await work();
+  } catch (error) {
+    console.error("[news] Copia local no disponible:", error.code || error.message);
+    return null;
+  }
+}
+
+async function wordpressGet(path, config, valid) {
   const bases = [...new Set([WP_BASE, WP_FALLBACK_BASE])];
   let lastError;
   for (const base of bases) {
     try {
-      return await axios.get(`${base}${path}`, {
+      const response = await axios.get(`${base}${path}`, {
         ...config,
         timeout: 12000,
         headers: { "User-Agent": "InsightTheCity-App/1.0", Accept: "application/json" },
       });
+      if (!valid(response.data)) throw Object.assign(new Error("invalid_content"), { upstream: describe(response) });
+      return response;
     } catch (error) {
       lastError = error;
+      // Una respuesta propia de WordPress (p. ej. nota inexistente) es definitiva.
+      if (wordpressCode(error)) break;
     }
   }
   throw lastError;
@@ -125,23 +172,33 @@ async function listNews({ section, page = 1, perPage = DEFAULT_PER_PAGE, catalog
   const { fresh, stale } = cacheGet(key, LIST_TTL_MS);
   if (fresh) return fresh;
 
+  if (failedRecently(key)) {
+    const copy = stale || (await best(() => store.list(section, p, pp)));
+    if (copy) return copy;
+  }
+
   try {
-    const res = await wordpressGet("/posts", {
-      params: { categories: catId, page: p, per_page: pp, _embed: 1 },
-    });
-    const items = (res.data || []).map(toCard);
-    const total = Number(res.headers["x-wp-total"]) || items.length;
+    const res = await wordpressGet(
+      "/posts",
+      { params: { categories: catId, page: p, per_page: pp, _embed: 1 } },
+      isPostList
+    );
+    const total = Number(res.headers["x-wp-total"]) || res.data.length;
     const totalPages = Number(res.headers["x-wp-totalpages"]) || 1;
-    const value = { items, page: p, perPage: pp, total, totalPages };
+    const value = { items: res.data.map(toCard), page: p, perPage: pp, total, totalPages };
     cacheSet(key, value);
+    failures.delete(key);
+    await best(() => store.saveList(section, res.data.map(toArticle), { first: p === 1, last: p >= totalPages }));
     return value;
   } catch (err) {
-    // Si WordPress falla pero tenemos una versión vieja, la servimos igual.
-    if (stale) return stale;
     // Página fuera de rango en WP responde 400: lo tratamos como lista vacía.
-    if (err.response && err.response.status === 400) {
+    if (wordpressCode(err) === "rest_post_invalid_page_number") {
       return { items: [], page: p, perPage: pp, total: 0, totalPages: 0 };
     }
+    recordFailure(key, `lista ${section}`, err);
+    // Si WordPress falla pero tenemos una versión anterior, la servimos igual.
+    const copy = stale || (await best(() => store.list(section, p, pp)));
+    if (copy) return copy;
     const e = new Error("No se pudo obtener el contenido de WordPress");
     e.status = 502;
     throw e;
@@ -150,7 +207,7 @@ async function listNews({ section, page = 1, perPage = DEFAULT_PER_PAGE, catalog
 
 async function getNews(id) {
   const numId = Number(id);
-  if (!Number.isFinite(numId)) {
+  if (!Number.isInteger(numId) || numId <= 0 || numId > 2147483647) {
     const err = new Error("ID inválido");
     err.status = 400;
     throw err;
@@ -160,20 +217,31 @@ async function getNews(id) {
   const { fresh, stale } = cacheGet(key, POST_TTL_MS);
   if (fresh) return fresh;
 
+  if (failedRecently(key)) {
+    const copy = stale || (await best(() => store.post(numId)));
+    if (copy) return copy;
+  }
+
   try {
-    const res = await wordpressGet(`/posts/${numId}`, {
-      params: { _embed: 1 },
-    });
+    const res = await wordpressGet(`/posts/${numId}`, { params: { _embed: 1 } }, isPost);
     const value = toArticle(res.data);
     cacheSet(key, value);
+    failures.delete(key);
+    await best(() => store.savePost(value));
     return value;
   } catch (err) {
-    if (stale) return stale;
-    if (err.response && err.response.status === 404) {
+    // WordPress confirma que la nota ya no existe o dejó de ser pública.
+    const code = wordpressCode(err);
+    if (code === "rest_post_invalid_id" || code === "rest_forbidden") {
+      cache.delete(key);
+      if (code === "rest_post_invalid_id") await best(() => store.removePost(numId));
       const e = new Error("Nota no encontrada");
       e.status = 404;
       throw e;
     }
+    recordFailure(key, `nota ${numId}`, err);
+    const copy = stale || (await best(() => store.post(numId)));
+    if (copy) return copy;
     const e = new Error("No se pudo obtener la nota de WordPress");
     e.status = 502;
     throw e;
