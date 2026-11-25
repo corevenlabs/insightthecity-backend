@@ -36,3 +36,13 @@ The workflow automatically registers a **sandbox-only** Stripe webhook at the is
 4. Test first payment, repeated notification, failed/recovered installment, publication, future renewal and cancellation. Test clocks may be used for renewal scenarios; never edit production client data to simulate time.
 
 No EAS build, app-store submission or mobile OTA update is part of either workflow. Production rollout is a separate task after the sandbox is reviewed.
+
+## Verified on 2026-11-25
+
+Both isolated Cloud Run services respond with HTTP 200. The deployed panel includes the test API URL, test banner and mail/event inbox. Administrator login was verified. The real Stripe sandbox product, normal USD 200 price, USD 60 automatic discount and USD 140 hosted checkout were verified; the diagnostic checkout was then expired without payment. Stripe webhook destination was created automatically in the sandbox. Production backend traffic was unchanged across deployment. The scheduled campaign worker returned HTTP 200 at 18:20 UTC.
+
+Backend deployment and checkout verification: https://github.com/corevenlabs/insightthecity-backend/actions/runs/45674096433
+
+Panel deployment: https://github.com/corevenlabs/insightthecity-panel/actions/runs/45672803513
+
+Remaining human/account validation before production: complete a test-card payment and review the resulting first invoice, welcome receipt and publication workflow; exercise recurring payment/renewal recovery; activate and validate Stripe Tax in the sandbox (currently disabled and labeled pending in the panel); perform an explicitly approved delivery test if real SMTP sending is later enabled. No commercial partner terms or real prices are approved by the technical sample campaign.
