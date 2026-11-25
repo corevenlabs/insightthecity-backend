@@ -17,6 +17,6 @@ for(const [path,method,max,seconds] of [['prepare',payment.prepare,10,60],['comp
  });
 }
 router.post('/retry-emails',require('../middleware/membership-email-worker'),async(req,res,next)=>{
- try{res.json({success:true,...await require('../services/worker.service').run()});}catch(e){next(e);}
+ try{res.json({success:true,...await (process.env.PARTNER_CAMPAIGNS_SANDBOX==='true'?require('../services/partner-campaign-billing').service().run():require('../services/worker.service').run())});}catch(e){next(e);}
 });
 module.exports=router;

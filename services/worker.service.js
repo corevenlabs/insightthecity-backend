@@ -1,5 +1,6 @@
 // Periodic work. One failing step must not stop the rest; the caller still gets an error so it is noticed.
 const STEPS = [
+  ['partnerCampaigns', () => process.env.PARTNER_CAMPAIGNS_ENABLED==='true'?require('./partner-campaign-billing').service().run():{enabled:false}],
   [null, () => require('./subscription.service').retryPendingConfirmations()],
   ['paymentNotices', () => require('./membership-payment-alert.service').retry()],
   ['passwordNotices', () => require('./password-change-notification.service').retry()],

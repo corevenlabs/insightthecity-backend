@@ -3,7 +3,7 @@ const { OAuth2Client } = require('google-auth-library');
 // Cloud Scheduler signs each call with a short-lived Google identity token of this service account.
 // It has no permissions in the project and no key: it only identifies the caller.
 const ACCOUNT = 'itc-worker-scheduler@itc-developer-502721.iam.gserviceaccount.com';
-const BASE = 'https://itc-backend-1031252664334.us-east1.run.app';
+const BASE = process.env.PARTNER_CAMPAIGNS_SANDBOX==='true'?process.env.PUBLIC_BASE_URL:'https://itc-backend-1031252664334.us-east1.run.app';
 const verifier = new OAuth2Client();
 
 // Each job has its own audience, so the token of one endpoint is useless on the other.

@@ -1,0 +1,74 @@
+name: Deploy isolated partner campaign sandbox
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Reviewed campaign source branch or commit
+        required: true
+        default: feat/partner-campaign-sandbox
+      admin_email:
+        description: Administrator for the isolated test panel
+        required: true
+        default: soporte@insightthecity.com
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: campaign-sandbox
+  cancel-in-progress: false
+env:
+  PROJECT_ID: itc-developer-502721
+  REGION: us-east1
+  SERVICE: itc-campaigns-test-backend
+  ACCOUNT: itc-campaigns-test@itc-developer-502721.iam.gserviceaccount.com
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+      - name: Record reviewed source revision
+        run: echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Open SQL proxy for isolated schema setup
+        run: |
+          curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x /tmp/cloud-sql-proxy
+          /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres > /tmp/campaign-proxy.log 2>&1 &
+          for i in $(seq 1 30); do nc -z 127.0.0.1 5432 && exit 0; sleep 1; done
+          exit 1
+      - name: Provision isolated sandbox credentials, database, storage and Stripe webhook
+        env:
+          CAMPAIGN_TEST_ADMIN_EMAIL: ${{ inputs.admin_email }}
+        run: node scripts/campaign-sandbox/prepare.cjs
+      - name: Migrate and seed test database only
+        run: |
+          test "$DB_DATABASE" = itc_campaigns_test
+          npm run db:migrate
+          node scripts/campaign-sandbox/seed-admin.cjs
+      - name: Build isolated backend image
+        run: |
+          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+          IMAGE="us-east1-docker.pkg.dev/$PROJECT_ID/itc/$SERVICE:$SOURCE_SHA"
+          docker build --pull -t "$IMAGE" .
+          docker push "$IMAGE"
+      - name: Deploy sandbox service only
+        run: python3 scripts/campaign-sandbox/deploy.py
+      - name: Check isolated service health
+        run: |
+          curl --fail --silent --show-error https://itc-campaigns-test-backend-1031252664334.us-east1.run.app/health
+          echo 'Sandbox backend ready. No Apple/Android build or production deployment was executed.'
+      - name: Verify real sandbox product, discount, checkout and captured mail without charging
+        run: node scripts/campaign-sandbox/smoke.cjs

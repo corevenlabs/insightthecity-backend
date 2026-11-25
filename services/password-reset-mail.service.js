@@ -22,6 +22,7 @@ function isConfigured() {
 }
 
 async function send(message) {
+  if(process.env.PARTNER_CAMPAIGNS_SANDBOX==='true')throw Object.assign(Error('Emails captured in sandbox; delivery disabled'),{code:'SANDBOX_EMAIL_CAPTURE_ONLY'});
   const mail = { from: process.env.PASSWORD_RESET_FROM, ...require('./brand-typography').email(message) };
   if (process.env.SMTP_HOST) {
     const result = await nodemailer.createTransport(smtpOptions()).sendMail(mail);

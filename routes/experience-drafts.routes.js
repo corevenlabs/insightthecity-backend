@@ -104,6 +104,7 @@ router.post('/:id/approve',transaction(async(c,row,req)=>{
  if(clientId){
   const client=await require('../services/partner-crm.service').get(c,clientId,req.admin,true);
   await require('../services/partner-publication.service').link(c,client,result.id,req.admin);
+  if(require('../services/partner-campaign-rules').isCampaign(client))await require('../services/partner-campaign-billing').service().activate(c,client,result.id,req.admin);
  }
  if(Object.hasOwn(req.body || {},'payload'))await activity(c,row,req.admin,'saved');
  await activity(c,row,req.admin,'published');

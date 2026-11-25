@@ -35,7 +35,7 @@ function pdf(a, client) {
 function render({ client, owner = {}, acceptance: a }) {
   owner = partnerContact(owner);
   const first = client.contact_name?.trim().split(/\s+/)[0] || "there";
-  const partnership = client.offer === "strategic" ? "Strategic Founding Partner" : client.offer === "founding" ? "Founding Partner" : "Partner";
+  const partnership = client.offer === "campaign" ? client.campaign_snapshot.config.name : client.offer === "strategic" ? "Strategic Founding Partner" : client.offer === "founding" ? "Founding Partner" : "Partner";
   const title = "Your accepted terms, for your records.";
   const body = `Thank you for accepting the Participation Terms and Conditions for ${client.business_name}. We have attached a copy of the exact version you accepted for your records.`;
   const next = client.offer === "strategic" ? "Your participation confirmation and next steps will arrive in a separate email once your onboarding is completed." : "Accepting the terms does not confirm payment. Your participation confirmation and next steps will arrive in a separate email once your checkout is completed.";

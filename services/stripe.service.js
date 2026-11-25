@@ -122,6 +122,7 @@ function listPartnerPaymentLinkSessions(offer = "founding") {
     return partnerLinkClient().checkout.sessions.list({ payment_link: require("./partner-payment-link.service").linkId(offer), status: "complete", limit: 100, created: { gte: Math.floor(Date.now() / 1000) - 90 * 86400 } });
 }
 module.exports = {
+    partnerCampaignClient: partnerLinkClient,
     canRetirePartnerCheckout: async session => {
         if (session.status!=='open' && session.status!=='expired') return false;
         if (session.payment_status!=='unpaid') return false;
