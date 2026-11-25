@@ -1,0 +1,48 @@
+name: Verify unified campaign panel and retire duplicate panel
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        required: true
+        default: feat/partner-campaign-sandbox
+      remove_duplicate_panel:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --omit=dev
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Open read-only production connection for scoped verification
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          curl --fail --silent --show-error -o /tmp/cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x /tmp/cloud-sql-proxy
+          /tmp/cloud-sql-proxy --port 5432 itc-developer-502721:us-east1:itc-postgres >/tmp/campaign-proxy.log 2>&1 &
+          for i in $(seq 1 30); do nc -z 127.0.0.1 5432 && break; sleep 1; done
+          DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=itc_app DB_DATABASE=itc DB_SSL=false node scripts/campaign-sandbox/verify-unified.cjs
+      - name: Retire only the duplicate static panel after verification
+        if: inputs.remove_duplicate_panel
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error https://itc-panel-1031252664334.us-east1.run.app/ -o /tmp/current-panel.html
+          python3 scripts/campaign-sandbox/verify-panel-bundle.py
+          gcloud run services delete itc-campaigns-test-panel --project itc-developer-502721 --region us-east1 --quiet
+          echo 'Duplicate test panel deleted. Test payment data and keys remain isolated behind the current administrator panel.'

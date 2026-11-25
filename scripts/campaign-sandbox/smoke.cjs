@@ -6,7 +6,7 @@ async function api(path,body,partner){
  const data=await response.json();if(!response.ok)throw Error(`Sandbox smoke ${path}: HTTP ${response.status} ${data.message||''}`);return data;
 }
 (async()=>{
- const auth=await api('/api/auth/login',{email:process.env.CAMPAIGN_TEST_ADMIN_EMAIL,password:process.env.CAMPAIGN_TEST_ADMIN_PASSWORD});bearer=auth.token;
+ const jwt=require('jsonwebtoken'),assertion=jwt.sign({purpose:'campaign-test-gateway',actorId:1,role:'admin'},process.env.JWT_SECRET,{algorithm:'HS256',issuer:'https://itc-backend-1031252664334.us-east1.run.app',audience:BASE,expiresIn:'60s'});const auth=await api('/api/partners/campaign-test-session',{assertion});bearer=auth.token;
  if(!bearer)throw Error('Sandbox administrator login failed');
  const status=await api('/api/partners/campaign-sandbox/status');if(!status.sandbox||status.stripe!=='test'||status.delivery!=='captured')throw Error('Unexpected sandbox environment');
  const all=await api('/api/partners/campaigns');let campaign=all.find(c=>c.draft_config.name==='[Técnica] Prueba de campañas');

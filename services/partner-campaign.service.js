@@ -29,6 +29,9 @@ function createService({db,transaction,stripe,now=()=>new Date()}){
  }
  async function verify(r){
   const c=r.config,p=await stripe.prices.retrieve(r.price_id);
+  const expectedMode=process.env.PARTNER_CAMPAIGNS_SANDBOX==='true'?false:process.env.NODE_ENV==='production'?true:null;
+  if(expectedMode!==null&&r.livemode!==expectedMode)fail('La cuenta Stripe no coincide con el modo seleccionado. Revisa la configuración antes de activar.',409);
+  if(r.livemode===true&&(await stripe.tax.settings.retrieve()).status!=='active')fail('Configura Stripe Tax antes de activar cobros reales de esta campaña.',409);
   if(!p.active||p.unit_amount!==c.normalPriceCents||p.currency!==c.currency||p.tax_behavior!=='exclusive'||R.idOf(p.product)!==r.product_id||p.livemode!==r.livemode||(c.mode==='installments'?(p.recurring?.interval!=='month'||p.recurring.interval_count!==1):!!p.recurring))fail('Stripe no confirmó el precio configurado. No se habilitará el pago.',409);
   if(r.coupon_id){const coupon=await stripe.coupons.retrieve(r.coupon_id,{expand:['applies_to']});if(!coupon.valid||coupon.currency!==c.currency||coupon.amount_off!==c.normalPriceCents-c.priceCents||coupon.duration!==(c.mode==='installments'?'forever':'once')||!coupon.applies_to?.products?.includes(r.product_id)||coupon.livemode!==r.livemode)fail('Stripe no confirmó el descuento de la campaña',409);}
   if(c.renewal){const p=await stripe.prices.retrieve(r.renewal_price_id);if(!p.active||p.unit_amount!==c.renewalPriceCents||p.currency!==c.currency||R.idOf(p.product)!==r.product_id||p.recurring?.interval!=='month'||p.recurring.interval_count!==1||p.livemode!==r.livemode)fail('Stripe no confirmó el precio de renovación',409);}

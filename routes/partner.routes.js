@@ -26,6 +26,7 @@ router.get("/payment/return", require("../middleware/partner-rate-limit")(60), a
     res.status(status).type('html').send(require('../services/partner-checkout-return-view').errorPage());
   }
 });
+router.post('/campaign-test-session',require('../middleware/partner-rate-limit')(120),require('../services/partner-campaign-test-gateway').exchange);
 router.get('/campaigns/configuration',admin,wrap(async(_req,res)=>res.json({emails:require('../services/partner-campaign-rules').EMAILS})));
 router.post('/campaigns/preview',admin,wrap(async(req,res)=>{
  const config=require('../services/partner-campaign-rules').config(req.body.config);

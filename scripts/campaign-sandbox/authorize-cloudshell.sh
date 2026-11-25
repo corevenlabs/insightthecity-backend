@@ -13,14 +13,12 @@ if ! gcloud iam service-accounts describe "$ITC_TEST_RUNTIME" --project "$ITC_TE
 fi
 gcloud projects add-iam-policy-binding "$ITC_TEST_PROJECT" --member="serviceAccount:$ITC_TEST_RUNTIME" --role=roles/cloudsql.client --condition=None --quiet >/dev/null
 gcloud iam service-accounts add-iam-policy-binding "$ITC_TEST_RUNTIME" --member="serviceAccount:$ITC_TEST_DEPLOYER" --role=roles/iam.serviceAccountUser --project "$ITC_TEST_PROJECT" --quiet >/dev/null
-for ITC_TEST_SECRET in PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY PARTNER_CAMPAIGNS_TEST_DB_PASSWORD PARTNER_CAMPAIGNS_TEST_JWT_SECRET PARTNER_CAMPAIGNS_TEST_WEBHOOK_SECRET PARTNER_CAMPAIGNS_TEST_ADMIN_PASSWORD; do
+for ITC_TEST_SECRET in PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY PARTNER_CAMPAIGNS_TEST_DB_PASSWORD PARTNER_CAMPAIGNS_TEST_JWT_SECRET PARTNER_CAMPAIGNS_TEST_WEBHOOK_SECRET; do
   if ! gcloud secrets describe "$ITC_TEST_SECRET" --project "$ITC_TEST_PROJECT" >/dev/null 2>&1; then
     gcloud secrets create "$ITC_TEST_SECRET" --replication-policy=automatic --project "$ITC_TEST_PROJECT" --quiet
   fi
   gcloud secrets add-iam-policy-binding "$ITC_TEST_SECRET" --member="serviceAccount:$ITC_TEST_DEPLOYER" --role=roles/secretmanager.admin --project "$ITC_TEST_PROJECT" --quiet >/dev/null
-  if [[ "$ITC_TEST_SECRET" != PARTNER_CAMPAIGNS_TEST_ADMIN_PASSWORD ]]; then
     gcloud secrets add-iam-policy-binding "$ITC_TEST_SECRET" --member="serviceAccount:$ITC_TEST_RUNTIME" --role=roles/secretmanager.secretAccessor --project "$ITC_TEST_PROJECT" --quiet >/dev/null
-  fi
 done
 if ! gcloud storage buckets describe "gs://$ITC_TEST_BUCKET" --project "$ITC_TEST_PROJECT" >/dev/null 2>&1; then
   gcloud storage buckets create "gs://$ITC_TEST_BUCKET" --location=us-east1 --uniform-bucket-level-access --project "$ITC_TEST_PROJECT" --quiet

@@ -50,7 +50,7 @@ function publicToken(row) {
     process.env.JWT_SECRET,
   );
 }
-const link = (row) => `${mail.PANEL()}/partner#${publicToken(row)}`;
+const link = (row) => `${mail.PANEL()}/partner${process.env.PARTNER_CAMPAIGNS_INLINE_TESTS==='true'?'?campaignTest=1':''}#${publicToken(row)}`;
 async function fromToken(token, c = db, lock = false) {
   let p;
   try {

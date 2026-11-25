@@ -96,6 +96,8 @@ app.use("/api/experience-drafts", require("./routes/experience-drafts.routes"));
 app.use("/api/auth", authRouter);
 app.use("/api/staff", require("./routes/staff.routes"));
 app.use("/api/push-campaigns", require("./routes/push-campaigns.routes"));
+app.use("/api/partner-campaign-test", require("./routes/partner-campaign-test.routes"));
+app.use("/api/partners/communications", require("./routes/partner-campaign-sandbox.routes"));
 app.use("/api/partners/campaign-sandbox", require("./routes/partner-campaign-sandbox.routes"));
 app.use("/api/partners", require("./routes/partner.routes"));
 app.get("/business/:id", require("./controllers/partner-preview.controller"));

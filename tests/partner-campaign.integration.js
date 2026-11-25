@@ -147,6 +147,26 @@ test('campaign lifecycle with isolated PostgreSQL and fake Stripe',async t=>{
   const event={id:'evt_regular_renewal',type:'invoice.paid',data:{object:invoice}};await billing.handle(event);const n=sent.size;await billing.handle(event);assert.equal(sent.size,n);assert.equal((await getClient(customer.id)).expires_at.toISOString(),'2027-09-11T12:00:00.000Z');assert.equal((await billing.detail(customer.id)).invoices.filter(i=>i.phase==='renewal').length,1);
   customer=await getClient(customer.id);await crm.transaction(c=>billing.cancel(c,customer,admin,true));assert.equal(sub.cancel_at_period_end,true);assert.equal((await getClient(customer.id)).expires_at.toISOString(),'2027-09-11T12:00:00.000Z');
  });
+ await t.test('campaign delivery leaves legacy pending emails untouched',async()=>{
+  const transport=require('../services/password-reset-mail.service'),emails=require('../services/partner-email.service');
+  const previous={isConfigured:transport.isConfigured,send:transport.send};const delivered=[];
+  const legacy=(await db.query("SELECT id FROM partner_clients WHERE offer!='campaign' LIMIT 1")).rows[0];assert.ok(legacy);
+  await db.query("UPDATE partner_mail SET status='sent' WHERE status!='sent'");
+  for(const [id,key] of [[legacy.id,'legacy-pending-proof'],[p.id,'campaign-pending-proof']])await db.query("INSERT INTO partner_mail(client_id,dedupe_key,recipient,message) VALUES($1,$2,'local@example.invalid',$3)",[id,key,JSON.stringify({subject:key,text:'Local test'})]);
+  transport.isConfigured=()=>true;transport.send=async m=>delivered.push(m.subject);
+  try{await emails.flush(undefined,{campaignOnly:true});assert.deepEqual(delivered,['campaign-pending-proof']);assert.equal((await db.query("SELECT status FROM partner_mail WHERE dedupe_key='legacy-pending-proof'")).rows[0].status,'pending');}
+  finally{Object.assign(transport,previous);}
+ });
+ await t.test('inline test exchange uses isolated staff and disables separate test login',async()=>{
+  const env={...process.env};const jwt=require('jsonwebtoken'),express=require('express'),gateway=require('../services/partner-campaign-test-gateway');
+  process.env.PARTNER_CAMPAIGNS_SANDBOX='true';process.env.PARTNER_CAMPAIGNS_INLINE_TESTS='true';process.env.CAMPAIGN_TEST_ADMIN_EMAIL=admin.email;
+  const app=express();app.use(express.json());app.use(require('../services/partner-campaign-sandbox').restrict);app.post('/api/partners/campaign-test-session',gateway.exchange);app.use((e,req,res,next)=>res.status(500).json({message:e.message}));
+  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}`;
+  const assertion=extra=>jwt.sign({purpose:'campaign-test-gateway',actorId:123,role:'admin',...extra},process.env.JWT_SECRET,{algorithm:'HS256',issuer:gateway.LIVE_BASE,audience:gateway.TEST_BASE,expiresIn:'60s'});
+  const post=token=>fetch(base+'/api/partners/campaign-test-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assertion:token})});
+  try{assert.equal((await fetch(base+'/api/auth/login',{method:'POST'})).status,404);assert.equal((await post('invalid')).status,401);assert.equal((await post(assertion({role:'executive'}))).status,403);const response=await post(assertion({}));assert.equal(response.status,200);const claims=jwt.verify((await response.json()).token,process.env.JWT_SECRET);assert.equal(claims.id,admin.id);assert.equal(claims.gatewayActor,123);assert.equal(claims.type,'staff');assert.ok(claims.exp-claims.iat<=90);}
+  finally{await new Promise(r=>server.close(r));for(const k of ['PARTNER_CAMPAIGNS_SANDBOX','PARTNER_CAMPAIGNS_INLINE_TESTS','CAMPAIGN_TEST_ADMIN_EMAIL'])if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}
+ });
  await t.test('sandbox captures branded mail and PDFs without SMTP; inbox requires admin authentication',async()=>{
   const previous=process.env.PARTNER_CAMPAIGNS_SANDBOX;process.env.PARTNER_CAMPAIGNS_SANDBOX='true';
   let server;
