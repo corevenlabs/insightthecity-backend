@@ -45,4 +45,4 @@ const secretNames={stripe:'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY',database:'P
  for(const value of [key,dbPassword,jwt,webhook,adminPassword])console.log(`::add-mask::${value}`);
  fs.appendFileSync(process.env.GITHUB_ENV,Object.entries(variables).map(([k,v])=>`${k}=${v}\n`).join(''));
  console.log(JSON.stringify({environment:'campaign-sandbox',database:DATABASE,webhookId:endpoint.id,webhookUrl:url,taxEnabled:tax,adminEmail:variables.CAMPAIGN_TEST_ADMIN_EMAIL,secretsStored:true}));
-})().catch(e=>{console.error('Sandbox provisioning failed:',e.code||e.message);if(e.stderr)console.error(String(e.stderr).replace(/(?:sk|whsec|rk)_(?:test_|live_)?[A-Za-z0-9]+/g,'[redacted]'));process.exitCode=1;});
+})().catch(async e=>{console.error('Sandbox provisioning failed:',e.code||e.message);if(e.stderr)console.error(String(e.stderr).replace(/(?:sk|whsec|rk)_(?:test_|live_)?[A-Za-z0-9]+/g,'[redacted]'));try{await require('./audit.cjs').audit();}catch(diagnostic){console.error('Read-only permission diagnostic failed:',diagnostic.code||diagnostic.name);}process.exitCode=1;});
