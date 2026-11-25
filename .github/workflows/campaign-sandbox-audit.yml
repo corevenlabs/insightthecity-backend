@@ -1,0 +1,29 @@
+name: Inspect campaign sandbox errors (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/1031252664334/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@itc-developer-502721.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read sanitized errors from the isolated test service
+        run: |
+          python3 - <<'PY'
+          import subprocess,json,re
+          q='resource.type="cloud_run_revision" AND resource.labels.service_name="itc-campaigns-test-backend" AND (severity>=ERROR OR logName="projects/itc-developer-502721/logs/run.googleapis.com%2Fstderr")'
+          result=subprocess.run(['gcloud','logging','read',q,'--project','itc-developer-502721','--freshness=30m','--limit=30','--format=json'],check=True,capture_output=True,text=True)
+          for row in json.loads(result.stdout):
+            msg=row.get('textPayload') or row.get('jsonPayload',{}).get('message','')
+            msg=re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+','[redacted-token]',msg)
+            msg=re.sub(r'(?:sk|rk|whsec)_(?:test_|live_)?[A-Za-z0-9]+','[redacted-secret]',msg)
+            msg=re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}','[redacted-email]',msg)
+            print(json.dumps({'timestamp':row.get('timestamp'),'revision':row.get('resource',{}).get('labels',{}).get('revision_name'),'status':row.get('httpRequest',{}).get('status'),'message':msg[:2000]}))
+          PY
