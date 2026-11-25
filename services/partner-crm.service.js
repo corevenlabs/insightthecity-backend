@@ -6,6 +6,9 @@ const R = require("./partner-rules");
 const mail = require("./partner-email.service");
 const paymentLink = require("./partner-payment-link.service");
 const externalAgreement = require("./partner-external-agreement");
+const campaigns=()=>require('./partner-campaign.service').service();
+const campaignBilling=()=>require('./partner-campaign-billing').service();
+const campaignRules=require('./partner-campaign-rules');
 async function transaction(fn) {
   const c = await db.connect();
   try {
@@ -47,7 +50,7 @@ function publicToken(row) {
     process.env.JWT_SECRET,
   );
 }
-const link = (row) => `${mail.PANEL()}/partner#${publicToken(row)}`;
+const link = (row) => `${mail.PANEL()}/partner${process.env.PARTNER_CAMPAIGNS_INLINE_TESTS==='true'?'?campaignTest=1':''}#${publicToken(row)}`;
 async function fromToken(token, c = db, lock = false) {
   let p;
   try {
@@ -121,7 +124,7 @@ async function moderate(id, input, actor) {
 async function list(actor) {
   return (
     await db.query(
-      `SELECT p.blocked_at,p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,COALESCE(e.title,d.payload->>'title') AS experience_title,e.is_published AS experience_published,d.id AS experience_draft_id,d.status AS experience_draft_status,CASE WHEN e.id IS NULL AND d.id IS NOT NULL THEN 'draft' WHEN e.id IS NULL THEN 'unlinked' WHEN e.is_published THEN 'published' ELSE 'unpublished' END AS publication_status,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id LEFT JOIN experiences e ON e.id=p.experience_id LEFT JOIN experience_drafts d ON d.client_id=p.id WHERE p.deleted_at IS NULL AND ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
+      `SELECT p.blocked_at,p.id,p.business_name,p.contact_name,p.form_status,p.activated_at,p.expires_at,p.experience_id,COALESCE(e.title,d.payload->>'title') AS experience_title,e.is_published AS experience_published,d.id AS experience_draft_id,d.status AS experience_draft_status,CASE WHEN e.id IS NULL AND d.id IS NOT NULL THEN 'draft' WHEN e.id IS NULL THEN 'unlinked' WHEN e.is_published THEN 'published' ELSE 'unpublished' END AS publication_status,a.name AS owner_name,a.email AS owner_email${actor.role === "editor" ? "" : ",p.campaign_snapshot->'config'->>'name' AS campaign_name,p.campaign_snapshot->'config'->>'currency' AS campaign_currency,p.email,p.owner_id,p.category,p.offer,p.amount_cents,p.payment_method,p.payment_status,p.renewal_status,p.next_followup"} FROM partner_clients p JOIN admins a ON a.id=p.owner_id LEFT JOIN experiences e ON e.id=p.experience_id LEFT JOIN experience_drafts d ON d.client_id=p.id WHERE p.deleted_at IS NULL AND ($1::boolean OR p.owner_id=$2) ORDER BY p.updated_at DESC`,
       [actor.role !== "executive", actor.id],
     )
   ).rows;
@@ -169,12 +172,14 @@ async function detail(id, actor) {
     acceptances: acceptances.rows,
     emails: emails.rows,
     periods: periods.rows,
+    campaign_billing: campaignRules.isCampaign(row)?await campaignBilling().detail(row.id):null,
     link: link(row),
   };
 }
 async function create(input, actor) {
   manage(actor);
-  const config = R.offer(input.category, input.offer, input.payment_method);
+  const campaign=input.campaign_id?await campaigns().revision(db,input.campaign_id):null;
+  const config = campaign?{category:'partner',offer:'campaign',amount_cents:campaign.config.priceCents,payment_method:'stripe',payment_status:'pending'}:R.offer(input.category, input.offer, input.payment_method);
   const ownerId =
     actor.role === "admin" ? Number(input.owner_id || actor.id) : actor.id;
   const who = (
@@ -187,6 +192,10 @@ async function create(input, actor) {
   const business = R.clean(input.business_name, 200),
     contact = R.clean(input.contact_name, 150);
   if (!business || !contact) R.fail("Completa negocio y contacto");
+  if(campaign){
+    const created=(await db.query("INSERT INTO partner_clients(business_name,contact_name,email,phone,language,owner_id,category,offer,amount_cents,payment_method,payment_status,campaign_revision_id,campaign_snapshot,terms_snapshot) VALUES($1,$2,$3,$4,$5,$6,'partner','campaign',$7,'stripe','pending',$8,$9,$10) RETURNING *",[business,contact,R.email(input.email),R.clean(input.phone,60),R.language(input.language),ownerId,campaign.config.priceCents,campaign.id,JSON.stringify(campaign),JSON.stringify(campaignRules.terms(campaign))])).rows[0];
+    await activity(db,created,actor,'created');return detail(created.id,actor);
+  }
   const row = (
     await db.query(
       `INSERT INTO partner_clients(business_name,contact_name,email,phone,language,owner_id,category,offer,amount_cents,payment_method,payment_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
@@ -215,7 +224,12 @@ async function action(id, input, actor) {
     const op = input.action;
     if (row.blocked_at) R.fail("Desbloquea el cliente antes de realizar esta acción", 409);
     if (!["ready", "activate"].includes(op)) manage(actor);
-    if (op === 'link-experience') {
+    if(campaignRules.isCampaign(row)&&['invite','generate-link','resend'].includes(op))await campaigns().allowInvitation(c,row);
+    if(campaignRules.isCampaign(row)&&['external-paid','stripe-link-paid','stripe-verify','renew'].includes(op))R.fail('Los pagos de campañas se verifican automáticamente con Stripe',409);
+    if(op==='cancel-campaign-renewal'){
+      if(!campaignRules.isCampaign(row))R.fail('El cliente no pertenece a una campaña',409);
+      await campaignBilling().cancel(c,row,actor,input.confirm);
+    } else if (op === 'link-experience') {
       await require('./partner-publication.service').link(c,row,R.clean(input.experience_id,120),actor);
     } else if (op === 'unlink-experience') {
       if(actor.role!=='admin')R.fail('Solo el administrador puede desvincular publicaciones',403);
@@ -257,13 +271,11 @@ async function action(id, input, actor) {
         row.stripe_session_id
       ) {
         const stripe = require("./stripe.service");
-        const session = await stripe.retrieveCheckoutSession(
-          row.stripe_session_id,
-        );
+        const session = await (campaignRules.isCampaign(row)?stripe.retrievePartnerPaymentLinkSession:stripe.retrieveCheckoutSession)(row.stripe_session_id);
         if (session.payment_status === "paid")
           R.fail("Primero verifica el pago en Stripe", 409);
         if (session.status === "open")
-          await stripe.expireCheckoutSession(session.id);
+          await (campaignRules.isCampaign(row)?stripe.expirePartnerCheckout:stripe.expireCheckoutSession)(session.id);
       }
       if (row.form_status === "not_sent") R.fail("Envía primero la invitación");
       await c
@@ -437,6 +449,11 @@ async function action(id, input, actor) {
       if (invalid || !["qr", "external"].includes(exp.benefit_action))
         R.fail(invalid || "Configura el canje QR o enlace de la experiencia");
       await require('./partner-publication.service').link(c,row,exp.id,actor);
+      if(campaignRules.isCampaign(row)){
+        await campaignBilling().activate(c,row,exp.id,actor);
+        if(!exp.is_published)await c.query('UPDATE experiences SET is_published=TRUE,updated_at=NOW() WHERE id=$1',[exp.id]);
+        await activity(c,row,actor,'activate');return id;
+      }
       if (!exp.is_published) {
         await c.query('UPDATE experiences SET is_published=TRUE,updated_at=NOW() WHERE id=$1',[exp.id]);
         exp.is_published = true;
@@ -529,9 +546,9 @@ async function action(id, input, actor) {
         if (actor.role !== "admin") R.fail("Solo un administrador puede cambiar el correo", 403);
         if (row.payment_status === "pending" && row.stripe_session_id) {
           const stripe = require("./stripe.service");
-          const session = await stripe.retrieveCheckoutSession(row.stripe_session_id);
+          const session = await (campaignRules.isCampaign(row)?stripe.retrievePartnerPaymentLinkSession:stripe.retrieveCheckoutSession)(row.stripe_session_id);
           if (session.payment_status === "paid") R.fail("Primero verifica el pago en Stripe", 409);
-          if (session.status === "open") await stripe.expireCheckoutSession(session.id);
+          if (session.status === "open") await (campaignRules.isCampaign(row)?stripe.expirePartnerCheckout:stripe.expireCheckoutSession)(session.id);
         }
         await c.query(
           "UPDATE partner_mail SET status='canceled' WHERE client_id=$1 AND recipient=$2 AND status IN ('pending','failed')",
@@ -591,6 +608,7 @@ async function publicView(token) {
     payment_method: row.payment_method,
     payment_status: row.payment_status,
     ...paymentLink.presentation(row),
+    ...(campaignRules.isCampaign(row)?{campaign:(({name,description,currency,mode,normalPriceCents,priceCents,installments,publicationMonths,publicationStart,renewal,renewalPriceCents})=>({name,description,currency,mode,normalPriceCents,priceCents,installments,publicationMonths,publicationStart,renewal,renewalPriceCents}))(row.campaign_snapshot.config),payment_tax_exclusive:true,payment_test:row.campaign_snapshot.livemode===false,activated_at:row.activated_at}:{}),
     ...externalAgreement.presentation(row),
     payment_confirmation: paymentLink.manualFor(row) ? "manual" : "automatic",
     form_status: row.form_status,
@@ -730,6 +748,10 @@ async function checkout(token, input) {
       (!paymentLink.strategicCheckout(row) && (row.payment_method !== "stripe" || row.payment_status !== "pending"))
     )
       R.fail("No hay un pago pendiente por Stripe", 409);
+    if(campaignRules.isCampaign(row)){
+      await acceptCommercial(c,row,input,{campaignRevisionId:row.campaign_revision_id,pricing:row.campaign_snapshot.config});
+      return campaignBilling().checkout(c,row);
+    }
     if (paymentLink.strategicCheckout(row) || (row.offer === "founding" && paymentLink.configured())) {
       await acceptCommercial(c, row, input, { paymentLinkReference: paymentLink.reference(row), pricing: { amountBeforeTax: row.amount_cents, currency: "usd", taxExclusive: !paymentLink.testMode() && row.offer === "founding" } });
       if (paymentLink.serverCheckout()) {
@@ -836,6 +858,11 @@ async function confirmPaymentLink(session) {
 async function paymentLinkReturn(sessionId) {
   if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId || "")) R.fail("Pago inválido", 400);
   const session = await require("./stripe.service").retrievePartnerPaymentLinkSession(sessionId);
+  if(session.metadata?.itc_partner_campaign==='v1'){
+    await campaignBilling().confirm(sessionId);const row=await get(db,session.metadata.partner_id);
+    if(session.metadata.invitation_version!==row.link_version||row.blocked_at||new Date(row.link_expires_at)<=new Date())R.fail('Usa la invitación vigente de ITC Club',403);
+    await sendPending(row.id);return link(row);
+  }
   if (!await confirmPaymentLink(session)) R.fail("El pago aún no se ha confirmado. Vuelve a tu invitación para consultar su estado.", 409);
   const row = await get(db, paymentLink.clientId(session.client_reference_id));
   // La referencia firma link_version: si el staff rotó, bloqueó o dejó vencer el enlace,
@@ -877,6 +904,10 @@ async function confirmPayment(session) {
 }
 async function sync(token) {
   const row = await fromToken(token);
+  if(campaignRules.isCampaign(row)){
+    if(row.stripe_session_id&&!row.payment_verified_at){const s=await require('./stripe.service').retrievePartnerPaymentLinkSession(row.stripe_session_id);if(s.status==='complete'&&s.payment_status==='paid')await campaignBilling().confirm(s.id);}
+    await sendPending(row.id);return publicView(token);
+  }
   if (paymentLink.manualFor(row)) return publicView(token);
   if (row.stripe_session_id && ['founding','strategic'].includes(row.offer) && paymentLink.configured() && !row.payment_verified_at) {
     const session=await require('./stripe.service').retrievePartnerPaymentLinkSession(row.stripe_session_id);

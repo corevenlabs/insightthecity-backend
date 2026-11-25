@@ -21,6 +21,7 @@ router.post("/", async (req, res) => {
         }
     }
 
+    if(!campaignSignature){try{if(await require('../services/partner-campaign-billing').service().handle(event))return res.json({received:true});}catch(e){console.error('[partner campaign webhook]',e.code||e.message);return res.status(500).json({received:false});}}
     // A dedicated live campaign destination can receive ordinary subscription events
     // from the same Stripe account. It must never apply them to normal members.
     if(['invoice.payment_failed','invoice.payment_action_required','invoice.paid'].includes(event.type)){

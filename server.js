@@ -1,4 +1,5 @@
 require("dotenv").config()
+require("./services/partner-campaign-sandbox").validate(process.env);
 if (process.env.APPLE_TEAM_ID) require("./services/apple-tokens.service").validateConfiguration();
 const path = require("path")
 const express = require("express")
@@ -23,6 +24,7 @@ const manejadorErrors = require("./middleware/manejadorErrores")
 
 
 const app = express()
+app.use(require("./services/partner-campaign-sandbox").restrict);
 app.use(require('./middleware/brand-typography'));
 app.use('/brand-assets', express.static(path.join(__dirname,'public/brand'),{maxAge:'7d',setHeaders(res){res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Cross-Origin-Resource-Policy','cross-origin');}}));
 // Cloud Run pone un proxy delante: así req.ip y req.protocol son los del cliente.
@@ -94,6 +96,9 @@ app.use("/api/experience-drafts", require("./routes/experience-drafts.routes"));
 app.use("/api/auth", authRouter);
 app.use("/api/staff", require("./routes/staff.routes"));
 app.use("/api/push-campaigns", require("./routes/push-campaigns.routes"));
+app.use("/api/partner-campaign-test", require("./routes/partner-campaign-test.routes"));
+app.use("/api/partners/communications", require("./routes/partner-campaign-sandbox.routes"));
+app.use("/api/partners/campaign-sandbox", require("./routes/partner-campaign-sandbox.routes"));
 app.use("/api/partners", require("./routes/partner.routes"));
 app.get("/business/:id", require("./controllers/partner-preview.controller"));
 app.use("/api/users", usersRouter);

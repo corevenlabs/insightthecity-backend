@@ -10,6 +10,7 @@ router.post("/", async (req, res) => {
     return res.status(400).send("Webhook signature error");
   }
   try {
+    if(await require('../services/partner-campaign-billing').service().handle(event))return res.json({received:true});
     if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type) &&
         ["paid", "no_payment_required"].includes(event.data.object.payment_status)) {
       await require("../services/partner-crm.service").confirmPaymentLink(event.data.object);

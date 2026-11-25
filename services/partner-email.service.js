@@ -156,6 +156,7 @@ function render(
   kind,
   { client = {}, owner = {}, url, note = "", preview, language = "en" },
 ) {
+  if(require('./partner-campaign-rules').isCampaign(client)&&!['approval','executive','staff'].includes(kind))return require('./partner-campaign-email').render(kind,arguments[1]);
   owner = partnerContact(owner);
   const external = Boolean(require("./partner-external-agreement").agreement(client));
   const strategic = client.offer === "strategic";
@@ -275,6 +276,7 @@ function render(
 async function queue(connection, { key, clientId, to, kind, data }) {
   const terms = kind === "accepted_terms" ? require("./partner-accepted-terms.service") : null;
   const message = terms ? terms.render(data) : render(kind, data);
+  if(require('./partner-campaign-rules').isCampaign(data.client)&&data.invoice?.status==='paid')message.attachments=[{filename:`ITC-Club-Receipt-${data.invoice.id}.pdf`,content:(await require('./partner-campaign-email').receipt(data.invoice,data.client)).toString('base64'),encoding:'base64',contentType:'application/pdf'}];
   if (terms) message.attachments = [{ filename: terms.filename(data.acceptance), content: (await terms.pdf(data.acceptance, data.client)).toString("base64"), encoding: "base64", contentType: "application/pdf" }];
   const receipt = kind === 'invite' ? data.receipt || data.client?.stripe_payment_receipt : null;
   if (receipt) {
@@ -289,11 +291,13 @@ async function queue(connection, { key, clientId, to, kind, data }) {
     [clientId || null, key, to, JSON.stringify(message)],
   );
 }
-async function flush(clientId) {
+async function flush(clientId,options={}) {
+  if(process.env.PARTNER_CAMPAIGNS_SANDBOX==='true'){await db.query("UPDATE partner_mail SET sandbox_captured_at=NOW() WHERE sandbox_captured_at IS NULL AND ($1::uuid IS NULL OR client_id=$1)",[clientId||null]);return;}
+
   if (!mail.isConfigured()) return;
   const { rows } = await db.query(
-    `UPDATE partner_mail SET status='sending',locked_at=NOW(),attempts=attempts+1 WHERE id IN (SELECT id FROM partner_mail WHERE ($1::uuid IS NULL OR client_id=$1) AND (status IN ('pending','failed') OR (status='sending' AND locked_at<NOW()-INTERVAL '5 minutes')) AND attempts<8 ORDER BY created_at LIMIT 8 FOR UPDATE SKIP LOCKED) RETURNING *`,
-    [clientId || null],
+    `UPDATE partner_mail SET status='sending',locked_at=NOW(),attempts=attempts+1 WHERE id IN (SELECT id FROM partner_mail WHERE ($1::uuid IS NULL OR client_id=$1) AND (status IN ('pending','failed') OR (status='sending' AND locked_at<NOW()-INTERVAL '5 minutes')) AND attempts<8 AND (NOT $2::boolean OR client_id IN (SELECT id FROM partner_clients WHERE offer='campaign')) ORDER BY created_at LIMIT 8 FOR UPDATE SKIP LOCKED) RETURNING *`,
+    [clientId || null,options.campaignOnly===true],
   );
   for (const row of rows) {
     try {

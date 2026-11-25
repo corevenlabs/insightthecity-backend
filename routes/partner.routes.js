@@ -26,6 +26,22 @@ router.get("/payment/return", require("../middleware/partner-rate-limit")(60), a
     res.status(status).type('html').send(require('../services/partner-checkout-return-view').errorPage());
   }
 });
+router.post('/campaign-test-session',require('../middleware/partner-rate-limit')(120),require('../services/partner-campaign-test-gateway').exchange);
+router.get('/campaigns/configuration',admin,wrap(async(_req,res)=>res.json({emails:require('../services/partner-campaign-rules').EMAILS})));
+router.post('/campaigns/preview',admin,wrap(async(req,res)=>{
+ const config=require('../services/partner-campaign-rules').config(req.body.config);
+ const kind=req.body.kind;
+ if(!Object.hasOwn(config.emails,kind))R.fail('Tipo de correo inválido');
+ const preview=require('../services/partner-campaign-email').render(kind,{client:{business_name:'Your business',contact_name:'Alex',campaign_snapshot:{config}},owner:{email:'soporte@insightthecity.com'},url:'https://example.invalid/preview'});
+ res.json({html:preview.html,subject:preview.subject});
+}));
+router.get('/campaigns/available',requireStaff('admin','executive'),wrap(async(_req,res)=>res.json(await require('../services/partner-campaign.service').service().available())));
+router.get('/campaigns',admin,wrap(async(req,res)=>res.json(await require('../services/partner-campaign.service').service().list(req.admin))));
+router.post('/campaigns',admin,wrap(async(req,res)=>res.status(201).json(await require('../services/partner-campaign.service').service().create(req.body,req.admin))));
+router.get('/campaigns/:id',admin,wrap(async(req,res)=>res.json(await require('../services/partner-campaign.service').service().detail(req.params.id,req.admin))));
+router.put('/campaigns/:id',admin,wrap(async(req,res)=>res.json(await require('../services/partner-campaign.service').service().save(req.params.id,req.body,req.admin))));
+router.post('/campaigns/:id/actions',admin,wrap(async(req,res)=>res.json(await require('../services/partner-campaign.service').service().action(req.params.id,req.body,req.admin))));
+router.post('/campaigns/worker',require('../middleware/membership-email-worker'),wrap(async(_req,res)=>res.json(await require('../services/partner-campaign-billing').service().run())));
 router.get(
   "/clients",
   all,
