@@ -10,7 +10,6 @@ function ensureSecret(name,value){
  try{return g(['secrets','versions','access','latest','--secret',name]);}catch(e){if(!/NOT_FOUND|not found|no versions/i.test(String(e.stderr)))throw e;}
  g(['secrets','versions','add',name,'--data-file=-'],value);return value;
 }
-function runtimeSecret(name){g(['secrets','add-iam-policy-binding',name,`--member=serviceAccount:${ACCOUNT}`,'--role=roles/secretmanager.secretAccessor']);}
 const secretNames={stripe:'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY',database:'PARTNER_CAMPAIGNS_TEST_DB_PASSWORD',jwt:'PARTNER_CAMPAIGNS_TEST_JWT_SECRET',webhook:'PARTNER_CAMPAIGNS_TEST_WEBHOOK_SECRET',admin:'PARTNER_CAMPAIGNS_TEST_ADMIN_PASSWORD'};
 (async()=>{
  const key=g(['secrets','versions','access','latest','--secret',secretNames.stripe]);if(!/^sk_test_/.test(key))throw Error('Configured campaign secret is not a sandbox test key');
@@ -18,9 +17,8 @@ const secretNames={stripe:'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY',database:'P
  const dbPassword=ensureSecret(secretNames.database,crypto.randomBytes(32).toString('base64url'));
  const jwt=ensureSecret(secretNames.jwt,crypto.randomBytes(48).toString('base64url'));
  const adminPassword=ensureSecret(secretNames.admin,crypto.randomBytes(24).toString('base64url'));
- if(!exists(['iam','service-accounts','describe',ACCOUNT]))g(['iam','service-accounts','create','itc-campaigns-test','--display-name=ITC Campaign Sandbox Runtime']);
- g(['projects','add-iam-policy-binding',PROJECT,`--member=serviceAccount:${ACCOUNT}`,'--role=roles/cloudsql.client','--condition=None']);
- g(['iam','service-accounts','add-iam-policy-binding',ACCOUNT,`--member=serviceAccount:github-deployer@${PROJECT}.iam.gserviceaccount.com`,'--role=roles/iam.serviceAccountUser']);
+ // One-time IAM grants are applied by the owner with authorize-cloudshell.sh.
+ // CI never grants itself project-wide IAM or service-account creation privileges.
  // Connect to the maintenance database solely to create a separate restricted login/database.
  const maintenance=new Client({host:'127.0.0.1',port:5432,user:'itc_app',password:g(['secrets','versions','access','latest','--secret','DB_PASSWORD']),database:'postgres'});
  await maintenance.connect();try{
@@ -29,16 +27,13 @@ const secretNames={stripe:'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY',database:'P
   if(!(await maintenance.query('SELECT 1 FROM pg_database WHERE datname=$1',[DATABASE])).rowCount)await maintenance.query(`CREATE DATABASE ${DATABASE} OWNER ${DATABASE}`);
  }finally{await maintenance.end();}
  const bucket=`${PROJECT}-campaign-tests-media`;
- if(!exists(['storage','buckets','describe',`gs://${bucket}`]))g(['storage','buckets','create',`gs://${bucket}`,'--location=us-east1','--uniform-bucket-level-access']);
- g(['storage','buckets','add-iam-policy-binding',`gs://${bucket}`,`--member=serviceAccount:${ACCOUNT}`,'--role=roles/storage.objectUser']);
- g(['storage','buckets','add-iam-policy-binding',`gs://${bucket}`,'--member=allUsers','--role=roles/storage.objectViewer']);
+ if(!exists(['storage','buckets','describe',`gs://${bucket}`]))throw Error('Run the reviewed owner setup for the isolated media bucket');
  const events=['checkout.session.completed','checkout.session.async_payment_succeeded','invoice.paid','invoice.payment_failed','invoice.payment_action_required','invoice.marked_uncollectible','invoice.voided','customer.subscription.updated','customer.subscription.deleted'];
  const url=BASE+'/api/partners/payment/webhook';
  let endpoint=null;for await(const item of stripe.webhookEndpoints.list({limit:100}))if(item.url===url&&item.metadata?.itc_campaign_sandbox==='v1')endpoint=item;
  let webhook;
  if(endpoint){webhook=g(['secrets','versions','access','latest','--secret',secretNames.webhook]);if(endpoint.livemode||endpoint.status!=='enabled')throw Error('Sandbox webhook is not enabled');}
  else{endpoint=await stripe.webhookEndpoints.create({url,enabled_events:events,metadata:{itc_campaign_sandbox:'v1'},description:'ITC partner campaign sandbox only'},{idempotencyKey:'itc-campaign-sandbox-webhook-v1'});if(endpoint.livemode!==false||!endpoint.secret)throw Error('Unexpected webhook mode');webhook=ensureSecret(secretNames.webhook,endpoint.secret);}
- for(const name of [secretNames.stripe,secretNames.database,secretNames.jwt,secretNames.webhook])runtimeSecret(name);
  let tax=false;try{tax=(await stripe.tax.settings.retrieve()).status==='active';}catch{}
  const variables={DB_HOST:'127.0.0.1',DB_PORT:'5432',DB_USER:DATABASE,DB_DATABASE:DATABASE,DB_PASSWORD:dbPassword,DB_SSL:'false',PARTNER_CAMPAIGNS_SANDBOX:'true',PARTNER_CAMPAIGNS_ENABLED:'true',PARTNER_STRIPE_SECRET_KEY:key,STRIPE_SECRET_KEY:key,PARTNER_STRIPE_WEBHOOK_SECRET:webhook,JWT_SECRET:jwt,PUBLIC_BASE_URL:BASE,PANEL_PUBLIC_URL:'https://itc-campaigns-test-panel-1031252664334.us-east1.run.app',OPENAI_API_KEY:'sandbox-disabled-not-used',CAMPAIGN_SANDBOX_TAX_ENABLED:String(tax),CAMPAIGN_TEST_ADMIN_EMAIL:process.env.CAMPAIGN_TEST_ADMIN_EMAIL||'soporte@insightthecity.com',CAMPAIGN_TEST_ADMIN_PASSWORD:adminPassword};
  if(!fs.existsSync(process.env.GITHUB_ENV||''))throw Error('Provisioning runs only in the dedicated GitHub workflow');

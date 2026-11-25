@@ -11,12 +11,7 @@ secrets={'PARTNER_STRIPE_SECRET_KEY':'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY:l
 with tempfile.NamedTemporaryFile(mode='w',suffix='.yaml') as f:
  json.dump(env,f);f.flush()
  g(['run','deploy',SERVICE,'--region','us-east1','--image',f'us-east1-docker.pkg.dev/{PROJECT}/itc/{SERVICE}:'+os.environ['SOURCE_SHA'],'--service-account',ACCOUNT,'--allow-unauthenticated','--port','8080','--min-instances','0','--max-instances','2','--memory','512Mi','--cpu','1','--add-cloudsql-instances',PROJECT+':us-east1:itc-postgres','--env-vars-file',f.name,'--set-secrets',','.join(k+'='+v for k,v in secrets.items())])
-job='itc-campaigns-test-worker'
-try:g(['scheduler','jobs','describe',job,'--location','us-east1']);verb='update'
-except subprocess.CalledProcessError as e:
- if 'NOT_FOUND' not in e.stderr:raise
- verb='create'
-g(['scheduler','jobs',verb,'http',job,'--location','us-east1','--schedule','*/10 * * * *','--uri',BASE+'/api/payment/launch/retry-emails','--http-method','POST','--oidc-service-account-email','itc-worker-scheduler@'+PROJECT+'.iam.gserviceaccount.com','--oidc-token-audience',BASE+'/api/payment/launch/retry-emails','--attempt-deadline','240s'])
+job='itc-campaigns-test-worker' # Configured once by the owner's scoped setup.
 after=json.loads(g(['run','services','describe','itc-backend','--region','us-east1','--format=json']))['status'].get('traffic',[])
 if before!=after:raise SystemExit('Production traffic changed concurrently; review before proceeding')
 print(json.dumps({'backend':BASE,'webhook':BASE+'/api/partners/payment/webhook','worker':job,'productionChanged':False}))
