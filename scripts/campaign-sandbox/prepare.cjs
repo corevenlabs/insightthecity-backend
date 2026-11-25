@@ -20,12 +20,15 @@ const secretNames={stripe:'PARTNER_CAMPAIGNS_STRIPE_TEST_SECRET_KEY',database:'P
  // One-time IAM grants are applied by the owner with authorize-cloudshell.sh.
  // CI never grants itself project-wide IAM or service-account creation privileges.
  // Connect to the maintenance database solely to create a separate restricted login/database.
- const maintenance=new Client({host:'127.0.0.1',port:5432,user:'itc_app',password:g(['secrets','versions','access','latest','--secret','DB_PASSWORD']),database:'postgres'});
+ const maintenanceOptions={host:'127.0.0.1',port:5432,user:'itc_app',password:g(['secrets','versions','access','latest','--secret','DB_PASSWORD'])};
+ const maintenance=new Client({...maintenanceOptions,database:'postgres'});
  await maintenance.connect();try{
   if(!(await maintenance.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[DATABASE])).rowCount)await maintenance.query(`CREATE ROLE ${DATABASE} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD ${maintenance.escapeLiteral(dbPassword)}`);
   else{const role=(await maintenance.query('SELECT rolsuper,rolcreaterole,rolcreatedb FROM pg_roles WHERE rolname=$1',[DATABASE])).rows[0];if(role.rolsuper||role.rolcreaterole||role.rolcreatedb)throw Error('Sandbox database role has excessive privileges');}
-  if(!(await maintenance.query('SELECT 1 FROM pg_database WHERE datname=$1',[DATABASE])).rowCount)await maintenance.query(`CREATE DATABASE ${DATABASE} OWNER ${DATABASE}`);
+  if(!(await maintenance.query('SELECT 1 FROM pg_database WHERE datname=$1',[DATABASE])).rowCount)await maintenance.query(`CREATE DATABASE ${DATABASE}`);
+  await maintenance.query(`GRANT CONNECT,CREATE,TEMPORARY ON DATABASE ${DATABASE} TO ${DATABASE}`);
  }finally{await maintenance.end();}
+ const schemaAdmin=new Client({...maintenanceOptions,database:DATABASE});await schemaAdmin.connect();try{await schemaAdmin.query(`GRANT USAGE,CREATE ON SCHEMA public TO ${DATABASE}`);}finally{await schemaAdmin.end();}
  const bucket=`${PROJECT}-campaign-tests-media`;
  if(!exists(['storage','buckets','describe',`gs://${bucket}`]))throw Error('Run the reviewed owner setup for the isolated media bucket');
  const events=['checkout.session.completed','checkout.session.async_payment_succeeded','invoice.paid','invoice.payment_failed','invoice.payment_action_required','invoice.marked_uncollectible','invoice.voided','customer.subscription.updated','customer.subscription.deleted'];
